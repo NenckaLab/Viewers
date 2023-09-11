@@ -5,6 +5,7 @@ import { ExtensionManager, MODULE_TYPES } from '@ohif/core';
 //
 import { extensionManager } from '../App.tsx';
 import { useParams, useLocation } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import useSearchParams from '../hooks/useSearchParams.ts';
 
 /**
@@ -27,6 +28,7 @@ const areLocationsTheSame = (location0, location1) => {
  * @param {function} props.children - Layout Template React Component
  */
 function DataSourceWrapper(props) {
+  const navigate = useNavigate();
   const { children: LayoutTemplate, ...rest } = props;
   const params = useParams();
   const location = useLocation();
@@ -123,6 +125,7 @@ function DataSourceWrapper(props) {
 
   useEffect(() => {
     const dataSourceChangedCallback = () => {
+      setIsLoading(false);
       setIsDataSourceInitialized(false);
       setDataSourcePath('');
       setDataSource(extensionManager.getActiveDataSource()[0]);
@@ -189,7 +192,16 @@ function DataSourceWrapper(props) {
         (!isLoading && (newOffset !== previousOffset || isLocationUpdated));
 
       if (isDataInvalid) {
-        getData();
+        getData().catch(() => {
+          // If there is a data source configuration API, then the Worklist will popup the dialog to attempt to configure it
+          // and attempt to resolve this issue.
+          if (dataSource.getConfig().configurationAPI) {
+            return;
+          }
+
+          // No data source configuration API, so navigate to the not found server page.
+          navigate('/notfoundserver', '_self');
+        });
       }
     } catch (ex) {
       console.warn(ex);

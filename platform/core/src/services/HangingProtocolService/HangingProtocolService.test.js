@@ -2,7 +2,6 @@ import HangingProtocolService from './HangingProtocolService';
 
 const testProtocol = {
   id: 'test',
-  hasUpdatedPriorsInformation: false,
   name: 'Default',
   protocolMatchingRules: [
     {
@@ -119,7 +118,7 @@ function checkHpsBestMatch(hps) {
   hps.run({ studies: [studyMatch], displaySets: studyMatchDisplaySets });
   const { viewportMatchDetails } = hps.getMatchDetails();
   expect(viewportMatchDetails.size).toBe(1);
-  expect(viewportMatchDetails.get(0)).toMatchObject({
+  expect(viewportMatchDetails.get('ctAXIAL')).toMatchObject({
     viewportOptions: {
       viewportId: 'ctAXIAL',
       viewportType: 'volume',

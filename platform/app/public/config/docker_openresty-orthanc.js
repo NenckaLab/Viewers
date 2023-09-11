@@ -4,7 +4,7 @@ window.config = {
   extensions: [],
   modes: [],
   // below flag is for performance reasons, but it might not work for all servers
-
+  omitQuotationForMultipartRequest: true,
   showWarningMessageForCrossOrigin: true,
   showCPUFallbackMessage: true,
   showLoadingIndicator: true,
@@ -17,13 +17,15 @@ window.config = {
       configuration: {
         friendlyName: 'Orthanc Server',
         name: 'Orthanc',
+        // wadoUriRoot: 'https://141.106.129.68/pacs/wado',
+        // qidoRoot: 'https://141.106.129.68/pacs/dicom-web',
+        // wadoRoot: 'https://141.106.129.68/pacs/dicom-web',
         wadoUriRoot: 'http://127.0.0.1/pacs/wado',
         qidoRoot: 'http://127.0.0.1/pacs/dicom-web',
         wadoRoot: 'http://127.0.0.1/pacs/dicom-web',
         qidoSupportsIncludeField: false,
         imageRendering: 'wadors',
         thumbnailRendering: 'wadors',
-        omitQuotationForMultipartRequest: true,
       },
     },
     {

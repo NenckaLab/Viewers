@@ -1123,6 +1123,8 @@ class SegmentationService extends PubSubService {
       );
     }
 
+    this._setDisplaySetIsHydrated(segmentationId, true);
+
     segmentation.hydrated = true;
 
     if (!suppressEvents) {
@@ -1131,6 +1133,18 @@ class SegmentationService extends PubSubService {
       });
     }
   };
+
+  private _setDisplaySetIsHydrated(
+    displaySetUID: string,
+    isHydrated: boolean
+  ): void {
+    const {
+      DisplaySetService: displaySetService,
+    } = this.servicesManager.services;
+    const displaySet = displaySetService.getDisplaySetByUID(displaySetUID);
+    displaySet.isHydrated = isHydrated;
+    displaySetService.setDisplaySetMetadataInvalidated(displaySetUID, false);
+  }
 
   private _highlightLabelmap(
     segmentIndex: number,
@@ -1278,8 +1292,9 @@ class SegmentationService extends PubSubService {
     }
 
     const { colorLUTIndex } = segmentation;
-
-    this._removeSegmentationFromCornerstone(segmentationId);
+    const { updatedToolGroupIds } = this._removeSegmentationFromCornerstone(
+      segmentationId
+    );
 
     // Delete associated colormap
     // Todo: bring this back
@@ -1295,13 +1310,13 @@ class SegmentationService extends PubSubService {
       if (remainingSegmentations.length) {
         const { id } = remainingSegmentations[0];
 
-        this._setActiveSegmentationForToolGroup(
-          id,
-          this._getFirstToolGroupId(),
-          false
-        );
+        updatedToolGroupIds.forEach(toolGroupId => {
+          this._setActiveSegmentationForToolGroup(id, toolGroupId, false);
+        });
       }
     }
+
+    this._setDisplaySetIsHydrated(segmentationId, false);
 
     this._broadcastEvent(this.EVENTS.SEGMENTATION_REMOVED, {
       segmentationId,
@@ -1887,7 +1902,7 @@ class SegmentationService extends PubSubService {
       toolGroupId
     );
 
-    if (segmentationRepresentations.length === 0) {
+    if (!segmentationRepresentations?.length) {
       return;
     }
 
@@ -2036,6 +2051,7 @@ class SegmentationService extends PubSubService {
     const removeFromCache = true;
     const segmentationState = cstSegmentation.state;
     const sourceSegState = segmentationState.getSegmentation(segmentationId);
+    const updatedToolGroupIds: Set<string> = new Set();
 
     if (!sourceSegState) {
       return;
@@ -2054,6 +2070,7 @@ class SegmentationService extends PubSubService {
       segmentationRepresentations.forEach(representation => {
         if (representation.segmentationId === segmentationId) {
           UIDsToRemove.push(representation.segmentationRepresentationUID);
+          updatedToolGroupIds.add(toolGroupId);
         }
       });
 
@@ -2071,6 +2088,8 @@ class SegmentationService extends PubSubService {
     if (removeFromCache && cache.getVolumeLoadObject(segmentationId)) {
       cache.removeVolumeLoadObject(segmentationId);
     }
+
+    return { updatedToolGroupIds: Array.from(updatedToolGroupIds) };
   }
 
   private _updateCornerstoneSegmentations({

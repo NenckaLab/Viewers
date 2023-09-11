@@ -13,6 +13,7 @@ import promptTrackNewStudy from './promptTrackNewStudy';
 import promptSaveReport from './promptSaveReport';
 import promptHydrateStructuredReport from './promptHydrateStructuredReport';
 import hydrateStructuredReport from './hydrateStructuredReport';
+import { useAppConfig } from '@state';
 
 const TrackedMeasurementsContext = React.createContext();
 TrackedMeasurementsContext.displayName = 'TrackedMeasurementsContext';
@@ -29,8 +30,10 @@ function TrackedMeasurementsContextProvider(
   { servicesManager, commandsManager, extensionManager }, // Bound by consumer
   { children } // Component props
 ) {
+  const [appConfig] = useAppConfig();
+
   const [viewportGrid, viewportGridService] = useViewportGrid();
-  const { activeViewportIndex, viewports } = viewportGrid;
+  const { activeViewportId, viewports } = viewportGrid;
   const { measurementService, displaySetService } = servicesManager.services;
 
   const machineOptions = Object.assign({}, defaultOptions);
@@ -46,7 +49,7 @@ function TrackedMeasurementsContextProvider(
 
       console.log(
         'jumping to measurement reset viewport',
-        viewportGrid.activeViewportIndex,
+        viewportGrid.activeViewportId,
         trackedMeasurements[0]
       );
 
@@ -81,7 +84,7 @@ function TrackedMeasurementsContextProvider(
       }
 
       viewportGridService.setDisplaySetsForViewport({
-        viewportIndex: viewportGrid.activeViewportIndex,
+        viewportId: viewportGrid.activeViewportId,
         displaySetInstanceUIDs: [referencedDisplaySetUID],
         viewportOptions: {
           initialImageOptions: {
@@ -96,7 +99,7 @@ function TrackedMeasurementsContextProvider(
           evt.data.createdDisplaySetInstanceUIDs[0].displaySetInstanceUID;
 
         viewportGridService.setDisplaySetsForViewport({
-          viewportIndex: evt.data.viewportIndex,
+          viewportId: evt.data.viewportId,
           displaySetInstanceUIDs: [StructuredReportDisplaySetInstanceUID],
         });
       }
@@ -125,27 +128,33 @@ function TrackedMeasurementsContextProvider(
     promptBeginTracking: promptBeginTracking.bind(null, {
       servicesManager,
       extensionManager,
+      appConfig,
     }),
     promptTrackNewSeries: promptTrackNewSeries.bind(null, {
       servicesManager,
       extensionManager,
+      appConfig,
     }),
     promptTrackNewStudy: promptTrackNewStudy.bind(null, {
       servicesManager,
       extensionManager,
+      appConfig,
     }),
     promptSaveReport: promptSaveReport.bind(null, {
       servicesManager,
       commandsManager,
       extensionManager,
+      appConfig,
     }),
     promptHydrateStructuredReport: promptHydrateStructuredReport.bind(null, {
       servicesManager,
       extensionManager,
+      appConfig,
     }),
     hydrateStructuredReport: hydrateStructuredReport.bind(null, {
       servicesManager,
       extensionManager,
+      appConfig,
     }),
   });
 
@@ -163,16 +172,14 @@ function TrackedMeasurementsContextProvider(
     machineOptions
   );
 
-  const [
-    trackedMeasurements,
-    sendTrackedMeasurementsEvent,
-    trackedMeasurementsService,
-  ] = useMachine(measurementTrackingMachine);
+  const [trackedMeasurements, sendTrackedMeasurementsEvent] = useMachine(
+    measurementTrackingMachine
+  );
 
   // ~~ Listen for changes to ViewportGrid for potential SRs hung in panes when idle
   useEffect(() => {
-    if (viewports.length > 0) {
-      const activeViewport = viewports[activeViewportIndex];
+    if (viewports.size > 0) {
+      const activeViewport = viewports.get(activeViewportId);
 
       if (!activeViewport || !activeViewport?.displaySetInstanceUIDs?.length) {
         return;
@@ -220,12 +227,12 @@ function TrackedMeasurementsContextProvider(
         sendTrackedMeasurementsEvent('PROMPT_HYDRATE_SR', {
           displaySetInstanceUID: displaySet.displaySetInstanceUID,
           SeriesInstanceUID: displaySet.SeriesInstanceUID,
-          viewportIndex: activeViewportIndex,
+          viewportId: activeViewportId,
         });
       }
     }
   }, [
-    activeViewportIndex,
+    activeViewportId,
     sendTrackedMeasurementsEvent,
     servicesManager.services,
     viewports,
@@ -245,6 +252,7 @@ TrackedMeasurementsContextProvider.propTypes = {
   servicesManager: PropTypes.object.isRequired,
   commandsManager: PropTypes.object.isRequired,
   extensionManager: PropTypes.object.isRequired,
+  appConfig: PropTypes.object,
 };
 
 export {

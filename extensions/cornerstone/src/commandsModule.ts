@@ -10,7 +10,7 @@ import {
   utilities as cstUtils,
   ReferenceLinesTool,
 } from '@cornerstonejs/tools';
-import { Types as OhifTypes } from '@ohif/core';
+import { HangingProtocolService, Types as OhifTypes } from '@ohif/core';
 
 import CornerstoneViewportDownloadForm from './utils/CornerstoneViewportDownloadForm';
 import callInputDialog from './utils/callInputDialog';
@@ -33,6 +33,8 @@ function commandsModule({
     cornerstoneViewportService,
     uiNotificationService,
     measurementService,
+    displaySetService,
+    hangingProtocolService,
   } = servicesManager.services as CornerstoneServices;
 
   const { measurementServiceSource } = this;
@@ -239,8 +241,7 @@ function commandsModule({
         return;
       }
 
-      const viewportIndex = viewportInfo.getViewportIndex();
-      viewportGridService.setActiveViewportIndex(viewportIndex);
+      viewportGridService.setActiveViewportId(viewportId);
     },
     arrowTextCallback: ({ callback, data }) => {
       callInputDialog(uiDialogService, data, callback);
@@ -294,6 +295,7 @@ function commandsModule({
     },
 
     setToolActive: ({ toolName, toolGroupId = null }) => {
+      toolGroupService.setPrimaryToolActive(toolName, toolGroupId);
       if (toolName === 'Crosshairs') {
         const activeViewportToolGroup = toolGroupService.getToolGroup(null);
 
@@ -310,9 +312,11 @@ function commandsModule({
         }
       }
 
-      const { viewports } = viewportGridService.getState() || {
-        viewports: [],
-      };
+      const { viewports } = viewportGridService.getState();
+
+      if (!viewports.size) {
+        return;
+      }
 
       const toolGroup = toolGroupService.getToolGroup(toolGroupId);
       const toolGroupViewportIds = toolGroup?.getViewportIds?.();
@@ -322,15 +326,11 @@ function commandsModule({
         return;
       }
 
-      const filteredViewports = viewports.filter(viewport => {
-        if (!viewport.viewportOptions) {
-          return false;
+      const filteredViewports = Array.from(viewports.values()).filter(
+        viewport => {
+          return toolGroupViewportIds.includes(viewport.viewportId);
         }
-
-        return toolGroupViewportIds.includes(
-          viewport.viewportOptions.viewportId
-        );
-      });
+      );
 
       if (!filteredViewports.length) {
         return;
@@ -368,12 +368,10 @@ function commandsModule({
       });
     },
     showDownloadViewportModal: () => {
-      const { activeViewportIndex } = viewportGridService.getState();
+      const { activeViewportId } = viewportGridService.getState();
 
       if (
-        !cornerstoneViewportService.getCornerstoneViewportByIndex(
-          activeViewportIndex
-        )
+        !cornerstoneViewportService.getCornerstoneViewport(activeViewportId)
       ) {
         // Cannot download a non-cornerstone viewport (image).
         uiNotificationService.show({
@@ -391,7 +389,7 @@ function commandsModule({
           content: CornerstoneViewportDownloadForm,
           title: 'Download High Quality Image',
           contentProps: {
-            activeViewportIndex,
+            activeViewportId,
             onClose: uiModalService.hide,
             cornerstoneViewportService,
           },
@@ -554,21 +552,20 @@ function commandsModule({
       cstUtils.scroll(viewport, options);
     },
     setViewportColormap: ({
-      viewportIndex,
+      viewportId,
       displaySetInstanceUID,
       colormap,
       immediate = false,
     }) => {
-      const viewport = cornerstoneViewportService.getCornerstoneViewportByIndex(
-        viewportIndex
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(
+        viewportId
       );
       //get actor from the viewport
       const actorEntries = viewport.getActors();
-
+      console.log(actorEntries);
       const actorEntry = actorEntries.find(actorEntry => {
         return actorEntry.uid.includes(displaySetInstanceUID);
       });
-
       const { actor: volumeActor, uid: volumeId } = actorEntry;
       viewport.setProperties({ colormap, volumeActor }, volumeId);
       if (immediate) {
@@ -589,17 +586,17 @@ function commandsModule({
         viewport.render();
       }
     },
-    incrementActiveViewport: () => {
-      const { activeViewportIndex, viewports } = viewportGridService.getState();
-      const nextViewportIndex = (activeViewportIndex + 1) % viewports.length;
-      viewportGridService.setActiveViewportIndex(nextViewportIndex);
-    },
-    decrementActiveViewport: () => {
-      const { activeViewportIndex, viewports } = viewportGridService.getState();
+    changeActiveViewport: ({ direction = 1 }) => {
+      const { activeViewportId, viewports } = viewportGridService.getState();
+      const viewportIds = Array.from(viewports.keys());
+      const currentIndex = viewportIds.indexOf(activeViewportId);
       const nextViewportIndex =
-        (activeViewportIndex - 1 + viewports.length) % viewports.length;
-      viewportGridService.setActiveViewportIndex(nextViewportIndex);
+        (currentIndex + direction + viewportIds.length) % viewportIds.length;
+      viewportGridService.setActiveViewportId(
+        viewportIds[nextViewportIndex] as string
+      );
     },
+
     toggleStackImageSync: ({ toggledState }) => {
       toggleStackImageSync({
         getEnabledElement,
@@ -608,9 +605,9 @@ function commandsModule({
       });
     },
     toggleReferenceLines: ({ toggledState }) => {
-      const { activeViewportIndex } = viewportGridService.getState();
-      const viewportInfo = cornerstoneViewportService.getViewportInfoByIndex(
-        activeViewportIndex
+      const { activeViewportId } = viewportGridService.getState();
+      const viewportInfo = cornerstoneViewportService.getViewportInfo(
+        activeViewportId
       );
 
       const viewportId = viewportInfo.getViewportId();
@@ -629,34 +626,44 @@ function commandsModule({
       );
       toolGroup.setToolEnabled(ReferenceLinesTool.toolName);
     },
-    storePresentation: ({ viewportIndex }) => {
-      const presentation = cornerstoneViewportService.getPresentation(
-        viewportIndex
-      );
-      if (!presentation || !presentation.presentationIds) {
-        return;
+    storePresentation: ({ viewportId }) => {
+      cornerstoneViewportService.storePresentation({ viewportId });
+    },
+    setDerviedDisplaySetsInGridViewports: ({ displaySet }) => {
+      const displaySetCache = displaySetService.getDisplaySetCache();
+      const cachedDisplaySetKeys = [displaySetCache.keys()];
+      const displaySetKey = Object.keys(displaySet)[0];
+
+      // Check to see if computed display set is already in cache
+      if (!cachedDisplaySetKeys.includes(displaySetKey)) {
+        displaySetCache.set(displaySetKey, displaySet[displaySetKey]);
       }
-      const {
-        lutPresentationStore,
-        positionPresentationStore,
-      } = stateSyncService.getState();
-      const { presentationIds } = presentation;
-      const { lutPresentationId, positionPresentationId } =
-        presentationIds || {};
-      const storeState = {};
-      if (lutPresentationId) {
-        storeState.lutPresentationStore = {
-          ...lutPresentationStore,
-          [lutPresentationId]: presentation,
-        };
-      }
-      if (positionPresentationId) {
-        storeState.positionPresentationStore = {
-          ...positionPresentationStore,
-          [positionPresentationId]: presentation,
-        };
-      }
-      stateSyncService.store(storeState);
+
+      // Get all viewports and their corresponding indexs
+      const { viewports } = viewportGridService.getState();
+
+      const viewportsToUpdate = viewports.map((viewport, index) => ({
+        viewportIndex: index,
+        displaySetInstanceUIDs: [displaySetKey],
+        viewportOptions: {
+          initialImageOptions: viewport.viewportOptions.initialImageOptions,
+          viewportType: 'volume',
+          orientation: viewport.viewportOptions.orientation,
+          background: viewport.viewportOptions.background,
+        },
+      }));
+
+      viewportGridService.setDisplaySetsForViewports(viewportsToUpdate);
+    },
+    updateVolumeData: ({ volume }) => {
+      // update vtkOpenGLTexture and imageData of computed volume
+      const { imageData, vtkOpenGLTexture } = volume;
+      const numSlices = imageData.getDimensions()[2];
+      const slicesToUpdate = [...Array(numSlices).keys()];
+      slicesToUpdate.forEach(i => {
+        vtkOpenGLTexture.setUpdatedFrame(i);
+      });
+      imageData.modified();
     },
   };
 
@@ -713,10 +720,11 @@ function commandsModule({
       options: { rotation: -90 },
     },
     incrementActiveViewport: {
-      commandFn: actions.incrementActiveViewport,
+      commandFn: actions.changeActiveViewport,
     },
     decrementActiveViewport: {
-      commandFn: actions.decrementActiveViewport,
+      commandFn: actions.changeActiveViewport,
+      options: { direction: -1 },
     },
     flipViewportHorizontal: {
       commandFn: actions.flipViewportHorizontal,
@@ -785,10 +793,13 @@ function commandsModule({
     setSingleViewportColormap: {
       commandFn: actions.setSingleViewportColormap,
     },
-    storePresentation: {
-      commandFn: actions.storePresentation,
+    setDerviedDisplaySetsInGridViewports: {
+      commandFn: actions.setDerviedDisplaySetsInGridViewports,
       storeContexts: [],
       options: {},
+    },
+    updateVolumeData: {
+      commandFn: actions.updateVolumeData,
     },
   };
 

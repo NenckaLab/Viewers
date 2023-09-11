@@ -132,9 +132,10 @@ function modeFactory() {
         'Capture',
         'Layout',
         'MPR',
+        'CMAP',
         'Crosshairs',
         'MoreTools',
-        'fusionPTColormap',
+        'setColormap',
         'RectangleROIStartEndThreshold',
       ]);
 
@@ -200,17 +201,21 @@ function modeFactory() {
           return {
             id: ohif.layout,
             props: {
-              leftPanels: [tracked.thumbnailList, ohif.HounsfieldUnitPanel],
-              rightPanels: [
-                dicomSeg.panel,
-                tracked.measurements,
-                tracked.ROIThresholdPanel,
-              ],
-              rightPanelDefaultClosed: true,
+              leftPanels: [tracked.thumbnailList],
+              rightPanels: [ohif.HounsfieldUnitPanel],
+              // rightPanels: [
+              //   dicomSeg.panel,
+              //   tracked.measurements,
+              //   tracked.ROIThresholdPanel,
+              // ],
+              // rightPanelDefaultClosed: true,
               viewports: [
                 {
                   namespace: tracked.viewport,
-                  displaySetsToDisplay: [ohif.sopClassHandler],
+                  displaySetsToDisplay: [
+                    ohif.sopClassHandler,
+                    ohif.sopClassHandler,
+                  ],
                 },
                 {
                   namespace: dicomsr.viewport,

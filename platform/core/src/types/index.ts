@@ -4,12 +4,17 @@ import Services from './Services';
 import Hotkey from '../classes/Hotkey';
 import DisplaySetService from '../services/DisplaySetService/DisplaySetService';
 import { DataSourceDefinition } from './DataSource';
+import {
+  BaseDataSourceConfigurationAPI,
+  BaseDataSourceConfigurationAPIItem,
+} from './DataSourceConfigurationAPI';
 
 export * from '../services/CustomizationService/types';
 // Separate out some generic types
 export * from './AppConfig';
 export * from './Consumer';
 export * from './Command';
+export * from './DisplaySet';
 export * from './StudyMetadata';
 export * from './PanelModule';
 export * from './IPubSub';
@@ -21,8 +26,10 @@ export * from './Color';
  */
 export {
   Extensions,
-  HangingProtocol, DisplaySetService as DisplaySet
-};  export type {
-    Services,
-    Hotkey, DataSourceDefinition
-  };
+  HangingProtocol,
+  Services,
+  Hotkey,
+  DataSourceDefinition,
+  BaseDataSourceConfigurationAPI,
+  BaseDataSourceConfigurationAPIItem,
+};

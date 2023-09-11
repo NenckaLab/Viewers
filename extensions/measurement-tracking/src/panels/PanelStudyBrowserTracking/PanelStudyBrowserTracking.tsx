@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 import { utils } from '@ohif/core';
@@ -30,6 +31,7 @@ function PanelStudyBrowserTracking({
     hangingProtocolService,
     uiNotificationService,
   } = servicesManager.services;
+  const navigate = useNavigate();
 
   const { t } = useTranslation('Common');
 
@@ -38,7 +40,7 @@ function PanelStudyBrowserTracking({
   // Tabs --> Studies --> DisplaySets --> Thumbnails
   const { StudyInstanceUIDs } = useImageViewer();
   const [
-    { activeViewportIndex, viewports },
+    { activeViewportId, viewports },
     viewportGridService,
   ] = useViewportGrid();
   const [
@@ -56,10 +58,10 @@ function PanelStudyBrowserTracking({
 
   const onDoubleClickThumbnailHandler = displaySetInstanceUID => {
     let updatedViewports = [];
-    const viewportIndex = activeViewportIndex;
+    const viewportId = activeViewportId;
     try {
       updatedViewports = hangingProtocolService.getViewportsRequireUpdate(
-        viewportIndex,
+        viewportId,
         displaySetInstanceUID
       );
     } catch (error) {
@@ -76,8 +78,8 @@ function PanelStudyBrowserTracking({
     viewportGridService.setDisplaySetsForViewports(updatedViewports);
   };
 
-  const activeViewportDisplaySetInstanceUIDs =
-    viewports[activeViewportIndex]?.displaySetInstanceUIDs;
+  const activeViewportDisplaySetInstanceUIDs = viewports.get(activeViewportId)
+    ?.displaySetInstanceUIDs;
 
   const { trackedSeries } = trackedMeasurements.context;
 
@@ -89,6 +91,11 @@ function PanelStudyBrowserTracking({
       const qidoForStudyUID = await dataSource.query.studies.search({
         studyInstanceUid: StudyInstanceUID,
       });
+
+      if (!qidoForStudyUID?.length) {
+        navigate('/notfoundstudy', '_self');
+        throw new Error('Invalid study URL');
+      }
 
       let qidoStudiesForPatient = qidoForStudyUID;
 
@@ -149,7 +156,7 @@ function PanelStudyBrowserTracking({
       const imageId = imageIds[Math.floor(imageIds.length / 2)];
 
       // TODO: Is it okay that imageIds are not returned here for SR displaysets?
-      if (imageId) {
+      if (imageId && !displaySet?.unsupported) {
         // When the image arrives, render it and store the result in the thumbnailImgSrcMap
         newImageSrcEntry[dSet.displaySetInstanceUID] = await getImageSrc(
           imageId
@@ -205,23 +212,24 @@ function PanelStudyBrowserTracking({
           const displaySet = displaySetService.getDisplaySetByUID(
             displaySetInstanceUID
           );
+          if (!displaySet?.unsupported) {
+            if (options.madeInClient) {
+              setJumpToDisplaySet(displaySetInstanceUID);
+            }
 
-          if (options.madeInClient) {
-            setJumpToDisplaySet(displaySetInstanceUID);
-          }
+            const imageIds = dataSource.getImageIdsForDisplaySet(displaySet);
+            const imageId = imageIds[Math.floor(imageIds.length / 2)];
 
-          const imageIds = dataSource.getImageIdsForDisplaySet(displaySet);
-          const imageId = imageIds[Math.floor(imageIds.length / 2)];
-
-          // TODO: Is it okay that imageIds are not returned here for SR displaysets?
-          if (imageId) {
-            // When the image arrives, render it and store the result in the thumbnailImgSrcMap
-            newImageSrcEntry[displaySetInstanceUID] = await getImageSrc(
-              imageId
-            );
-            setThumbnailImageSrcMap(prevState => {
-              return { ...prevState, ...newImageSrcEntry };
-            });
+            // TODO: Is it okay that imageIds are not returned here for SR displaysets?
+            if (imageId) {
+              // When the image arrives, render it and store the result in the thumbnailImgSrcMap
+              newImageSrcEntry[displaySetInstanceUID] = await getImageSrc(
+                imageId
+              );
+              setThumbnailImageSrcMap(prevState => {
+                return { ...prevState, ...newImageSrcEntry };
+              });
+            }
           }
         });
       }
@@ -248,9 +256,29 @@ function PanelStudyBrowserTracking({
       }
     );
 
+    const SubscriptionDisplaySetMetaDataInvalidated = displaySetService.subscribe(
+      displaySetService.EVENTS.DISPLAY_SET_SERIES_METADATA_INVALIDATED,
+      () => {
+        const mappedDisplaySets = _mapDisplaySets(
+          displaySetService.getActiveDisplaySets(),
+          thumbnailImageSrcMap,
+          trackedSeries,
+          viewports,
+          viewportGridService,
+          dataSource,
+          displaySetService,
+          uiDialogService,
+          uiNotificationService
+        );
+
+        setDisplaySets(mappedDisplaySets);
+      }
+    );
+
     return () => {
       SubscriptionDisplaySetsAdded.unsubscribe();
       SubscriptionDisplaySetsChanged.unsubscribe();
+      SubscriptionDisplaySetMetaDataInvalidated.unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -417,22 +445,21 @@ function _mapDisplaySets(
     .filter(ds => !ds.excludeFromThumbnailBrowser)
     .forEach(ds => {
       const imageSrc = thumbnailImageSrcMap[ds.displaySetInstanceUID];
-      const componentType = _getComponentType(ds.Modality);
+      const componentType = _getComponentType(ds);
       const numPanes = viewportGridService.getNumViewportPanes();
-      const viewportIdentificator =
-        numPanes === 1
-          ? []
-          : viewports.reduce((acc, viewportData, index) => {
-              if (
-                index < numPanes &&
-                viewportData?.displaySetInstanceUIDs?.includes(
-                  ds.displaySetInstanceUID
-                )
-              ) {
-                acc.push(viewportData.viewportLabel);
-              }
-              return acc;
-            }, []);
+      const viewportIdentificator = [];
+
+      if (numPanes !== 1) {
+        viewports.forEach(viewportData => {
+          if (
+            viewportData?.displaySetInstanceUIDs?.includes(
+              ds.displaySetInstanceUID
+            )
+          ) {
+            viewportIdentificator.push(viewportData.viewportLabel);
+          }
+        });
+      }
 
       const array =
         componentType === 'thumbnailTracked'
@@ -459,12 +486,13 @@ function _mapDisplaySets(
           // .. Any other data to pass
         },
         isTracked: trackedSeriesInstanceUIDs.includes(ds.SeriesInstanceUID),
+        isHydratedForDerivedDisplaySet: ds.isHydrated,
         viewportIdentificator,
       };
 
       if (componentType === 'thumbnailNoImage') {
         if (dataSource.reject && dataSource.reject.series) {
-          thumbnailProps.canReject = true;
+          thumbnailProps.canReject = !ds?.unsupported;
           thumbnailProps.onReject = () => {
             uiDialogService.create({
               id: 'ds-reject-sr',
@@ -557,8 +585,8 @@ const thumbnailNoImageModalities = [
   'OT',
 ];
 
-function _getComponentType(Modality) {
-  if (thumbnailNoImageModalities.includes(Modality)) {
+function _getComponentType(ds) {
+  if (thumbnailNoImageModalities.includes(ds.Modality) || ds?.unsupported) {
     return 'thumbnailNoImage';
   }
 

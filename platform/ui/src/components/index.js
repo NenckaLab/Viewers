@@ -13,6 +13,7 @@ import Icon from './Icon';
 import IconButton from './IconButton';
 import Input from './Input';
 import InputDateRange from './InputDateRange';
+import InputFilterText from './InputFilterText';
 import InputGroup from './InputGroup';
 import InputLabelWrapper from './InputLabelWrapper';
 import InputMultiSelect from './InputMultiSelect';
@@ -26,6 +27,7 @@ import MeasurementTable from './MeasurementTable';
 import Modal from './Modal';
 import NavBar from './NavBar';
 import Notification from './Notification';
+import ProgressDropdown from './ProgressDropdown';
 import Select from './Select';
 import SegmentationTable from './SegmentationTable';
 import SegmentationGroupTable from './SegmentationGroupTable';
@@ -59,6 +61,7 @@ import Viewport from './Viewport';
 import ViewportDownloadForm from './ViewportDownloadForm';
 import ViewportGrid from './ViewportGrid';
 import ViewportPane from './ViewportPane';
+import WindowLevel from './WindowLevel';
 import WindowLevelMenuItem from './WindowLevelMenuItem';
 import UserPreferences from './UserPreferences';
 import HotkeysPreferences from './HotkeysPreferences';
@@ -73,6 +76,7 @@ import LoadingIndicatorProgress from './LoadingIndicatorProgress';
 import LoadingIndicatorTotalPercent from './LoadingIndicatorTotalPercent';
 import ViewportActionBar from './ViewportActionBar';
 import ProgressLoadingBar from './ProgressLoadingBar';
+import InputDoubleRange from './InputDoubleRange';
 
 export {
   AboutModal,
@@ -97,6 +101,7 @@ export {
   IconButton,
   Input,
   InputDateRange,
+  InputFilterText,
   InputGroup,
   InputRange,
   InputNumber,
@@ -115,6 +120,7 @@ export {
   Modal,
   NavBar,
   Notification,
+  ProgressDropdown,
   ProgressLoadingBar,
   Select,
   SegmentationTable,
@@ -150,5 +156,7 @@ export {
   ViewportGrid,
   ViewportPane,
   ViewportOverlay,
+  WindowLevel,
   WindowLevelMenuItem,
+  InputDoubleRange,
 };

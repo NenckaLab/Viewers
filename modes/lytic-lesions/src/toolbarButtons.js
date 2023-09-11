@@ -106,22 +106,22 @@ function _createSetToolActiveCommands(toolName) {
 
 const toolbarButtons = [
   {
-    id: 'fusionPTColormap',
+    id: 'setColormap',
     type: 'ohif.splitButton',
     props: {
       groupId: 'fusionPTColormap',
       primary: _createToolButton(
-        'fusionPTColormap',
+        'setColormap',
         'tool-fusion-color',
-        'Fusion PT Colormap',
+        'Set Colormap',
         [],
-        'Fusion PT Colormap'
+        'Set Colormap'
       ),
       secondary: {
         icon: 'chevron-down',
-        label: 'PT Colormap',
+        label: 'Colormap',
         isActive: true,
-        tooltip: 'PET Image Colormap',
+        tooltip: 'Colormap',
       },
       isAction: true, // ?
       renderer: WindowLevelMenuItem,
@@ -138,7 +138,6 @@ const toolbarButtons = [
         _createColormap('GE', 'ge'),
         _createColormap('Siemens', 'siemens'),
         _createColormap('Test', 'test'),
-        _createColormap('newTest', 'newtest'),
       ],
     },
   },
@@ -422,6 +421,24 @@ const toolbarButtons = [
           commandName: 'toggleHangingProtocol',
           commandOptions: {
             protocolId: 'mpr',
+          },
+          context: 'LYTIC',
+        },
+      ],
+    },
+  },
+  {
+    id: 'CMAP',
+    type: 'ohif.action',
+    props: {
+      type: 'toggle',
+      icon: 'tool-fusion-color',
+      label: 'Colormap and 3d',
+      commands: [
+        {
+          commandName: 'toggleHangingProtocol',
+          commandOptions: {
+            protocolId: 'colormapAnd3d',
           },
           context: 'LYTIC',
         },

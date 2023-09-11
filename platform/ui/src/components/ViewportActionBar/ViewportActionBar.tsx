@@ -27,7 +27,6 @@ const ViewportActionBar = ({
   getStatusComponent,
 }: ViewportActionBarProps): JSX.Element => {
   const { label, studyDate, seriesDescription, patientInformation } = studyData;
-
   const {
     patientName,
     patientSex,
@@ -133,7 +132,11 @@ const ViewportActionBar = ({
         <span className="ml-1 text-aqua-pale text-large">{label}</span>
       )}
       <div className={separatorClasses}></div>
-      <span ref={studyDateElemRef} className={studyDateClasses()}>
+      <span
+        data-cy="studyDate"
+        ref={studyDateElemRef}
+        className={studyDateClasses()}
+      >
         {studyDate}
       </span>
       {showSeriesDesc && (
@@ -194,7 +197,7 @@ ViewportActionBar.propTypes = {
       patientAge: PropTypes.string.isRequired,
       MRN: PropTypes.string.isRequired,
       thickness: PropTypes.string.isRequired,
-      thicknessUnits: PropTypes.string.isRequired,
+      thicknessUnits: PropTypes.string,
       spacing: PropTypes.string.isRequired,
       scanner: PropTypes.string.isRequired,
     }),

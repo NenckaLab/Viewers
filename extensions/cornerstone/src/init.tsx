@@ -14,7 +14,10 @@ import {
   utilities as csUtilities,
 } from '@cornerstonejs/core';
 import { Enums, utilities, ReferenceLinesTool } from '@cornerstonejs/tools';
-import { cornerstoneStreamingImageVolumeLoader } from '@cornerstonejs/streaming-image-volume-loader';
+import {
+  cornerstoneStreamingImageVolumeLoader,
+  cornerstoneStreamingDynamicImageVolumeLoader,
+} from '@cornerstonejs/streaming-image-volume-loader';
 
 import initWADOImageLoader from './initWADOImageLoader';
 import initCornerstoneTools from './initCornerstoneTools';
@@ -54,12 +57,11 @@ export default async function init({
     },
   });
 
-  // For debugging large datasets
-  const MAX_CACHE_SIZE_1GB = 1073741824;
-  const maxCacheSize = appConfig.maxCacheSize;
-  cornerstone.cache.setMaxCacheSize(
-    maxCacheSize ? maxCacheSize : MAX_CACHE_SIZE_1GB
-  );
+  // For debugging large datasets, otherwise prefer the defaults
+  const { maxCacheSize } = appConfig;
+  if (maxCacheSize) {
+    cornerstone.cache.setMaxCacheSize(maxCacheSize);
+  }
 
   initCornerstoneTools();
 
@@ -73,7 +75,6 @@ export default async function init({
     customizationService,
     uiModalService,
     uiNotificationService,
-    cineService,
     cornerstoneViewportService,
     hangingProtocolService,
     toolGroupService,
@@ -140,6 +141,11 @@ export default async function init({
     cornerstoneStreamingImageVolumeLoader
   );
 
+  volumeLoader.registerVolumeLoader(
+    'cornerstoneStreamingDynamicImageVolume',
+    cornerstoneStreamingDynamicImageVolumeLoader
+  );
+
   hangingProtocolService.registerImageLoadStrategy(
     'interleaveCenter',
     interleaveCenterLoader
@@ -171,7 +177,7 @@ export default async function init({
     servicesManager
   );
 
-  initCineService(cineService);
+  initCineService(servicesManager);
 
   // When a custom image load is performed, update the relevant viewports
   hangingProtocolService.subscribe(
@@ -283,9 +289,8 @@ export default async function init({
   );
 
   viewportGridService.subscribe(
-    viewportGridService.EVENTS.ACTIVE_VIEWPORT_INDEX_CHANGED,
-    ({ viewportIndex, viewportId }) => {
-      viewportId = viewportId || `viewport-${viewportIndex}`;
+    viewportGridService.EVENTS.ACTIVE_VIEWPORT_ID_CHANGED,
+    ({ viewportId }) => {
       const toolGroup = toolGroupService.getToolGroupForViewport(viewportId);
 
       if (!toolGroup || !toolGroup._toolInstances?.['ReferenceLines']) {
