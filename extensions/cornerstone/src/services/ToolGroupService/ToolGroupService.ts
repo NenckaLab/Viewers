@@ -41,7 +41,8 @@ export default class ToolGroupService {
   EVENTS: { [key: string]: string };
 
   constructor(serviceManager) {
-    const { cornerstoneViewportService, viewportGridService } = serviceManager.services;
+    const { cornerstoneViewportService, viewportGridService, uiNotificationService } =
+      serviceManager.services;
     this.cornerstoneViewportService = cornerstoneViewportService;
     this.viewportGridService = viewportGridService;
     this.uiNotificationService = uiNotificationService;

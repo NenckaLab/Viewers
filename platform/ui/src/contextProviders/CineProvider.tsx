@@ -22,7 +22,7 @@ export default function CineProvider({ children, service }) {
         const cines = state.cines;
         const syncedCineIds = service
           .getSyncedViewports(id)
-          .map(({ viewportIndex }) => viewportIndex);
+          .map(({ viewportId }) => viewportId);
         const cineIdsToUpdate = [id, ...syncedCineIds].filter(curId => {
           const currentCine = cines[curId] ?? {};
           const shouldUpdateFrameRate =
@@ -30,26 +30,27 @@ export default function CineProvider({ children, service }) {
           const shouldUpdateIsPlaying =
             currentCine.isPlaying !== (isPlaying ?? currentCine.isPlaying);
 
-          if (!cines[id]) {
-            cines[id] = { id, ...DEFAULT_CINE };
-          }
-          cines[id].frameRate = frameRate || cines[id].frameRate;
-          cines[id].isPlaying = isPlaying !== undefined ? isPlaying : cines[id].isPlaying;
-
-          cineIdsToUpdate.forEach(currId => {
-            let cine = cines[currId];
-
-            if (!cine) {
-              cine = { id, ...DEFAULT_CINE };
-              cines[currId] = cine;
-            }
-
-            cine.frameRate = frameRate ?? cine.frameRate;
-            cine.isPlaying = isPlaying ?? cine.isPlaying;
-          });
-
-          return { ...state, cines: { ...cines } };
+          return shouldUpdateFrameRate || shouldUpdateIsPlaying;
+        });
+        if (!cines[id]) {
+          cines[id] = { id, ...DEFAULT_CINE };
         }
+        cines[id].frameRate = frameRate || cines[id].frameRate;
+        cines[id].isPlaying = isPlaying !== undefined ? isPlaying : cines[id].isPlaying;
+        cineIdsToUpdate.forEach(currId => {
+          let cine = cines[currId];
+
+          if (!cine) {
+            cine = { id, ...DEFAULT_CINE };
+            cines[currId] = cine;
+          }
+
+          cine.frameRate = frameRate ?? cine.frameRate;
+          cine.isPlaying = isPlaying ?? cine.isPlaying;
+        });
+
+        return { ...state, cines: { ...cines } };
+      }
       case 'SET_IS_CINE_ENABLED': {
         return { ...state, ...{ isCineEnabled: action.payload } };
       }

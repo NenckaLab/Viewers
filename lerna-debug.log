@@ -1,0 +1,20 @@
+0 silly argv {
+0 silly argv   _: [ 'run' ],
+0 silly argv   stream: true,
+0 silly argv   lernaVersion: '7.2.0',
+0 silly argv   '$0': '/Users/zpick/Desktop/Viewers/node_modules/.bin/lerna',
+0 silly argv   script: 'build:viewer'
+0 silly argv }
+1 notice cli v7.2.0
+2 verbose packageConfigs Explicit "packages" configuration found in lerna.json. Resolving packages using the configured glob(s): ["extensions/*","platform/*","modes/*"]
+3 verbose rootPath /Users/zpick/Desktop/Viewers
+4 error SyntaxError: Expected ":" or blank space but "\n" found.
+4 error     at peg$buildStructuredError (/Users/zpick/Desktop/Viewers/node_modules/@yarnpkg/parsers/lib/grammars/syml.js:371:12)
+4 error     at peg$parse (/Users/zpick/Desktop/Viewers/node_modules/@yarnpkg/parsers/lib/grammars/syml.js:1898:11)
+4 error     at parseViaPeg (/Users/zpick/Desktop/Viewers/node_modules/@yarnpkg/parsers/lib/syml.js:109:29)
+4 error     at parseViaJsYaml (/Users/zpick/Desktop/Viewers/node_modules/@yarnpkg/parsers/lib/syml.js:114:16)
+4 error     at parseSyml (/Users/zpick/Desktop/Viewers/node_modules/@yarnpkg/parsers/lib/syml.js:130:12)
+4 error     at parseLockFile (/Users/zpick/Desktop/Viewers/node_modules/nx/src/plugins/js/lock-file/yarn-parser.js:20:20)
+4 error     at getYarnLockfileNodes (/Users/zpick/Desktop/Viewers/node_modules/nx/src/plugins/js/lock-file/yarn-parser.js:26:45)
+4 error     at getLockFileNodes (/Users/zpick/Desktop/Viewers/node_modules/nx/src/plugins/js/lock-file/lock-file.js:33:59)
+4 error     at exports.createNodes (/Users/zpick/Desktop/Viewers/node_modules/nx/src/plugins/js/index.js:42:64)

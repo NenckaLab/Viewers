@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import SwiperCore, { A11y, Controller, Navigation, Pagination, Scrollbar } from 'swiper';
 import { Swiper, SwiperSlide } from 'swiper/react';
 
+import { PanelService, ServicesManager, Types } from '@ohif/core';
+
 import LegacyButton from '../LegacyButton';
 import Icon from '../Icon';
 import IconButton from '../IconButton';
@@ -64,13 +66,14 @@ const position = {
 };
 
 const SidePanel = ({
+  servicesManager,
   side,
   className,
   activeTabIndex: activeTabIndexProp,
   tabs,
-  onSidePanelOpen,
-  onActiveTabIndexChange,
 }) => {
+  const panelService: PanelService = servicesManager?.services?.panelService;
+
   const { t } = useTranslation('SidePanel');
 
   // Tracks whether this SidePanel has been opened at least once since this SidePanel was inserted into the DOM.
@@ -87,6 +90,8 @@ const SidePanel = ({
   const openStatus = panelOpen ? 'open' : 'closed';
   const style = Object.assign({}, styleMap[openStatus][side], baseStyle);
 
+  const ActiveComponent = tabs[activeTabIndex].content;
+
   useEffect(() => {
     if (panelOpen && swiper) {
       swiper.slideTo(activeTabIndex, 500);
@@ -102,27 +107,19 @@ const SidePanel = ({
     }
   }, [swiper]);
 
-  const updatePanelOpen = useCallback(
-    (panelOpen: boolean) => {
-      setPanelOpen(panelOpen);
-
-      if (panelOpen && onSidePanelOpen) {
-        onSidePanelOpen();
-      }
-    },
-    [onSidePanelOpen]
-  );
+  const updatePanelOpen = useCallback((panelOpen: boolean) => {
+    setPanelOpen(panelOpen);
+    if (panelOpen) {
+      setHasBeenOpened(true);
+    }
+  }, []);
 
   const updateActiveTabIndex = useCallback(
-    (activeTabIndexParam: number) => {
-      setActiveTabIndex(activeTabIndexParam);
+    (activeTabIndex: number) => {
+      setActiveTabIndex(activeTabIndex);
       updatePanelOpen(true);
-
-      if (onActiveTabIndexChange) {
-        onActiveTabIndexChange({ activeTabIndex: activeTabIndexParam });
-      }
     },
-    [onActiveTabIndexChange, updatePanelOpen]
+    [updatePanelOpen]
   );
 
   useEffect(() => {
@@ -143,7 +140,7 @@ const SidePanel = ({
         activatePanelSubscription.unsubscribe();
       };
     }
-  }, [activeTabIndexProp, updateActiveTabIndex]);
+  }, [tabs, hasBeenOpened, panelService, updateActiveTabIndex]);
 
   const getCloseStateComponent = () => {
     const _childComponents = Array.isArray(tabs) ? tabs : [tabs];
@@ -155,7 +152,7 @@ const SidePanel = ({
             side === 'left' ? 'justify-end pr-2' : 'justify-start pl-2'
           )}
           onClick={() => {
-            updatePanelOpen(!panelOpen);
+            updatePanelOpen(prev => !prev);
           }}
           data-cy={`side-panel-header-${side}`}
         >
@@ -215,7 +212,7 @@ const SidePanel = ({
               tabs.length === 1 && 'mb-1'
             )}
             onClick={() => {
-              updatePanelOpen(!panelOpen);
+              updatePanelOpen(prev => !prev);
               // slideToActivePanel();
             }}
             data-cy={`side-panel-header-${side}`}
@@ -277,15 +274,7 @@ const SidePanel = ({
               </button>
             </div>
           )}
-
-          {tabs.map((tab, tabIndex) => (
-            <div
-              key={tab.id}
-              className={tabIndex === activeTabIndex ? '' : 'hidden'}
-            >
-              <tab.content />
-            </div>
-          ))}
+          <ActiveComponent />
         </React.Fragment>
       ) : (
         <React.Fragment>{getCloseStateComponent()}</React.Fragment>
@@ -299,6 +288,7 @@ SidePanel.defaultProps = {
 };
 
 SidePanel.propTypes = {
+  servicesManager: PropTypes.instanceOf(ServicesManager),
   side: PropTypes.oneOf(['left', 'right']).isRequired,
   className: PropTypes.string,
   activeTabIndex: PropTypes.number,
@@ -313,8 +303,6 @@ SidePanel.propTypes = {
       })
     ),
   ]),
-  onSidePanelOpen: PropTypes.func,
-  onActiveTabIndexChange: PropTypes.func,
 };
 
 function _getMoreThanOneTabLayout(

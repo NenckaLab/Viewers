@@ -3,7 +3,7 @@ import { getPresentationIds, PresentationIds } from './getPresentationIds';
 
 class ViewportGridService extends PubSubService {
   public static readonly EVENTS = {
-    ACTIVE_VIEWPORT_ID_CHANGED: 'event::activeviewportidchanged',
+    ACTIVE_VIEWPORT_INDEX_CHANGED: 'event::activeviewportindexchanged',
     LAYOUT_CHANGED: 'event::layoutChanged',
     GRID_STATE_CHANGED: 'event::gridStateChanged',
   };
@@ -27,7 +27,7 @@ class ViewportGridService extends PubSubService {
 
   public setServiceImplementation({
     getState: getStateImplementation,
-    setActiveViewportId: setActiveViewportIdImplementation,
+    setActiveViewportIndex: setActiveViewportIndexImplementation,
     setDisplaySetsForViewports: setDisplaySetsForViewportsImplementation,
     setLayout: setLayoutImplementation,
     reset: resetImplementation,
@@ -38,8 +38,8 @@ class ViewportGridService extends PubSubService {
     if (getStateImplementation) {
       this.serviceImplementation._getState = getStateImplementation;
     }
-    if (setActiveViewportIdImplementation) {
-      this.serviceImplementation._setActiveViewport = setActiveViewportIdImplementation;
+    if (setActiveViewportIndexImplementation) {
+      this.serviceImplementation._setActiveViewportIndex = setActiveViewportIndexImplementation;
     }
     if (setDisplaySetsForViewportsImplementation) {
       this.serviceImplementation._setDisplaySetsForViewports =
@@ -62,11 +62,13 @@ class ViewportGridService extends PubSubService {
     }
   }
 
-  public setActiveViewportId(id: string) {
-    this.serviceImplementation._setActiveViewport(id);
+  public setActiveViewportIndex(index) {
+    this.serviceImplementation._setActiveViewportIndex(index);
     const state = this.getState();
-    this._broadcastEvent(this.EVENTS.ACTIVE_VIEWPORT_ID_CHANGED, {
-      viewportId: id,
+    const viewportId = state.viewports[index]?.viewportOptions?.viewportId;
+    this._broadcastEvent(this.EVENTS.ACTIVE_VIEWPORT_INDEX_CHANGED, {
+      viewportIndex: index,
+      viewportId,
     });
   }
 
@@ -85,7 +87,7 @@ class ViewportGridService extends PubSubService {
     const viewports = [];
 
     for (const viewport of props) {
-      const updatedViewport = state.viewports.get(viewport.viewportId);
+      const updatedViewport = state.viewports[viewport.viewportIndex];
       if (updatedViewport) {
         viewports.push(updatedViewport);
       } else {
@@ -111,7 +113,7 @@ class ViewportGridService extends PubSubService {
     numRows,
     layoutOptions,
     layoutType = 'grid',
-    activeViewportId = undefined,
+    activeViewportIndex = undefined,
     findOrCreateViewport = undefined,
   }) {
     this.serviceImplementation._setLayout({
@@ -119,7 +121,7 @@ class ViewportGridService extends PubSubService {
       numRows,
       layoutOptions,
       layoutType,
-      activeViewportId,
+      activeViewportIndex,
       findOrCreateViewport,
     });
     this._broadcastEvent(this.EVENTS.LAYOUT_CHANGED, {
@@ -153,10 +155,8 @@ class ViewportGridService extends PubSubService {
     return this.serviceImplementation._getNumViewportPanes();
   }
 
-  public getLayoutOptionsFromState(
-    state: any
-  ): { x: number; y: number; width: number; height: number }[] {
-    return Array.from(state.viewports.entries()).map(([_, viewport]) => {
+  public getLayoutOptionsFromState(state) {
+    return state.viewports.map(viewport => {
       return {
         x: viewport.x,
         y: viewport.y,

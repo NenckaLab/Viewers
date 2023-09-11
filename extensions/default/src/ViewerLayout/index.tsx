@@ -1,10 +1,25 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
-
-import { SidePanel, ErrorBoundary, LoadingIndicatorProgress } from '@ohif/ui';
-import { ServicesManager, HangingProtocolService, CommandsManager } from '@ohif/core';
+import { useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router';
+import { useTranslation } from 'react-i18next';
+import {
+  SidePanel,
+  ErrorBoundary,
+  UserPreferences,
+  AboutModal,
+  Header,
+  useModal,
+  LoadingIndicatorProgress,
+} from '@ohif/ui';
+import i18n from '@ohif/i18n';
+import { ServicesManager, HangingProtocolService, hotkeys, CommandsManager } from '@ohif/core';
 import { useAppConfig } from '@state';
+import Toolbar from '../Toolbar/Toolbar';
+import SidePanelWithService from '../components/SidePanelWithService';
 import ViewerHeader from './ViewerHeader';
+
+const { availableLanguages, defaultLanguage, currentLanguage } = i18n;
 
 function ViewerLayout({
   // From Extension Module Params
@@ -19,9 +34,108 @@ function ViewerLayout({
   rightPanelDefaultClosed = false,
 }): React.FunctionComponent {
   const [appConfig] = useAppConfig();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const { hangingProtocolService } = servicesManager.services;
+  const { panelService, hangingProtocolService } = servicesManager.services;
+
+  const hasPanels = useCallback(
+    (side): boolean => !!panelService.getPanels(side).length,
+    [panelService]
+  );
+
+  const [hasRightPanels, setHasRightPanels] = useState(hasPanels('right'));
+  const [hasLeftPanels, setHasLeftPanels] = useState(hasPanels('left'));
+
+  const onClickReturnButton = () => {
+    const { pathname } = location;
+    const dataSourceIdx = pathname.indexOf('/', 1);
+    // const search =
+    //   dataSourceIdx === -1
+    //     ? undefined
+    //     : `datasources=${pathname.substring(dataSourceIdx + 1)}`;
+
+    // Todo: Handle parameters in a better way.
+    const query = new URLSearchParams(window.location.search);
+    const configUrl = query.get('configUrl');
+
+    const dataSourceName = pathname.substring(dataSourceIdx + 1);
+    const existingDataSource = extensionManager.getDataSources(dataSourceName);
+
+    const searchQuery = new URLSearchParams();
+    if (dataSourceIdx !== -1 && existingDataSource) {
+      searchQuery.append('datasources', pathname.substring(dataSourceIdx + 1));
+    }
+
+    if (configUrl) {
+      searchQuery.append('configUrl', configUrl);
+    }
+
+    navigate({
+      pathname: '/',
+      search: decodeURIComponent(searchQuery.toString()),
+    });
+  };
+
+  const { t } = useTranslation();
+  const { show, hide } = useModal();
+
   const [showLoadingIndicator, setShowLoadingIndicator] = useState(appConfig.showLoadingIndicator);
+
+  const { hotkeyDefinitions, hotkeyDefaults } = hotkeysManager;
+  const versionNumber = process.env.VERSION_NUMBER;
+  const commitHash = process.env.COMMIT_HASH;
+
+  const menuOptions = [
+    {
+      title: t('Header:About'),
+      icon: 'info',
+      onClick: () =>
+        show({
+          content: AboutModal,
+          title: 'About OHIF Viewer',
+          contentProps: { versionNumber, commitHash },
+        }),
+    },
+    {
+      title: t('Header:Preferences'),
+      icon: 'settings',
+      onClick: () =>
+        show({
+          title: t('UserPreferencesModal:User Preferences'),
+          content: UserPreferences,
+          contentProps: {
+            hotkeyDefaults: hotkeysManager.getValidHotkeyDefinitions(hotkeyDefaults),
+            hotkeyDefinitions,
+            currentLanguage: currentLanguage(),
+            availableLanguages,
+            defaultLanguage,
+            onCancel: () => {
+              hotkeys.stopRecord();
+              hotkeys.unpause();
+              hide();
+            },
+            onSubmit: ({ hotkeyDefinitions, language }) => {
+              i18n.changeLanguage(language.value);
+              hotkeysManager.setHotkeys(hotkeyDefinitions);
+              hide();
+            },
+            onReset: () => hotkeysManager.restoreDefaultBindings(),
+            hotkeysModule: hotkeys,
+          },
+        }),
+    },
+  ];
+
+  if (appConfig.oidc) {
+    menuOptions.push({
+      title: t('Header:Logout'),
+      icon: 'power-off',
+      onClick: async () => {
+        navigate(`/logout?redirect_uri=${encodeURIComponent(window.location.href)}`);
+      },
+    });
+  }
 
   /**
    * Set body classes (tailwindcss) that don't allow vertical
