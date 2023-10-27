@@ -23,6 +23,10 @@ import {
 } from '@ohif/core';
 
 import loadModules from './pluginImports';
+import {
+  isLoggedIn,
+  xnatAuthenticate,
+} from '../../../extensions/default/src/DicomWebDataSource/utils/xnatDev';
 
 /**
  * @param {object|func} appConfigOrFunc - application configuration, or a function that returns application configuration
@@ -127,7 +131,11 @@ async function appInit(appConfigOrFunc, defaultExtensions, defaultModes) {
   // Hack alert - don't touch the original modes definition,
   // but there are still dependencies on having the appConfig modes defined
   appConfig.modes = appConfig.loadedModes;
-
+  const loggedIn = await isLoggedIn();
+  console.info('Logged in XNAT? ' + loggedIn);
+  if (!loggedIn) {
+    await xnatAuthenticate();
+  }
   return {
     appConfig,
     commandsManager,

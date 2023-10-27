@@ -69,14 +69,8 @@ module.exports = (env, argv) => {
         // Hoisted Yarn Workspace Modules
         path.resolve(__dirname, '../../../node_modules'),
         SRC_DIR,
-        path.resolve(
-          __dirname,
-          '/Users/zpick/Desktop/Viewers/modes/longitudinal/node_modules'
-        ),
-        path.resolve(
-          __dirname,
-          '/Users/zpick/Desktop/Viewers/modes/lytic-lesions/node_modules'
-        ),
+        path.resolve(__dirname, '/Users/zpick/Desktop/Viewers/modes/longitudinal/node_modules'),
+        path.resolve(__dirname, '/Users/zpick/Desktop/Viewers/modes/lytic-lesions/node_modules'),
         path.resolve(
           __dirname,
           '/Users/zpick/Desktop/Viewers/extensions/extension-lytic-lesion/node_modules'
@@ -158,7 +152,8 @@ module.exports = (env, argv) => {
         overlay: { errors: true, warnings: false },
       },
       proxy: {
-        '/dicomweb': 'http://localhost:5000',
+        '/': 'https://devxnat.rcc.mcw.edu/',
+        changeOrigin: true,
       },
       static: [
         {
