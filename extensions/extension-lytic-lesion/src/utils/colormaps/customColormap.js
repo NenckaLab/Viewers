@@ -29,13 +29,6 @@ function customColormap(
     huMax -= huMin;
     huMin = 0;
   }
-  console.log(windowLow / windowHigh);
-  console.log(huMin / windowHigh);
-  console.log(huLow / windowHigh);
-  console.log(huCenter / windowHigh);
-  console.log(huHigh / windowHigh);
-  console.log(huMax / windowHigh);
-  console.log(windowHigh / windowHigh);
   // Define the HU range and breakpoints
   const huG = (huCenter + huMin) / 2;
   const huB = (huCenter + huMax) / 2;
@@ -51,8 +44,6 @@ function customColormap(
       [huMax / windowHigh, [192, 192, 192]], // gray
       [1, [255, 255, 255]], // white
     ];
-    console.log('Window Correct');
-    console.log(breakpoints);
   } else {
     breakpoints = [
       [0, [0, 0, 0]], // black
@@ -63,8 +54,6 @@ function customColormap(
       [(huHigh + huMax) / 2 / huMax, [192, 192, 255]], // gray
       [1, [255, 255, 255]], // white
     ];
-    console.log('Window Incorrect');
-    console.log(breakpoints);
   }
   // Create the colormap using LinearSegmentedColormap
   const colormap = createLinearSegmentedColormap(
@@ -72,15 +61,6 @@ function customColormap(
     breakpoints,
     numPoints
   );
-  console.log(colormap);
-  console.log(windowLow);
-  console.log(huMin);
-  console.log(huLow);
-  console.log(huCenter);
-  console.log(windowCenter);
-  console.log(huHigh);
-  console.log(huMax);
-  console.log(windowHigh);
   // Initialize the array to store RGBPoints
   const RGBPoints = [];
   // Generate RGBPoints
@@ -93,7 +73,6 @@ function customColormap(
     const normalizedRGB = [r / 255, g / 255, b / 255];
     RGBPoints.push(normalizedValue, ...normalizedRGB);
   }
-  console.log(RGBPoints);
   return RGBPoints;
 }
 
@@ -146,5 +125,4 @@ function parseColor(color) {
 
 // Usage
 const RGBPoints = customColormap();
-console.log('RGBPoints =', RGBPoints);
 export default customColormap;

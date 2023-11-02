@@ -23,12 +23,7 @@ function customColormap() {
   ];
 
   // Create the colormap using LinearSegmentedColormap
-  const colormap = createLinearSegmentedColormap(
-    'custom_colormap',
-    breakpoints,
-    numPoints
-  );
-  console.log(colormap);
+  const colormap = createLinearSegmentedColormap('custom_colormap', breakpoints, numPoints);
   // Initialize the array to store RGBPoints
   const RGBPoints = [];
   // Generate RGBPoints
@@ -38,7 +33,6 @@ function customColormap() {
     const [r, g, b] = colormap;
     RGBPoints.push([normalizedValue, r, g, b]);
   }
-  console.log(RGBPoints);
   return RGBPoints;
 }
 
@@ -89,6 +83,4 @@ function parseColor(color) {
 }
 
 // Usage
-const RGBPoints = customColormap();
-console.log('RGBPoints =', RGBPoints);
 export default customColormap;

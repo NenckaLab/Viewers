@@ -25,7 +25,6 @@
 import { DICOMWeb, utils } from '@ohif/core';
 import { sortStudySeries } from '@ohif/core/src/utils/sortStudy';
 import DICOMwebClient from 'dicomweb-client/types/api';
-
 const { getString, getName, getModalities } = DICOMWeb;
 /**
  * Parses resulting data from a QIDO call into a set of Study MetaData

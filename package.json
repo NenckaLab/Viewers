@@ -140,6 +140,7 @@
     "workbox-webpack-plugin": "^6.1.5",
     "worker-loader": "^3.0.8"
   },
+  "proxy": "https://devxnat.rcc.mcw.edu",
   "husky": {
     "hooks": {
       "pre-commit": "lint-staged"

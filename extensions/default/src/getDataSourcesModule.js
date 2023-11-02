@@ -17,21 +17,21 @@ function getDataSourcesModule() {
       type: 'webApi',
       createDataSource: createDicomWebApi,
     },
-    {
-      name: 'dicomwebproxy',
-      type: 'webApi',
-      createDataSource: createDicomWebProxyApi,
-    },
-    {
-      name: 'dicomjson',
-      type: 'jsonApi',
-      createDataSource: createDicomJSONApi,
-    },
-    {
-      name: 'dicomlocal',
-      type: 'localApi',
-      createDataSource: createDicomLocalApi,
-    },
+    // {
+    //   name: 'dicomwebproxy',
+    //   type: 'webApi',
+    //   createDataSource: createDicomWebProxyApi,
+    // },
+    // {
+    //   name: 'dicomjson',
+    //   type: 'jsonApi',
+    //   createDataSource: createDicomJSONApi,
+    // },
+    // {
+    //   name: 'dicomlocal',
+    //   type: 'localApi',
+    //   createDataSource: createDicomLocalApi,
+    // },
   ];
 }
 

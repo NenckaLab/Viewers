@@ -9,12 +9,14 @@ import {
   processSeriesResults,
 } from './qido.js';
 import dcm4cheeReject from './dcm4cheeReject';
+
 import getImageId from './utils/getImageId';
 import dcmjs from 'dcmjs';
 import { retrieveStudyMetadata, deleteStudyMetadataPromise } from './retrieveStudyMetadata.js';
 import StaticWadoClient from './utils/StaticWadoClient';
 import getDirectURL from '../utils/getDirectURL';
 import { fixBulkDataURI } from './utils/fixBulkDataURI';
+
 const { DicomMetaDictionary, DicomDict } = dcmjs.data;
 
 const { naturalizeDataset, denaturalizeDataset } = DicomMetaDictionary;
@@ -22,175 +24,9 @@ const { naturalizeDataset, denaturalizeDataset } = DicomMetaDictionary;
 const ImplementationClassUID = '2.25.270695996825855179949881587723571202391.2.0.0';
 const ImplementationVersionName = 'OHIF-VIEWER-2.0.0';
 const EXPLICIT_VR_LITTLE_ENDIAN = '1.2.840.10008.1.2.1';
-const MEDIATYPES = {
-  DICOM: 'application/dicom',
-  DICOM_JSON: 'application/dicom+json',
-  OCTET_STREAM: 'application/octet-stream',
-  PDF: 'application/pdf',
-  JPEG: 'image/jpeg',
-  PNG: 'image/png',
-};
+
 const metadataProvider = classes.MetadataProvider;
-class MyDICOMwebClient extends api.DICOMwebClient {
-  constructor(config) {
-    super(config);
-  }
-  searchForStudies(options = {}) {
-    console.log('search for studies');
-    let withCredentials = true;
-    let url = `${this.qidoURL}/data/experiments`;
-    if ('queryParams' in options) {
-      url += MyDICOMwebClient._parseQueryParameters(options.queryParams);
-    }
-    if ('withCredentials' in options) {
-      if (options.withCredentials) {
-        withCredentials = options.withCredentials;
-      }
-    }
-    return this._httpGetApplicationJson(url, {}, false, withCredentials);
-  }
-  _httpGetApplicationJson(url, params = {}, progressCallback, withCredentials) {
-    let urlWithQueryParams = url;
 
-    if (typeof params === 'object') {
-      if (!isEmptyObject(params)) {
-        urlWithQueryParams += MyDICOMwebClient._parseQueryParameters(params);
-      }
-    }
-    const headers = { Accept: MEDIATYPES.DICOM_JSON };
-    const responseType = 'json';
-    return this._httpGet(
-      urlWithQueryParams,
-      headers,
-      responseType,
-      progressCallback,
-      withCredentials
-    );
-  }
-  _httpGet(url, headers, responseType, progressCallback, withCredentials) {
-    return this._httpRequest(url, 'get', headers, {
-      responseType,
-      progressCallback,
-      withCredentials,
-    });
-  }
-  _httpRequest(url, method, headers = {}, options = {}) {
-    const { errorInterceptor, requestHooks } = this;
-
-    return new Promise((resolve, reject) => {
-      let request = options.request ? options.request : new XMLHttpRequest();
-
-      request.open(method, url, true);
-      if ('responseType' in options) {
-        request.responseType = options.responseType;
-      }
-
-      if (typeof headers === 'object') {
-        Object.keys(headers).forEach(key => {
-          request.setRequestHeader(key, headers[key]);
-        });
-      }
-
-      // now add custom headers from the user
-      // (e.g. access tokens)
-      const userHeaders = this.headers;
-      Object.keys(userHeaders).forEach(key => {
-        request.setRequestHeader(key, userHeaders[key]);
-      });
-
-      // Event triggered when upload starts
-      request.onloadstart = function onloadstart() {
-        // console.log('upload started: ', url)
-      };
-
-      // Event triggered when upload ends
-      request.onloadend = function onloadend() {
-        // console.log('upload finished')
-      };
-
-      // Handle response message
-      request.onreadystatechange = () => {
-        if (request.readyState === 4) {
-          if (request.status === 200) {
-            resolve(request.response);
-          } else if (request.status === 202) {
-            if (this.verbose) {
-              console.warn('some resources already existed: ', request);
-            }
-            resolve(request.response);
-          } else if (request.status === 204) {
-            if (this.verbose) {
-              console.warn('empty response for request: ', request);
-            }
-            resolve([]);
-          } else {
-            const error = new Error('request failed');
-            error.request = request;
-            error.response = request.response;
-            error.status = request.status;
-            if (this.verbose) {
-              console.error('request failed: ', request);
-              console.error(error);
-              console.error(error.response);
-            }
-
-            errorInterceptor(error);
-
-            reject(error);
-          }
-        }
-      };
-
-      // Event triggered while download progresses
-      if ('progressCallback' in options) {
-        if (typeof options.progressCallback === 'function') {
-          request.onprogress = options.progressCallback;
-        }
-      }
-
-      if (requestHooks && areValidRequestHooks(requestHooks)) {
-        const combinedHeaders = Object.assign({}, headers, this.headers);
-        const metadata = { method, url, headers: combinedHeaders };
-        const pipeRequestHooks = functions => args =>
-          functions.reduce((props, fn) => fn(props, metadata), args);
-        const pipedRequest = pipeRequestHooks(requestHooks);
-        request = pipedRequest(request);
-      }
-
-      // Add withCredentials to request if needed
-      if ('withCredentials' in options) {
-        if (options.withCredentials) {
-          request.withCredentials = true;
-        }
-      }
-
-      if ('data' in options) {
-        request.send(options.data);
-      } else {
-        request.send();
-      }
-    });
-  }
-}
-function areValidRequestHooks(requestHooks) {
-  const isValid =
-    Array.isArray(requestHooks) &&
-    requestHooks.every(
-      requestHook => typeof requestHook === 'function' && requestHook.length === 2
-    );
-
-  if (!isValid) {
-    console.warn(
-      'Request hooks should have the following signature: ' +
-        'function requestHook(request, metadata) { return request; }'
-    );
-  }
-
-  return isValid;
-}
-function isEmptyObject(obj) {
-  return Object.keys(obj).length === 0 && obj.constructor === Object;
-}
 /**
  *
  * @param {string} name - Data source name
@@ -204,7 +40,7 @@ function isEmptyObject(obj) {
  * @param {bool} lazyLoadStudy - "enableStudyLazyLoad"; Request series meta async instead of blocking
  * @param {string|bool} singlepart - indicates of the retrieves can fetch singlepart.  Options are bulkdata, video, image or boolean true
  */
-async function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
+function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
   let dicomWebConfigCopy,
     qidoConfig,
     wadoConfig,
@@ -263,16 +99,16 @@ async function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
         headers: userAuthenticationService.getAuthorizationHeader(),
         errorInterceptor: errorHandler.getHTTPErrorHandler(),
       };
-      console.log(dicomWebConfig.staticWado);
+
       // TODO -> Two clients sucks, but its better than 1000.
       // TODO -> We'll need to merge auth later.
       qidoDicomWebClient = dicomWebConfig.staticWado
         ? new StaticWadoClient(qidoConfig)
-        : new MyDICOMwebClient(qidoConfig);
+        : new api.DICOMwebClient(qidoConfig);
 
       wadoDicomWebClient = dicomWebConfig.staticWado
         ? new StaticWadoClient(wadoConfig)
-        : new MyDICOMwebClient(wadoConfig);
+        : new api.DICOMwebClient(wadoConfig);
     },
     query: {
       studies: {

@@ -1,15 +1,14 @@
 /*
 XNAT authentication
  */
-const XNAT_PROXY = 'http://localhost:3000/';
+const XNAT_PROXY = 'localhost:3000/';
 
 function _isLoggedIn() {
   console.log('LOGGED IN?');
   const url = XNAT_PROXY + 'data/JSESSION?CSRF=true';
-  console.log(url);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-
+    console.log(`GET ${url}... ${xhr.status}`);
     xhr.onload = () => {
       console.log(`GET ${url}... ${xhr.status}`);
 
@@ -23,8 +22,8 @@ function _isLoggedIn() {
     xhr.onerror = () => {
       reject('Error checking logged-in to XNAT' + xhr.responseText);
     };
-
     xhr.open('GET', url);
+    xhr.setRequestHeader('Accept', 'application/json');
     xhr.timeout = 5000;
     xhr.send();
   });
@@ -73,6 +72,17 @@ export async function isLoggedIn() {
   return loggedIn;
 }
 
+export async function xnatAuthenticate() {
+  const csrfToken = _getCsrfToken();
+
+  try {
+    let res = await _xnatAuthenticate(csrfToken);
+    document.cookie = `XNAT_JSESSIONID=${res}`;
+    console.warn('Logged-in to XNAT: ' + res);
+  } catch (err) {
+    console.error(err);
+  }
+}
 function _xnatAuthenticate(csrfToken) {
   console.log('AUTHENTICATED?');
   const csrfTokenParameter = `XNAT_CSRF=${csrfToken}`;
@@ -93,7 +103,6 @@ function _xnatAuthenticate(csrfToken) {
     xhr.onerror = () => {
       reject('Error authenticating to XNAT' + xhr.responseText);
     };
-
     const XNAT_USERNAME = 'admin';
     const XNAT_PASSWORD = 'admin';
 
@@ -103,25 +112,17 @@ function _xnatAuthenticate(csrfToken) {
     }
     console.log(url);
     xhr.open('POST', url);
-    // xhr.withCredentials = true;
+    xhr.setRequestHeader('Accept', 'application/json');
+    // Set withCredentials to true to enable cookie and authentication data
+    xhr.withCredentials = true;
+
     xhr.setRequestHeader('Authorization', 'Basic ' + btoa(`${XNAT_USERNAME}:${XNAT_PASSWORD}`));
     xhr.timeout = 5000;
+    console.log(xhr);
     xhr.send();
+    console.log('SENT');
   });
 }
-
-export async function xnatAuthenticate() {
-  const csrfToken = _getCsrfToken();
-
-  try {
-    let res = await _xnatAuthenticate(csrfToken);
-    document.cookie = `XNAT_JSESSIONID=${res}`;
-    console.warn('Logged-in to XNAT: ' + res);
-  } catch (err) {
-    console.error(err);
-  }
-}
-
 export function reassignInstanceUrls(studies) {
   const XNAT_DOMAIN = 'http://devxnat.rcc.mcw.edu'.replace(/^http(s?):/i, '') + '/';
 

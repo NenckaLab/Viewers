@@ -15,6 +15,7 @@ const SRC_DIR = path.join(__dirname, '../src');
 const DIST_DIR = path.join(__dirname, '../dist');
 const PUBLIC_DIR = path.join(__dirname, '../public');
 // ~~ Env Vars
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const HTML_TEMPLATE = process.env.HTML_TEMPLATE || 'index.html';
 const PUBLIC_URL = process.env.PUBLIC_URL || '/';
 const APP_CONFIG = process.env.APP_CONFIG || 'config/default.js';
@@ -27,18 +28,23 @@ const writePluginImportFile = require('./writePluginImportsFile.js');
 const copyPluginFromExtensions = writePluginImportFile(SRC_DIR, DIST_DIR);
 
 const setHeaders = (res, path) => {
-  if (path.indexOf('.gz') !== -1) {
-    res.setHeader('Content-Encoding', 'gzip');
-  } else if (path.indexOf('.br') !== -1) {
-    res.setHeader('Content-Encoding', 'br');
-  }
-  if (path.indexOf('.pdf') !== -1) {
-    res.setHeader('Content-Type', 'application/pdf');
-  } else if (path.indexOf('frames') !== -1) {
-    res.setHeader('Content-Type', 'multipart/related');
-  } else {
-    res.setHeader('Content-Type', 'application/json');
-  }
+  // if (path.indexOf('.gz') !== -1) {
+  //   res.setHeader('Content-Encoding', 'gzip');
+  // } else if (path.indexOf('.br') !== -1) {
+  //   res.setHeader('Content-Encoding', 'br');
+  // }
+  // if (path.indexOf('.pdf') !== -1) {
+  //   res.setHeader('Content-Type', 'application/pdf');
+  // } else if (path.indexOf('frames') !== -1) {
+  //   res.setHeader('Content-Type', 'multipart/related');
+  // } else {
+  //   res.setHeader('Content-Type', 'application/json');
+  // }
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
 };
 
 module.exports = (env, argv) => {
@@ -152,8 +158,22 @@ module.exports = (env, argv) => {
         overlay: { errors: true, warnings: false },
       },
       proxy: {
-        '/': 'https://devxnat.rcc.mcw.edu/',
-        changeOrigin: true,
+        '/data/': {
+          target: 'https://devxnat.rcc.mcw.edu',
+          secure: false,
+          changeOrigin: true,
+          auth: 'admin:admin',
+          logLevel: 'debug',
+          stats: 'verbose',
+        },
+        '/studies/': {
+          target: 'https://devxnat.rcc.mcw.edu/data/experiments',
+          secure: false,
+          changeOrigin: true,
+          auth: 'admin:admin',
+          logLevel: 'debug',
+          stats: 'verbose',
+        },
       },
       static: [
         {
