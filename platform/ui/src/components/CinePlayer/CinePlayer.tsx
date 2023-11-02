@@ -36,9 +36,7 @@ const CinePlayer: React.FC<CinePlayerProps> = ({
   onClose,
 }) => {
   const [frameRate, setFrameRate] = useState(currentFrameRate);
-  const debouncedSetFrameRate = useCallback(debounce(onFrameRateChange, 100), [
-    onFrameRateChange,
-  ]);
+  const debouncedSetFrameRate = useCallback(debounce(onFrameRateChange, 100), [onFrameRateChange]);
 
   const getPlayPauseIconName = () => (isPlaying ? 'icon-pause' : 'icon-play');
 
@@ -108,7 +106,7 @@ const CinePlayer: React.FC<CinePlayerProps> = ({
   );
 };
 
-const noop = () => {};
+const noop = () => { };
 
 CinePlayer.defaultProps = {
   isPlaying: false,

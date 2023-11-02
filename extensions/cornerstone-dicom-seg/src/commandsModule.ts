@@ -2,8 +2,17 @@ import dcmjs from 'dcmjs';
 import { createReportDialogPrompt } from '@ohif/extension-default';
 import { ServicesManager, Types } from '@ohif/core';
 import { cache, metaData } from '@cornerstonejs/core';
-import { segmentation as cornerstoneToolsSegmentation } from '@cornerstonejs/tools';
-import { adaptersSEG, helpers } from '@cornerstonejs/adapters';
+import {
+  segmentation as cornerstoneToolsSegmentation,
+  Enums as cornerstoneToolsEnums,
+} from '@cornerstonejs/tools';
+import { adaptersRT, helpers, adaptersSEG } from '@cornerstonejs/adapters';
+import { classes, DicomMetadataStore } from '@ohif/core';
+
+import vtkImageMarchingSquares from '@kitware/vtk.js/Filters/General/ImageMarchingSquares';
+import vtkDataArray from '@kitware/vtk.js/Common/Core/DataArray';
+import vtkImageData from '@kitware/vtk.js/Common/DataModel/ImageData';
+
 import {
   updateViewportsForSegmentationRendering,
   getUpdatedViewportsForSegmentation,
@@ -14,11 +23,20 @@ import * as cs from '@cornerstonejs/core';
 import { thresholdSegmentationByRange } from '@cornerstonejs/tools/dist/esm/utilities/segmentation';
 
 const LABELMAP = csTools.Enums.SegmentationRepresentations.Labelmap;
+
+const { datasetToBlob } = dcmjs.data;
+
 const {
   Cornerstone3D: {
     Segmentation: { generateLabelMaps2DFrom3D, generateSegmentation },
   },
 } = adaptersSEG;
+
+const {
+  Cornerstone3D: {
+    RTSS: { generateRTSSFromSegmentations },
+  },
+} = adaptersRT;
 
 const { downloadDICOMData } = helpers;
 
@@ -59,50 +77,11 @@ const commandsModule = ({
      * @param params.viewportId - the target viewport ID.
      *
      */
-    // createEmptySegmentationForViewport: async ({ viewportId, color }) => {
-    //   const viewport = getTargetViewport({ viewportId, viewportGridService });
-    //   // Todo: add support for multiple display sets
-    //   const displaySetInstanceUID = viewport.displaySetInstanceUIDs[0];
-    //   const displaySet = displaySetService.getDisplaySetByUID(displaySetInstanceUID);
-
-    //   if (!displaySet.isReconstructable) {
-    //     uiNotificationService.show({
-    //       title: 'Segmentation',
-    //       message: 'Segmentation is not supported for non-reconstructible displaysets yet',
-    //       type: 'error',
-    //     });
-    //     return;
-    //   }
-    //   const toolGroupId = viewport.viewportOptions.toolGroupId;
-    //   const segmentationIds = [];
-
-    //   updateViewportsForSegmentationRendering({
-    //     viewportId,
-    //     servicesManager,
-    //     loadFn: async () => {
-    //           await segmentationService.createSegmentationForDisplaySet(displaySetInstanceUID)
-
-    //         await segmentationService.addSegmentationRepresentationToToolGroup(
-    //           toolGroupId,
-    //           segmentationId
-    //         );
-    //         segmentationService.addSegment(segmentationId, {
-    //           segmentIndex: i + 1,
-    //           properties: {
-    //             color: [color[0], color[1], color[2]],
-    //             opacity: color[3],
-    //             label: `Segment ${i + 1}`,
-    //           },
-    //         });
-    //       }
-    //       return segmentationId;
-    //     },
-    //   },
     createEmptySegmentationForViewport: async ({ viewportId }) => {
-      console.log('emptySeg');
       const viewport = getTargetViewport({ viewportId, viewportGridService });
       // Todo: add support for multiple display sets
       const displaySetInstanceUID = viewport.displaySetInstanceUIDs[0];
+
       const displaySet = displaySetService.getDisplaySetByUID(displaySetInstanceUID);
 
       if (!displaySet.isReconstructable) {
@@ -432,7 +411,50 @@ const commandsModule = ({
 
       await dataSource.store.dicom(naturalizedReport);
 
+      // The "Mode" route listens for DicomMetadataStore changes
+      // When a new instance is added, it listens and
+      // automatically calls makeDisplaySets
+
+      // add the information for where we stored it to the instance as well
+      naturalizedReport.wadoRoot = dataSource.getConfig().wadoRoot;
+
+      DicomMetadataStore.addInstances([naturalizedReport], true);
+
       return naturalizedReport;
+    },
+    /**
+     * Converts segmentations into RTSS for download.
+     * This sample function retrieves all segentations and passes to
+     * cornerstone tool adapter to convert to DICOM RTSS format. It then
+     * converts dataset to downloadable blob.
+     *
+     */
+    downloadRTSS: ({ segmentationId }) => {
+      const segmentations = segmentationService.getSegmentation(segmentationId);
+      const vtkUtils = {
+        vtkImageMarchingSquares,
+        vtkDataArray,
+        vtkImageData,
+      };
+
+      const RTSS = generateRTSSFromSegmentations(
+        segmentations,
+        classes.MetadataProvider,
+        DicomMetadataStore,
+        cache,
+        cornerstoneToolsEnums,
+        vtkUtils
+      );
+
+      try {
+        const reportBlob = datasetToBlob(RTSS);
+
+        //Create a URL for the binary.
+        const objectUrl = URL.createObjectURL(reportBlob);
+        window.location.assign(objectUrl);
+      } catch (e) {
+        console.warn(e);
+      }
     },
   };
 
@@ -457,6 +479,9 @@ const commandsModule = ({
     },
     storeSegmentation: {
       commandFn: actions.storeSegmentation,
+    },
+    downloadRTSS: {
+      commandFn: actions.downloadRTSS,
     },
   };
 

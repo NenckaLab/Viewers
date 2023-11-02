@@ -58,6 +58,7 @@ export {
   IconButton,
   Input,
   InputRange,
+  InputDoubleRange,
   InputNumber,
   InputDoubleRange,
   InputDateRange,
@@ -71,6 +72,7 @@ export {
   LegacyButton,
   LegacyButtonGroup,
   LegacyCinePlayer,
+  LegacySidePanel,
   LegacyViewportActionBar,
   LoadingIndicatorProgress,
   LoadingIndicatorTotalPercent,
@@ -119,6 +121,8 @@ export {
   ImageScrollbar,
   ViewportOverlay,
 } from './components';
+
+export { useSessionStorage } from './hooks';
 
 /** These are mostly used in the docs */
 export { getIcon, ICONS, addIcon } from './components/Icon/getIcon';

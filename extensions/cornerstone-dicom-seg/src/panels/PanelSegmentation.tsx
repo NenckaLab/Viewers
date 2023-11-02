@@ -1,7 +1,7 @@
 import { createReportAsync } from '@ohif/extension-default';
 import React, { useEffect, useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
-import { SegmentationGroupTable } from '@ohif/ui';
+import { SegmentationGroupTable, LegacyButtonGroup, LegacyButton } from '@ohif/ui';
 
 import callInputDialog from './callInputDialog';
 import callColorPickerDialog from './colorPickerDialog';
@@ -13,7 +13,7 @@ export default function PanelSegmentation({
   extensionManager,
   configuration,
 }) {
-  const { segmentationService, uiDialogService } = servicesManager.services;
+  const { segmentationService, viewportGridService, uiDialogService } = servicesManager.services;
 
   const { t } = useTranslation('PanelSegmentation');
 
@@ -200,26 +200,42 @@ export default function PanelSegmentation({
     });
   };
 
-  const storeSegmentation = segmentationId => {
+  const storeSegmentation = async segmentationId => {
     const datasources = extensionManager.getActiveDataSource();
 
-    const getReport = async () => {
-      return await commandsManager.runCommand('storeSegmentation', {
-        segmentationId,
-        dataSource: datasources[0],
-      });
-    };
-
-    createReportAsync({
+    const displaySetInstanceUIDs = await createReportAsync({
       servicesManager,
-      getReport,
+      getReport: () =>
+        commandsManager.runCommand('storeSegmentation', {
+          segmentationId,
+          dataSource: datasources[0],
+        }),
       reportType: 'Segmentation',
+    });
+
+    // Show the exported report in the active viewport as read only (similar to SR)
+    if (displaySetInstanceUIDs) {
+      // clear the segmentation that we exported, similar to the storeMeasurement
+      // where we remove the measurements and prompt again the user if they would like
+      // to re-read the measurements in a SR read only viewport
+      segmentationService.remove(segmentationId);
+
+      viewportGridService.setDisplaySetsForViewport({
+        viewportId: viewportGridService.getActiveViewportId(),
+        displaySetInstanceUIDs,
+      });
+    }
+  };
+
+  const onSegmentationDownloadRTSS = segmentationId => {
+    commandsManager.runCommand('downloadRTSS', {
+      segmentationId,
     });
   };
 
   return (
     <>
-      <div className="flex min-h-0 flex-auto select-none flex-col justify-between">
+      <div className="ohif-scrollbar flex min-h-0 flex-auto select-none flex-col justify-between overflow-auto">
         <SegmentationGroupTable
           title={t('Segmentations')}
           segmentations={segmentations}
@@ -229,6 +245,7 @@ export default function PanelSegmentation({
           onSegmentationClick={onSegmentationClick}
           onSegmentationDelete={onSegmentationDelete}
           onSegmentationDownload={onSegmentationDownload}
+          onSegmentationDownloadRTSS={onSegmentationDownloadRTSS}
           storeSegmentation={storeSegmentation}
           onSegmentationEdit={onSegmentationEdit}
           onSegmentClick={onSegmentClick}

@@ -42,85 +42,106 @@ const InputNumber: React.FC<{
   label,
   showAdjustmentArrows = true,
 }) => {
-  const [numberValue, setNumberValue] = useState(value);
+    const [numberValue, setNumberValue] = useState(value);
+    const [isFocused, setIsFocused] = useState(false);
 
-  const maxDigits = getMaxDigits(maxValue, step);
-  const inputWidth = Math.max(maxDigits * 10, showAdjustmentArrows ? 20 : 28);
-  const arrowWidth = showAdjustmentArrows ? 20 : 0;
-  const containerWidth = `${inputWidth + arrowWidth}px`;
+    const maxDigits = getMaxDigits(maxValue, step);
+    const inputWidth = Math.max(maxDigits * 10, showAdjustmentArrows ? 20 : 28);
+    const arrowWidth = showAdjustmentArrows ? 20 : 0;
+    const containerWidth = `${inputWidth + arrowWidth}px`;
+    const decimalPlaces = Number.isInteger(step) ? 0 : step.toString().split('.')[1].length;
 
-  useEffect(() => {
-    setNumberValue(value);
-  }, [value]);
+    useEffect(() => {
+      setNumberValue(value);
+    }, [value]);
 
-  const handleMinMax = useCallback(
-    (val: number) => Math.min(Math.max(val, minValue), maxValue),
-    [maxValue, minValue]
-  );
+    const maxDigits = getMaxDigits(maxValue, step);
+    const inputWidth = Math.max(maxDigits * 10, showAdjustmentArrows ? 20 : 28);
+    const arrowWidth = showAdjustmentArrows ? 20 : 0;
+    const containerWidth = `${inputWidth + arrowWidth}px`;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputValue = e.target.value;
+    useEffect(() => {
+      setNumberValue(value);
+    }, [value]);
 
-    // Allow negative sign, empty string, or single decimal point for user flexibility
-    if (inputValue === '-' || inputValue === '' || inputValue === '.') {
-      setNumberValue(inputValue);
-      return;
-    }
+    const handleMinMax = useCallback(
+      (val: number) => Math.min(Math.max(val, minValue), maxValue),
+      [maxValue, minValue]
+    );
 
-    const number = Number(inputValue);
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const inputValue = e.target.value;
 
-    // Filter out invalid inputs like 'NaN'
-    if (!isNaN(number)) {
-      updateValue(number);
-    }
-  };
+      // Allow negative sign, empty string, or single decimal point for user flexibility
+      if (inputValue === '-' || inputValue === '' || inputValue === '.') {
+        setNumberValue(inputValue);
+        return;
+      }
 
-  const updateValue = (val: number) => {
-    const newValue = handleMinMax(val);
-    setNumberValue(newValue);
-    onChange(newValue);
-  };
+      const number = Number(inputValue);
 
-  const increment = () => updateValue(numberValue + step);
-  const decrement = () => updateValue(numberValue - step);
+      // Filter out invalid inputs like 'NaN'
+      if (!isNaN(number)) {
+        updateValue(number);
+      }
+    };
 
-  return (
-    <div className="flex flex-1 flex-col">
-      {label && (
-        <Label
-          className={labelClassName}
-          text={label}
-        />
-      )}
-      <div
-        className={`border-secondary-light flex items-center justify-center overflow-hidden rounded-md border-2 bg-black px-1 ${
-          sizesClasses[size]
-        } ${className || ''}`}
-        style={{ width: containerWidth }}
-      >
-        <div className="flex">
-          <input
-            type="number"
-            value={numberValue}
-            step={step}
-            onChange={handleChange}
-            className={'input-number w-full bg-black text-center text-[12px] text-white'}
-            style={{ width: inputWidth }}
+    const updateValue = (val: number) => {
+      const newValue = handleMinMax(val);
+      setNumberValue(newValue);
+      onChange(newValue);
+    };
+
+    const handleFocus = () => {
+      setIsFocused(true);
+    };
+
+    const handleBlur = () => {
+      setIsFocused(false);
+      setNumberValue(parseFloat(numberValue).toFixed(decimalPlaces));
+    };
+
+    const increment = () => updateValue(parseFloat(numberValue) + step);
+    const decrement = () => updateValue(parseFloat(numberValue) - step);
+
+    return (
+      <div className="flex flex-1 flex-col">
+        {label && (
+          <Label
+            className={labelClassName}
+            text={label}
           />
-          {showAdjustmentArrows && (
-            <div className="up-arrowsize flex flex-col items-center justify-around">
-              <ArrowButton
-                onClick={increment}
-                rotate
-              />
-              <ArrowButton onClick={decrement} />
-            </div>
-          )}
+        )}
+        <div
+          className={`border-secondary-light flex items-center justify-center overflow-hidden rounded-md border-2 bg-black px-1 ${sizesClasses[size]
+            } ${className || ''}`}
+          style={{ width: containerWidth }}
+        >
+          <div className="flex">
+            <input
+              type="number"
+              value={isFocused ? numberValue : parseFloat(numberValue).toFixed(decimalPlaces)}
+              step={step}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              onChange={handleChange}
+              className={'input-number w-full bg-black text-center text-[12px] text-white'}
+              style={{ width: inputWidth }}
+            />
+            {showAdjustmentArrows && (
+              <div className="up-arrowsize flex flex-col items-center justify-around">
+                <ArrowButton
+                  onClick={increment}
+                  rotate
+                />
+                <ArrowButton onClick={decrement} />
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
 const ArrowButton = ({ onClick, rotate = false }: { onClick: () => void; rotate?: boolean }) => (
   <IconButton

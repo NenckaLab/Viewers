@@ -58,10 +58,7 @@ function initDefaultToolGroup(extensionManager, toolGroupService, commandsManage
     enabled: [{ toolName: toolNames.ImageOverlayViewer }],
     // disabled
     enabled: [{ toolName: toolNames.SegmentationDisplay }],
-    disabled: [
-      { toolName: toolNames.ReferenceLines },
-      { toolName: toolNames.Crosshairs },
-    ],
+    disabled: [{ toolName: toolNames.ReferenceLines }, { toolName: toolNames.Crosshairs }],
   };
 
   toolGroupService.createToolGroupAndAddTools(toolGroupId, tools);

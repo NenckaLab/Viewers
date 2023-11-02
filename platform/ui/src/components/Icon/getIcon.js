@@ -40,6 +40,8 @@ import profile from './../../assets/icons/profile.svg';
 import pushLeft from './../../assets/icons/push-left.svg';
 import pushRight from './../../assets/icons/push-right.svg';
 import settings from './../../assets/icons/settings.svg';
+import sidePanelCloseLeft from './../../assets/icons/side-panel-close-left.svg';
+import sidePanelCloseRight from './../../assets/icons/side-panel-close-right.svg';
 import sorting from './../../assets/icons/sorting.svg';
 import sortingActiveDown from './../../assets/icons/sorting-active-down.svg';
 import sortingActiveUp from './../../assets/icons/sorting-active-up.svg';
@@ -72,6 +74,7 @@ import tabLinear from './../../assets/icons/tab-linear.svg';
 import tabPatientInfo from './../../assets/icons/tab-patient-info.svg';
 import tabROIThreshold from './../../assets/icons/tab-roi-threshold.svg';
 import tabSegmentation from './../../assets/icons/tab-segmentation.svg';
+import tabStudies from './../../assets/icons/tab-studies.svg';
 import uiArrowDown from './../../assets/icons/ui-arrow-down.svg';
 import uiArrowUp from './../../assets/icons/ui-arrow-up.svg';
 import uiArrowLeft from './../../assets/icons/ui-arrow-left.svg';
@@ -135,6 +138,7 @@ import iconMoreMenu from './../../assets/icons/icon-more-menu.svg';
 import iconToolBrush from './../../assets/icons/icon-tool-brush.svg';
 import iconToolEraser from './../../assets/icons/icon-tool-eraser.svg';
 import iconToolScissor from './../../assets/icons/icon-tool-scissor.svg';
+import iconToolShape from './../../assets/icons/icon-tool-shape.svg';
 import iconToolThreshold from './../../assets/icons/icon-tool-threshold.svg';
 
 /** Old OHIF */
@@ -191,6 +195,8 @@ const ICONS = {
   'push-left': pushLeft,
   'push-right': pushRight,
   settings: settings,
+  'side-panel-close-left': sidePanelCloseLeft,
+  'side-panel-close-right': sidePanelCloseRight,
   'sorting-active-down': sortingActiveDown,
   'sorting-active-up': sortingActiveUp,
   'status-alert': statusAlert,
@@ -261,6 +267,7 @@ const ICONS = {
   'tab-patient-info': tabPatientInfo,
   'tab-roi-threshold': tabROIThreshold,
   'tab-segmentation': tabSegmentation,
+  'tab-studies': tabStudies,
   'ui-arrow-down': uiArrowDown,
   'ui-arrow-up': uiArrowUp,
   'ui-arrow-left': uiArrowLeft,
@@ -278,6 +285,7 @@ const ICONS = {
   'icon-tool-brush': iconToolBrush,
   'icon-tool-eraser': iconToolEraser,
   'icon-tool-scissor': iconToolScissor,
+  'icon-tool-shape': iconToolShape,
   'icon-tool-threshold': iconToolThreshold,
 
   /** Old OHIF */
