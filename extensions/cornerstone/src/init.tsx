@@ -153,7 +153,7 @@ export default async function init({
 
   volumeLoader.registerVolumeLoader(
     'cornerstoneStreamingDynamicImageVolume',
-    cornerstoneStreamingDynamicImageVolumeLoader
+    cornerstoneStreamingImageVolumeLoader
   );
 
   hangingProtocolService.registerImageLoadStrategy('interleaveCenter', interleaveCenterLoader);

@@ -8,29 +8,29 @@ function _isLoggedIn() {
   const url = XNAT_PROXY + 'data/JSESSION?CSRF=true';
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    console.log(`GET ${url}... ${xhr.status}`);
+    xhr.open('GET', url);
     xhr.onload = () => {
       console.log(`GET ${url}... ${xhr.status}`);
-
       if (xhr.status === 200) {
         resolve(xhr.response);
       } else {
-        reject('Error checking logged-in to XNAT');
+        reject('Here: Error checking logged-in to XNAT:' + xhr.status);
       }
     };
-
     xhr.onerror = () => {
-      reject('Error checking logged-in to XNAT' + xhr.responseText);
+      reject('There: Error checking logged-in to XNAT' + xhr.responseText);
     };
-    xhr.open('GET', url);
     xhr.setRequestHeader('Accept', 'application/json');
+    console.log(xhr);
     xhr.timeout = 5000;
     xhr.send();
+    console.log(document.cookie);
   });
 }
 
 function _getSessionID() {
   let value = '';
+  console.log(document.cookie);
   if (document.cookie !== '') {
     value = document.cookie.split('; ').find(row => row.startsWith('XNAT_JSESSIONID'));
     if (value) {
@@ -53,10 +53,12 @@ function _getCsrfToken() {
 }
 
 export async function isLoggedIn() {
-  const sessionID = _getSessionID();
   let loggedIn = false;
   try {
     let res = await _isLoggedIn();
+    console.log(res);
+    const sessionID = _getSessionID();
+    console.log(sessionID);
     res = res.split(';');
     const csrfToken = res.length > 1 ? res[1].trim().split('=')[1] : '';
     console.log(csrfToken);
@@ -119,6 +121,7 @@ function _xnatAuthenticate(csrfToken) {
     xhr.setRequestHeader('Authorization', 'Basic ' + btoa(`${XNAT_USERNAME}:${XNAT_PASSWORD}`));
     xhr.timeout = 5000;
     console.log(xhr);
+    console.log(xhr.getAllResponseHeaders());
     xhr.send();
     console.log('SENT');
   });

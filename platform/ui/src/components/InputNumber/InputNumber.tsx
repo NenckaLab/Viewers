@@ -55,15 +55,6 @@ const InputNumber: React.FC<{
       setNumberValue(value);
     }, [value]);
 
-    const maxDigits = getMaxDigits(maxValue, step);
-    const inputWidth = Math.max(maxDigits * 10, showAdjustmentArrows ? 20 : 28);
-    const arrowWidth = showAdjustmentArrows ? 20 : 0;
-    const containerWidth = `${inputWidth + arrowWidth}px`;
-
-    useEffect(() => {
-      setNumberValue(value);
-    }, [value]);
-
     const handleMinMax = useCallback(
       (val: number) => Math.min(Math.max(val, minValue), maxValue),
       [maxValue, minValue]

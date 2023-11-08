@@ -24,7 +24,7 @@
  */
 import { DICOMWeb, utils } from '@ohif/core';
 import { sortStudySeries } from '@ohif/core/src/utils/sortStudy';
-import DICOMwebClient from 'dicomweb-client/types/api';
+import { api } from 'dicomweb-client';
 const { getString, getName, getModalities } = DICOMWeb;
 /**
  * Parses resulting data from a QIDO call into a set of Study MetaData
@@ -36,6 +36,7 @@ const { getString, getName, getModalities } = DICOMWeb;
  * @param {string[]} qidoStudies[0].qidoStudy[dicomTag].Value - Optional string array representation of the DICOM Tag's value
  * @returns {Array} An array of Study MetaData objects
  */
+let apiDicomWebClient;
 function processResults(qidoStudies) {
   if (!qidoStudies || !qidoStudies.length) {
     return [];
@@ -44,16 +45,38 @@ function processResults(qidoStudies) {
   const studies = [];
 
   qidoStudies.forEach(qidoStudy =>
+    // studies.push({
+    //   studyInstanceUid: getString(qidoStudy['0020000D']),
+    //   date: getString(qidoStudy['00080020']), // YYYYMMDD
+    //   time: getString(qidoStudy['00080030']), // HHmmss.SSS (24-hour, minutes, seconds, fractional seconds)
+    //   accession: getString(qidoStudy['00080050']) || '', // short string, probably a number?
+    //   mrn: getString(qidoStudy['00100020']) || '', // medicalRecordNumber
+    //   patientName: utils.formatPN(getName(qidoStudy['00100010'])) || '',
+    //   instances: Number(getString(qidoStudy['00201208'])) || 0, // number
+    //   description: getString(qidoStudy['00081030']) || '',
+    //   modalities: getString(getModalities(qidoStudy['00080060'], qidoStudy['00080061'])) || '',
+    // })
     studies.push({
-      studyInstanceUid: getString(qidoStudy['0020000D']),
-      date: getString(qidoStudy['00080020']), // YYYYMMDD
-      time: getString(qidoStudy['00080030']), // HHmmss.SSS (24-hour, minutes, seconds, fractional seconds)
-      accession: getString(qidoStudy['00080050']) || '', // short string, probably a number?
-      mrn: getString(qidoStudy['00100020']) || '', // medicalRecordNumber
-      patientName: utils.formatPN(getName(qidoStudy['00100010'])) || '',
-      instances: Number(getString(qidoStudy['00201208'])) || 0, // number
-      description: getString(qidoStudy['00081030']) || '',
-      modalities: getString(getModalities(qidoStudy['00080060'], qidoStudy['00080061'])) || '',
+      StudyInstanceUID: qidoStudy['UID'],
+      // 00080005 = SpecificCharacterSet
+      StudyDate: qidoStudy['date'],
+      StudyTime: qidoStudy['time'],
+      AccessionNumber: DICOMWeb.getString(qidoStudy['dcmAccessionNumber']),
+      // referringPhysicianName: DICOMWeb.getString(study['00080090']),
+      // 00081190 = URL
+      PatientName: qidoStudy['dcmPatientName'],
+      PatientID: qidoStudy['dcmPatientID'],
+      // PatientBirthdate: DICOMWeb.getString(study['00100030']),
+      // patientSex: DICOMWeb.getString(study['00100040']),
+      studyID: qidoStudy['subject_ID'],
+      // numberOfStudyRelatedSeries: DICOMWeb.getString(study['00201206']),
+      // numberOfStudyRelatedInstances: DICOMWeb.getString(study['00201208']),
+      // StudyDescription: DICOMWeb.getString(study['00081030']),
+      // Modality: DICOMWeb.getString(study['00080060']),
+      // ModalitiesInStudy: DICOMWeb.getString(study['00080061']),
+      modalities: qidoStudy['modality'],
+      uri: qidoStudy['URI'],
+      projectID: qidoStudy['project'],
     })
   );
 
@@ -76,9 +99,9 @@ export function processSeriesResults(qidoSeries) {
   if (qidoSeries && qidoSeries.length) {
     qidoSeries.forEach(qidoSeries =>
       series.push({
-        studyInstanceUid: getString(qidoSeries['0020000D']),
+        studyInstanceUid: getString(qidoSeries['UID']),
         seriesInstanceUid: getString(qidoSeries['0020000E']),
-        modality: getString(qidoSeries['00080060']),
+        modality: getString(qidoSeries['modality']),
         seriesNumber: getString(qidoSeries['00200011']),
         seriesDate: utils.formatDate(getString(qidoSeries['00080021'])),
         numSeriesInstances: Number(getString(qidoSeries['00201209'])),
@@ -102,7 +125,7 @@ export function processSeriesResults(qidoSeries) {
  * @returns {Promise<results>} - Promise that resolves results
  */
 async function search(dicomWebClient, studyInstanceUid, seriesInstanceUid, queryParameters) {
-  let searchResult = await dicomWebClient.searchForStudies({
+  let searchResult = await searchForStudies(dicomWebClient, {
     studyInstanceUid: undefined,
     queryParams: queryParameters,
   });
@@ -110,7 +133,7 @@ async function search(dicomWebClient, studyInstanceUid, seriesInstanceUid, query
   return searchResult;
 }
 
-/**
+/**s
  *
  * @param {string} studyInstanceUID - ID of study to return a list of series for
  * @returns {Promise} - Resolves SeriesMetadata[] in study
@@ -132,9 +155,28 @@ export default function searchStudies(server, filter) {
     queryParams,
   };
 
-  return dicomWeb.searchForStudies(options).then(resultDataToStudies);
+  return searchForStudies(options).then(resultDataToStudies);
 }
 
+export function searchForStudies(dicomWebClient, options = {}) {
+  console.log('search for studies');
+  let withCredentials = false;
+  // let url = `${qidoURL}/data/experiments`;
+  let url = 'localhost:3000/data/experiments';
+  if ('queryParams' in options) {
+    try {
+      url += api.DICOMwebClient._parseQueryParameters(options.queryParams);
+    } catch (err) {
+      console.log(err);
+    }
+  }
+  if ('withCredentials' in options) {
+    if (options.withCredentials) {
+      withCredentials = options.withCredentials;
+    }
+  }
+  return dicomWebClient._httpGetApplicationJson(url, {}, false, withCredentials);
+}
 /**
  * Produces a QIDO URL given server details and a set of specified search filter
  * items
@@ -158,19 +200,33 @@ function mapParams(params, options = {}) {
     return supportsWildcard && value ? `*${value}*` : value;
   };
 
+  // const parameters = {
+  //   // Named
+  //   PatientName: withWildcard(params.patientName),
+  //   //PatientID: withWildcard(params.patientId),
+  //   '00100020': withWildcard(params.patientId), // Temporarily to make the tests pass with dicomweb-server.. Apparently it's broken?
+  //   AccessionNumber: withWildcard(params.accessionNumber),
+  //   StudyDescription: withWildcard(params.studyDescription),
+  //   ModalitiesInStudy: params.modalitiesInStudy,
+  //   // Other
+  //   limit: params.limit || 101,
+  //   offset: params.offset || 0,
+  //   fuzzymatching: options.supportsFuzzyMatching === true,
+  //   includefield: commaSeparatedFields, // serverSupportsQIDOIncludeField ? commaSeparatedFields : 'all',
+  // };
   const parameters = {
-    // Named
-    PatientName: withWildcard(params.patientName),
-    //PatientID: withWildcard(params.patientId),
-    '00100020': withWildcard(params.patientId), // Temporarily to make the tests pass with dicomweb-server.. Apparently it's broken?
-    AccessionNumber: withWildcard(params.accessionNumber),
-    StudyDescription: withWildcard(params.studyDescription),
-    ModalitiesInStudy: params.modalitiesInStudy,
-    // Other
+    PatientName: withWildcard(params.PatientName),
+    '00100020': withWildcard(params.PatientID),
+    AccessionNumber: withWildcard(params.AccessionNumber),
+    StudyDescription: withWildcard(params.StudyDescription),
+    ModalitiesInStudy: withWildcard(params.ModalitiesInStudy),
     limit: params.limit || 101,
     offset: params.offset || 0,
     fuzzymatching: options.supportsFuzzyMatching === true,
     includefield: commaSeparatedFields, // serverSupportsQIDOIncludeField ? commaSeparatedFields : 'all',
+    format: 'json',
+    columns:
+      'UID,project,label,xistype,date,subject_ID,dcmPatientID,dcmPatientName,modality,time,dcmAccessionNumber,project',
   };
 
   // build the StudyDate range parameter

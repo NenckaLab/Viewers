@@ -38,9 +38,9 @@ window.config = {
       configuration: {
         friendlyName: 'DevXNAT',
         name: 'DEVXNAT',
-        wadoUriRoot: 'https://devxnat.rcc.mcw.edu/',
-        qidoRoot: 'https://devxnat.rcc.mcw.edu/',
-        wadoRoot: 'https://devxnat.rcc.mcw.edu/',
+        wadoUriRoot: 'http://devxnat.rcc.mcw.edu',
+        qidoRoot: 'http://devxnat.rcc.mcw.edu',
+        wadoRoot: 'http://devxnat.rcc.mcw.edu',
         qidoSupportsIncludeField: false,
         imageRendering: 'wadors',
         thumbnailRendering: 'wadors',

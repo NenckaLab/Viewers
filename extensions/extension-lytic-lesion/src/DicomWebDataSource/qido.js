@@ -44,7 +44,7 @@ function processResults(qidoStudies) {
 
   const studies = [];
 
-  qidoStudies.forEach(qidoStudy =>
+  qidoStudies.forEach((qidoStudy) =>
     studies.push({
       studyInstanceUid: getString(qidoStudy['0020000D']),
       date: getString(qidoStudy['00080020']), // YYYYMMDD
@@ -78,7 +78,7 @@ export function processSeriesResults(qidoSeries) {
   const series = [];
 
   if (qidoSeries && qidoSeries.length) {
-    qidoSeries.forEach(qidoSeries =>
+    qidoSeries.forEach((qidoSeries) =>
       series.push({
         studyInstanceUid: getString(qidoSeries['0020000D']),
         seriesInstanceUid: getString(qidoSeries['0020000E']),
@@ -166,7 +166,7 @@ function mapParams(params, options = {}) {
   ].join(',');
 
   const { supportsWildcard } = options;
-  const withWildcard = value => {
+  const withWildcard = (value) => {
     return supportsWildcard && value ? `*${value}*` : value;
   };
 
@@ -212,7 +212,7 @@ function mapParams(params, options = {}) {
 
   // Clean query params of undefined values.
   const final = {};
-  Object.keys(parameters).forEach(key => {
+  Object.keys(parameters).forEach((key) => {
     if (parameters[key] !== undefined && parameters[key] !== '') {
       final[key] = parameters[key];
     }

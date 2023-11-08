@@ -160,21 +160,49 @@ module.exports = (env, argv) => {
         overlay: { errors: true, warnings: false },
       },
       proxy: {
-        '/data/': {
+        '/data': {
           target: 'https://devxnat.rcc.mcw.edu',
           secure: false,
           changeOrigin: true,
           auth: 'admin:admin',
           logLevel: 'debug',
           stats: 'verbose',
+          pathRewrite: function (path, req) {
+            return path.includes('?') ? path + '&format=json' : path + '?format=json';
+          },
+          // onProxyReq: function (proxyReq, req, res) {
+          //   // Set the Accept header to request JSON
+          //   proxyReq.setHeader('Accept', 'application/json, application/dicom+json, ');
+          // },
+          onProxyRes: function (proxyRes, req, res) {
+            proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+            proxyRes.headers['Access-Control-Allow-Headers'] =
+              'X-Requested-With,content-type,Authorization,JSESSIONID';
+            proxyRes.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE';
+            proxyRes.headers['Access-Control-Allow-Credentials'] = 'true';
+          },
         },
-        '/studies/': {
+        '/studies': {
           target: 'https://devxnat.rcc.mcw.edu/data/experiments',
           secure: false,
           changeOrigin: true,
           auth: 'admin:admin',
           logLevel: 'debug',
           stats: 'verbose',
+          pathRewrite: function (path, req) {
+            return path.includes('?') ? path + '&format=json' : path + '?format=json';
+          },
+          // onProxyReq: function (proxyReq, req, res) {
+          //   // Set the Accept header to request JSON
+          //   proxyReq.setHeader('Accept', 'application/json');
+          // },
+          onProxyRes: function (proxyRes, req, res) {
+            proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+            proxyRes.headers['Access-Control-Allow-Headers'] =
+              'X-Requested-With,content-type,Authorization,JSESSIONID';
+            proxyRes.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE';
+            proxyRes.headers['Access-Control-Allow-Credentials'] = 'true';
+          },
         },
       },
       static: [

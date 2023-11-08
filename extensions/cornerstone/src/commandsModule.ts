@@ -756,17 +756,18 @@ function commandsModule({
       commandFn: actions.setDerviedDisplaySetsInGridViewports,
       storeContexts: [],
       options: {},
-    storePresentation: {
-      commandFn: actions.storePresentation,
-    },
-    setToolbarToggled: {
-      commandFn: actions.setToolbarToggled,
-    },
-    cleanUpCrosshairs: {
-      commandFn: actions.cleanUpCrosshairs,
-    },
-    updateVolumeData: {
-      commandFn: actions.updateVolumeData,
+      storePresentation: {
+        commandFn: actions.storePresentation,
+      },
+      setToolbarToggled: {
+        commandFn: actions.setToolbarToggled,
+      },
+      cleanUpCrosshairs: {
+        commandFn: actions.cleanUpCrosshairs,
+      },
+      updateVolumeData: {
+        commandFn: actions.updateVolumeData,
+      },
     },
   };
 

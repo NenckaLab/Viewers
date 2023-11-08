@@ -122,7 +122,7 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
             }) || {};
 
           const results = await qidoSearch(qidoDicomWebClient, undefined, undefined, mappedParams);
-
+          console.log(results);
           return processResults(results);
         },
         processResults: processResults.bind(),
