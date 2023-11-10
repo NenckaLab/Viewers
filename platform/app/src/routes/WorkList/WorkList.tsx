@@ -202,28 +202,40 @@ function WorkList({
 
   // Query for series information
   useEffect(() => {
-    const fetchSeries = async studyInstanceUid => {
+    // const fetchSeries = async studyInstanceUid => {
+    //   try {
+    //     const series = await dataSource.query.series.search(studyInstanceUid);
+    //     seriesInStudiesMap.set(studyInstanceUid, sortBySeriesDate(series));
+    //     setStudiesWithSeriesData([...studiesWithSeriesData, studyInstanceUid]);
+    //   } catch (ex) {
+    //     // TODO: UI Notification Service
+    //     console.warn(ex);
+    //   }
+    // };
+    const fetchSeries = async studyURI => {
       try {
-        const series = await dataSource.query.series.search(studyInstanceUid);
-        seriesInStudiesMap.set(studyInstanceUid, sortBySeriesDate(series));
-        setStudiesWithSeriesData([...studiesWithSeriesData, studyInstanceUid]);
+        const series = await dataSource.query.series.search(studyURI);
+        seriesInStudiesMap.set(studyURI, sortBySeriesDate(series));
+        setStudiesWithSeriesData([...studiesWithSeriesData, studyURI]);
       } catch (ex) {
         // TODO: UI Notification Service
         console.warn(ex);
       }
     };
-
     // TODO: WHY WOULD YOU USE AN INDEX OF 1?!
     // Note: expanded rows index begins at 1
     for (let z = 0; z < expandedRows.length; z++) {
       const expandedRowIndex = expandedRows[z] - 1;
-      const studyInstanceUid = sortedStudies[expandedRowIndex].studyInstanceUid;
-
-      if (studiesWithSeriesData.includes(studyInstanceUid)) {
+      // const studyInstanceUid = sortedStudies[expandedRowIndex].studyInstanceUid;
+      const studyURI = sortedStudies[expandedRowIndex].uri;
+      // if (studiesWithSeriesData.includes(studyInstanceUid)) {
+      //   continue;
+      // }
+      if (studiesWithSeriesData.includes(studyURI)) {
         continue;
       }
-
-      fetchSeries(studyInstanceUid);
+      fetchSeries(studyURI);
+      // fetchSeries(studyInstanceUid);
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -254,11 +266,13 @@ function WorkList({
     const studyDate =
       date &&
       moment(date, ['YYYYMMDD', 'YYYY.MM.DD'], true).isValid() &&
-      moment(date, ['YYYYMMDD', 'YYYY.MM.DD']).format(t('Common:localDateFormat','MMM-DD-YYYY'));
+      moment(date, ['YYYYMMDD', 'YYYY.MM.DD']).format(t('Common:localDateFormat', 'MMM-DD-YYYY'));
     const studyTime =
       time &&
       moment(time, ['HH', 'HHmm', 'HHmmss', 'HHmmss.SSS']).isValid() &&
-      moment(time, ['HH', 'HHmm', 'HHmmss', 'HHmmss.SSS']).format(t('Common:localTimeFormat', 'hh:mm A'));
+      moment(time, ['HH', 'HHmm', 'HHmmss', 'HHmmss.SSS']).format(
+        t('Common:localTimeFormat', 'hh:mm A')
+      );
 
     return {
       dataCY: `studyRow-${studyInstanceUid}`,
@@ -335,13 +349,13 @@ function WorkList({
           seriesTableDataSource={
             seriesInStudiesMap.has(studyInstanceUid)
               ? seriesInStudiesMap.get(studyInstanceUid).map(s => {
-                  return {
-                    description: s.description || '(empty)',
-                    seriesNumber: s.seriesNumber ?? '',
-                    modality: s.modality || '',
-                    instances: s.numSeriesInstances || '',
-                  };
-                })
+                return {
+                  description: s.description || '(empty)',
+                  seriesNumber: s.seriesNumber ?? '',
+                  modality: s.modality || '',
+                  instances: s.numSeriesInstances || '',
+                };
+              })
               : []
           }
         >
@@ -369,9 +383,8 @@ function WorkList({
                   <Link
                     className={isValidMode ? '' : 'cursor-not-allowed'}
                     key={i}
-                    to={`${dataPath ? '../../' : ''}${mode.routeName}${
-                      dataPath || ''
-                    }?${query.toString()}`}
+                    to={`${dataPath ? '../../' : ''}${mode.routeName}${dataPath || ''
+                      }?${query.toString()}`}
                     onClick={event => {
                       // In case any event bubbles up for an invalid mode, prevent the navigation.
                       // For example, the event bubbles up when the icon embedded in the disabled button is clicked.
@@ -379,7 +392,7 @@ function WorkList({
                         event.preventDefault();
                       }
                     }}
-                    // to={`${mode.routeName}/dicomweb?StudyInstanceUIDs=${studyInstanceUid}`}
+                  // to={`${mode.routeName}/dicomweb?StudyInstanceUIDs=${studyInstanceUid}`}
                   >
                     {/* TODO revisit the completely rounded style of buttons used for launching a mode from the worklist later - for now use LegacyButton*/}
                     <LegacyButton
@@ -387,7 +400,7 @@ function WorkList({
                       variant={isValidMode ? 'contained' : 'disabled'}
                       disabled={!isValidMode}
                       endIcon={<Icon name="launch-arrow" />} // launch-arrow | launch-info
-                      onClick={() => {}}
+                      onClick={() => { }}
                       data-cy={`mode-${mode.routeName}-${studyInstanceUid}`}
                     >
                       {t(`Modes:${mode.displayName}`)}
@@ -464,25 +477,25 @@ function WorkList({
   const uploadProps =
     dicomUploadComponent && dataSource.getConfig()?.dicomUploadEnabled
       ? {
-          title: 'Upload files',
-          closeButton: true,
-          shouldCloseOnEsc: false,
-          shouldCloseOnOverlayClick: false,
-          content: dicomUploadComponent.bind(null, {
-            dataSource,
-            onComplete: () => {
-              hide();
-              onRefresh();
-            },
-            onStarted: () => {
-              show({
-                ...uploadProps,
-                // when upload starts, hide the default close button as closing the dialogue must be handled by the upload dialogue itself
-                closeButton: false,
-              });
-            },
-          }),
-        }
+        title: 'Upload files',
+        closeButton: true,
+        shouldCloseOnEsc: false,
+        shouldCloseOnOverlayClick: false,
+        content: dicomUploadComponent.bind(null, {
+          dataSource,
+          onComplete: () => {
+            hide();
+            onRefresh();
+          },
+          onStarted: () => {
+            show({
+              ...uploadProps,
+              // when upload starts, hide the default close button as closing the dialogue must be handled by the upload dialogue itself
+              closeButton: false,
+            });
+          },
+        }),
+      }
       : undefined;
 
   const { component: dataSourceConfigurationComponent } =

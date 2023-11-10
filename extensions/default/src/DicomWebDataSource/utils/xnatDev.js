@@ -1,7 +1,7 @@
 /*
 XNAT authentication
  */
-const XNAT_PROXY = 'localhost:3000/';
+const XNAT_PROXY = 'https://devxnat.rcc.mcw.edu/';
 
 function _isLoggedIn() {
   console.log('LOGGED IN?');
@@ -20,7 +20,7 @@ function _isLoggedIn() {
     xhr.onerror = () => {
       reject('There: Error checking logged-in to XNAT' + xhr.responseText);
     };
-    xhr.setRequestHeader('Accept', 'application/json');
+    // xhr.setRequestHeader('Accept', 'application/json');
     console.log(xhr);
     xhr.timeout = 5000;
     xhr.send();
@@ -93,7 +93,7 @@ function _xnatAuthenticate(csrfToken) {
     const xhr = new XMLHttpRequest();
 
     xhr.onload = () => {
-      console.log(`POST ${url}... ${xhr.status}`);
+      console.log(`GET ${url}... ${xhr.status}`);
 
       if (xhr.status === 200) {
         resolve(xhr.response);
@@ -113,8 +113,8 @@ function _xnatAuthenticate(csrfToken) {
       return;
     }
     console.log(url);
-    xhr.open('POST', url);
-    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.open('GET', url);
+    // xhr.setRequestHeader('Accept', 'application/json');
     // Set withCredentials to true to enable cookie and authentication data
     xhr.withCredentials = true;
 

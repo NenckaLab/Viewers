@@ -46,7 +46,7 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
     wadoConfig,
     qidoDicomWebClient,
     wadoDicomWebClient,
-    getAuthrorizationHeader,
+    getAuthorizationHeader,
     generateWadoHeader;
 
   const implementation = {
@@ -60,7 +60,7 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
 
       dicomWebConfigCopy = JSON.parse(JSON.stringify(dicomWebConfig));
 
-      getAuthrorizationHeader = () => {
+      getAuthorizationHeader = () => {
         const xhrRequestHeaders = {};
         const authHeaders = userAuthenticationService.getAuthorizationHeader();
         if (authHeaders && authHeaders.Authorization) {
@@ -70,7 +70,7 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
       };
 
       generateWadoHeader = () => {
-        let authorizationHeader = getAuthrorizationHeader();
+        let authorizationHeader = getAuthorizationHeader();
         //Generate accept header depending on config params
         let formattedAcceptHeader = utils.generateAcceptHeader(
           dicomWebConfig.acceptHeader,
@@ -114,7 +114,7 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
       studies: {
         mapParams: mapParams.bind(),
         search: async function (origParams) {
-          qidoDicomWebClient.headers = getAuthrorizationHeader();
+          qidoDicomWebClient.headers = getAuthorizationHeader();
           const { studyInstanceUid, seriesInstanceUid, ...mappedParams } =
             mapParams(origParams, {
               supportsFuzzyMatching: dicomWebConfig.supportsFuzzyMatching,
@@ -123,23 +123,25 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
 
           const results = await qidoSearch(qidoDicomWebClient, undefined, undefined, mappedParams);
           console.log(results);
-          return processResults(results);
+          console.log(processResults(results.ResultSet.Result));
+          return processResults(results.ResultSet.Result);
         },
         processResults: processResults.bind(),
       },
       series: {
         // mapParams: mapParams.bind(),
         search: async function (studyInstanceUid) {
-          qidoDicomWebClient.headers = getAuthrorizationHeader();
+          qidoDicomWebClient.headers = getAuthorizationHeader();
+          console.log(studyInstanceUid);
           const results = await seriesInStudy(qidoDicomWebClient, studyInstanceUid);
-
+          console.log(results.ResultSet.Result);
           return processSeriesResults(results);
         },
         // processResults: processResults.bind(),
       },
       instances: {
         search: (studyInstanceUid, queryParameters) => {
-          qidoDicomWebClient.headers = getAuthrorizationHeader();
+          qidoDicomWebClient.headers = getAuthorizationHeader();
           qidoSearch.call(undefined, qidoDicomWebClient, studyInstanceUid, null, queryParameters);
         },
       },
