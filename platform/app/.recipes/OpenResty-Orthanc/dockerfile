@@ -24,7 +24,6 @@
 
 # Stage 1: Build the application
 FROM node:18.16.1-slim as builder
-RUN apt-get update  && apt-get install -y python3 build-essential && apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN mkdir /usr/src/app
 WORKDIR /usr/src/app
 

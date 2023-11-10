@@ -21,7 +21,7 @@ specific `SOPClassHandlerUID`, so if you want to fork just a single Viewport
 component for a specialized mode, this is possible.
 
 ```jsx
-// displaySet, viewportId, dataSource
+// displaySet, dataSource
 const getViewportModule = () => {
   const wrappedViewport = props => {
     return (

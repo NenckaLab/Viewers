@@ -58,10 +58,7 @@ function initDefaultToolGroup(extensionManager, toolGroupService, commandsManage
     enabled: [{ toolName: toolNames.ImageOverlayViewer }],
     // disabled
     enabled: [{ toolName: toolNames.SegmentationDisplay }],
-    disabled: [
-      { toolName: toolNames.ReferenceLines },
-      { toolName: toolNames.Crosshairs },
-    ],
+    disabled: [{ toolName: toolNames.ReferenceLines }, { toolName: toolNames.Crosshairs }],
   };
 
   toolGroupService.createToolGroupAndAddTools(toolGroupId, tools);
@@ -187,6 +184,19 @@ function initMPRToolGroup(extensionManager, toolGroupService, commandsManager) {
       { toolName: toolNames.PlanarFreehandROI },
       { toolName: toolNames.SegmentationDisplay },
       { toolName: 'RectangleROIStartEndThreshold' },
+    ],
+    disabled: [
+      {
+        toolName: toolNames.Crosshairs,
+        configuration: {
+          viewportIndicators: false,
+          autoPan: {
+            enabled: false,
+            panSize: 10,
+          },
+        },
+      },
+      { toolName: toolNames.ReferenceLines },
     ],
     disabled: [
       {

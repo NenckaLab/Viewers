@@ -153,3 +153,26 @@ directly from
 Your public folder should look like this:
 
 ![](../../assets/img/dicom-json-public.png)
+
+:::tip
+It is important to URL encode the `url` query parameter especially if the `url`
+parameter itself also contains query parameters. So for example,
+
+`http://localhost:3000/viewer/dicomjson?url=http://localhost:3000/LIDC-IDRI-0001.json?key0=val0&key1=val1`
+
+should be...
+
+`http://localhost:3000/viewer/dicomjson?url=http://localhost:3000/LIDC-IDRI-0001.json?key0=val0%26key1=val1`
+
+Notice the ampersand (`&`) is encoded as `%26`.
+:::
+
+:::note
+When hosting the DICOM JSON files, it is important to be aware that certain providers
+do not automatically handle the 404 error and fallback to index.html. For example, Netlify
+handles this, but Azure does not. Consequently, when you attempt to access a link with a
+specific URL, a 404 error will be displayed.
+
+This issue also occurs locally, where the http-server does not handle it. However,
+if you utilize the `serve` package (npx serve ./dist -l 8080 -s), it effectively addresses this problem.
+:::

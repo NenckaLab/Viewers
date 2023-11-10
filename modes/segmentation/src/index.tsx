@@ -17,10 +17,8 @@ const cornerstone = {
 
 const segmentation = {
   panel: '@ohif/extension-cornerstone-dicom-seg.panelModule.panelSegmentation',
-  panelTool:
-    '@ohif/extension-cornerstone-dicom-seg.panelModule.panelSegmentationWithTools',
-  sopClassHandler:
-    '@ohif/extension-cornerstone-dicom-seg.sopClassHandlerModule.dicom-seg',
+  panelTool: '@ohif/extension-cornerstone-dicom-seg.panelModule.panelSegmentationWithTools',
+  sopClassHandler: '@ohif/extension-cornerstone-dicom-seg.sopClassHandlerModule.dicom-seg',
   viewport: '@ohif/extension-cornerstone-dicom-seg.viewportModule.dicom-seg',
 };
 
@@ -52,8 +50,7 @@ function modeFactory({ modeConfiguration }) {
      * Services and other resources.
      */
     onModeEnter: ({ servicesManager, extensionManager, commandsManager }) => {
-      const { measurementService, toolbarService, toolGroupService } =
-        servicesManager.services;
+      const { measurementService, toolbarService, toolGroupService } = servicesManager.services;
 
       measurementService.clearMeasurements();
 
@@ -65,7 +62,6 @@ function modeFactory({ modeConfiguration }) {
       const activateTool = () => {
         toolbarService.recordInteraction({
           groupId: 'WindowLevel',
-          itemId: 'WindowLevel',
           interactionType: 'tool',
           commands: [
             {
@@ -124,9 +120,16 @@ function modeFactory({ modeConfiguration }) {
     },
     /**
      * A boolean return value that indicates whether the mode is valid for the
-     * modalities of the selected studies. For instance a PET/CT mode should be
+     * modalities of the selected studies. Currently we don't have stack viewport
+     * segmentations and we should exclude them
      */
-    isValidMode: ({ modalities }) => true,
+    isValidMode: ({ modalities }) => {
+      if (modalities.length === 1) {
+        return !['SM', 'US', 'MG', 'OT', 'DOC', 'CR'].includes(modalities[0]);
+      }
+
+      return true;
+    },
     /**
      * Mode Routes are used to define the mode's behavior. A list of Mode Route
      * that includes the mode's path and the layout to be used. The layout will

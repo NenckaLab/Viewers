@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import debounce from 'lodash.debounce';
 
@@ -36,9 +36,7 @@ const CinePlayer: React.FC<CinePlayerProps> = ({
   onClose,
 }) => {
   const [frameRate, setFrameRate] = useState(currentFrameRate);
-  const debouncedSetFrameRate = useCallback(debounce(onFrameRateChange, 100), [
-    onFrameRateChange,
-  ]);
+  const debouncedSetFrameRate = useCallback(debounce(onFrameRateChange, 100), [onFrameRateChange]);
 
   const getPlayPauseIconName = () => (isPlaying ? 'icon-pause' : 'icon-play');
 
@@ -50,7 +48,9 @@ const CinePlayer: React.FC<CinePlayerProps> = ({
     debouncedSetFrameRate(frameRate);
   };
 
-  useEffect(() => setFrameRate(currentFrameRate), [currentFrameRate]);
+  useEffect(() => {
+    setFrameRate(defaultFrameRate);
+  }, [defaultFrameRate]);
 
   return (
     <div
@@ -108,7 +108,7 @@ const CinePlayer: React.FC<CinePlayerProps> = ({
   );
 };
 
-const noop = () => {};
+const noop = () => { };
 
 CinePlayer.defaultProps = {
   isPlaying: false,

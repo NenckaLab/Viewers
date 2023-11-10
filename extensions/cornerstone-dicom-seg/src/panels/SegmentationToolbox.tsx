@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState, useReducer } from 'react';
 import { AdvancedToolbox, InputDoubleRange, useViewportGrid } from '@ohif/ui';
 import { Types } from '@ohif/extension-cornerstone';
 import { utilities } from '@cornerstonejs/tools';
-import { commandsManager } from '../../../../platform/app/src/App';
 
 const { segmentation: segmentationUtils } = utilities;
 
@@ -11,9 +10,9 @@ const TOOL_TYPES = {
   SPHERE_BRUSH: 'SphereBrush',
   CIRCULAR_ERASER: 'CircularEraser',
   SPHERE_ERASER: 'SphereEraser',
-  CIRCLE_SCISSOR: 'CircleScissor',
-  RECTANGLE_SCISSOR: 'RectangleScissor',
-  SPHERE_SCISSOR: 'SphereScissor',
+  CIRCLE_SHAPE: 'CircleScissor',
+  RECTANGLE_SHAPE: 'RectangleScissor',
+  SPHERE_SHAPE: 'SphereScissor',
   THRESHOLD_CIRCULAR_BRUSH: 'ThresholdCircularBrush',
   THRESHOLD_SPHERE_BRUSH: 'ThresholdSphereBrush',
 };
@@ -32,7 +31,7 @@ const initialState = {
     brushSize: 15,
     mode: 'CircularEraser', // Can be 'CircularEraser' or 'SphereEraser'
   },
-  Scissors: {
+  Shapes: {
     brushSize: 15,
     mode: 'CircleScissor', // E.g., 'CircleScissor', 'RectangleScissor', or 'SphereScissor'
   },
@@ -75,7 +74,6 @@ function SegmentationToolbox({ servicesManager, extensionManager }) {
     if (!viewports?.size || activeViewportId === undefined) {
       return;
     }
-
     const viewport = viewports.get(activeViewportId);
 
     if (!viewport) {
@@ -114,6 +112,7 @@ function SegmentationToolbox({ servicesManager, extensionManager }) {
     const events = [
       segmentationService.EVENTS.SEGMENTATION_ADDED,
       segmentationService.EVENTS.SEGMENTATION_UPDATED,
+      segmentationService.EVENTS.SEGMENTATION_REMOVED,
     ];
 
     const unsubscriptions = [];
@@ -130,10 +129,12 @@ function SegmentationToolbox({ servicesManager, extensionManager }) {
       unsubscriptions.push(unsubscribe);
     });
 
+    updateActiveTool();
+
     return () => {
       unsubscriptions.forEach(unsubscribe => unsubscribe());
     };
-  }, [activeViewportId, viewports, segmentationService]);
+  }, [activeViewportId, viewports, segmentationService, updateActiveTool]);
 
   /**
    * Update the active tool when the toolbar state changes
@@ -248,8 +249,8 @@ function SegmentationToolbox({ servicesManager, extensionManager }) {
               name: 'Radius (mm)',
               id: 'brush-radius',
               type: 'range',
-              min: 0.01,
-              max: 100,
+              min: 0.5,
+              max: 99.5,
               value: state.Brush.brushSize,
               step: 0.5,
               onChange: value => onBrushSizeChange(value, 'Brush'),
@@ -280,8 +281,8 @@ function SegmentationToolbox({ servicesManager, extensionManager }) {
               name: 'Radius (mm)',
               type: 'range',
               id: 'eraser-radius',
-              min: 0.01,
-              max: 100,
+              min: 0.5,
+              max: 99.5,
               value: state.Eraser.brushSize,
               step: 0.5,
               onChange: value => onBrushSizeChange(value, 'Eraser'),
@@ -300,24 +301,24 @@ function SegmentationToolbox({ servicesManager, extensionManager }) {
           ],
         },
         {
-          name: 'Scissor',
-          icon: 'icon-tool-scissor',
+          name: 'Shapes',
+          icon: 'icon-tool-shape',
           disabled: !toolsEnabled,
           active:
-            state.activeTool === TOOL_TYPES.CIRCLE_SCISSOR ||
-            state.activeTool === TOOL_TYPES.RECTANGLE_SCISSOR ||
-            state.activeTool === TOOL_TYPES.SPHERE_SCISSOR,
-          onClick: () => setToolActive(TOOL_TYPES.CIRCLE_SCISSOR),
+            state.activeTool === TOOL_TYPES.CIRCLE_SHAPE ||
+            state.activeTool === TOOL_TYPES.RECTANGLE_SHAPE ||
+            state.activeTool === TOOL_TYPES.SPHERE_SHAPE,
+          onClick: () => setToolActive(TOOL_TYPES.CIRCLE_SHAPE),
           options: [
             {
               name: 'Mode',
               type: 'radio',
-              value: state.Scissors.mode,
-              id: 'scissor-mode',
+              value: state.Shapes.mode,
+              id: 'shape-mode',
               values: [
-                { value: TOOL_TYPES.CIRCLE_SCISSOR, label: 'Circle' },
-                { value: TOOL_TYPES.RECTANGLE_SCISSOR, label: 'Rectangle' },
-                { value: TOOL_TYPES.SPHERE_SCISSOR, label: 'Sphere' },
+                { value: TOOL_TYPES.CIRCLE_SHAPE, label: 'Circle' },
+                { value: TOOL_TYPES.RECTANGLE_SHAPE, label: 'Rectangle' },
+                { value: TOOL_TYPES.SPHERE_SHAPE, label: 'Sphere' },
               ],
               onChange: value => setToolActive(value),
             },
@@ -336,8 +337,8 @@ function SegmentationToolbox({ servicesManager, extensionManager }) {
               name: 'Radius (mm)',
               id: 'threshold-radius',
               type: 'range',
-              min: 0.01,
-              max: 100,
+              min: 0.5,
+              max: 99.5,
               value: state.ThresholdBrush.brushSize,
               step: 0.5,
               onChange: value => onBrushSizeChange(value, 'ThresholdBrush'),
@@ -355,7 +356,7 @@ function SegmentationToolbox({ servicesManager, extensionManager }) {
             },
             {
               type: 'custom',
-              id: 'threshold-range',
+              id: 'segmentation-threshold-range',
               children: () => {
                 return (
                   <div>
@@ -376,11 +377,6 @@ function SegmentationToolbox({ servicesManager, extensionManager }) {
               },
             },
           ],
-        },
-        {
-          name: 'Threshold',
-          icon: 'icon-tool-threshold',
-          onClick: () => commandsManager.runCommand('thresholdSegmentation'),
         },
       ]}
     />

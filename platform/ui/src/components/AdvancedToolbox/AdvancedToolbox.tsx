@@ -10,7 +10,6 @@ const AdvancedToolbox = ({ title, items }) => {
     // see if any of the items are active from the outside
     const activeItem = items?.find(item => item.active);
     setActiveItemName(activeItem ? activeItem.name : null);
-    console.log('Active item', activeItem);
   }, [items]);
 
   const activeItemOptions = items?.find(item => item.name === activeItemName)?.options;
