@@ -198,7 +198,6 @@ function initMPRToolGroup(extensionManager, toolGroupService, commandsManager) {
       },
       { toolName: toolNames.ReferenceLines },
     ],
-
     // enabled
     // disabled
   };

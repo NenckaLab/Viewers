@@ -3,6 +3,8 @@ import {
   StackViewport,
   VolumeViewport,
   utilities as csUtils,
+  Types as CoreTypes,
+  BaseVolumeViewport,
 } from '@cornerstonejs/core';
 import {
   ToolGroupManager,
@@ -10,7 +12,8 @@ import {
   utilities as cstUtils,
   ReferenceLinesTool,
 } from '@cornerstonejs/tools';
-import { HangingProtocolService, Types as OhifTypes } from '@ohif/core';
+import { Types as OhifTypes } from '@ohif/core';
+import { vec3, mat4 } from 'gl-matrix';
 
 import CornerstoneViewportDownloadForm from './utils/CornerstoneViewportDownloadForm';
 import callInputDialog from './utils/callInputDialog';
@@ -393,8 +396,16 @@ function commandsModule({
 
       const { viewport } = enabledElement;
 
-      if (viewport instanceof StackViewport) {
-        const { rotation: currentRotation } = viewport.getProperties();
+      if (viewport instanceof BaseVolumeViewport) {
+        const camera = viewport.getCamera();
+        const rotAngle = (rotation * Math.PI) / 180;
+        const rotMat = mat4.identity(new Float32Array(16));
+        mat4.rotate(rotMat, rotMat, rotAngle, camera.viewPlaneNormal);
+        const rotatedViewUp = vec3.transformMat4(vec3.create(), camera.viewUp, rotMat);
+        viewport.setCamera({ viewUp: rotatedViewUp as CoreTypes.Point3 });
+        viewport.render();
+      } else if (viewport.getRotation !== undefined) {
+        const currentRotation = viewport.getRotation();
         const newRotation = (currentRotation + rotation) % 360;
         viewport.setProperties({ rotation: newRotation });
         viewport.render();
@@ -588,41 +599,22 @@ function commandsModule({
     storePresentation: ({ viewportId }) => {
       cornerstoneViewportService.storePresentation({ viewportId });
     },
-    setDerviedDisplaySetsInGridViewports: ({ displaySet }) => {
-      const displaySetCache = displaySetService.getDisplaySetCache();
-      const cachedDisplaySetKeys = [displaySetCache.keys()];
-      const displaySetKey = Object.keys(displaySet)[0];
 
-      // Check to see if computed display set is already in cache
-      if (!cachedDisplaySetKeys.includes(displaySetKey)) {
-        displaySetCache.set(displaySetKey, displaySet[displaySetKey]);
-      }
+    attachProtocolViewportDataListener: ({ protocol, stageIndex }) => {
+      const EVENT = cornerstoneViewportService.EVENTS.VIEWPORT_DATA_CHANGED;
+      const command = protocol.callbacks.onViewportDataInitialized;
+      const numPanes = protocol.stages?.[stageIndex]?.viewports.length ?? 1;
+      let numPanesWithData = 0;
+      const { unsubscribe } = cornerstoneViewportService.subscribe(EVENT, evt => {
+        numPanesWithData++;
 
-      // Get all viewports and their corresponding indexs
-      const { viewports } = viewportGridService.getState();
+        if (numPanesWithData === numPanes) {
+          commandsManager.run(...command);
 
-      const viewportsToUpdate = viewports.map((viewport, index) => ({
-        viewportId: index,
-        displaySetInstanceUIDs: [displaySetKey],
-        viewportOptions: {
-          initialImageOptions: viewport.viewportOptions.initialImageOptions,
-          viewportType: 'volume',
-          orientation: viewport.viewportOptions.orientation,
-          background: viewport.viewportOptions.background,
-        },
-      }));
-
-      viewportGridService.setDisplaySetsForViewports(viewportsToUpdate);
-    },
-    updateVolumeData: ({ volume }) => {
-      // update vtkOpenGLTexture and imageData of computed volume
-      const { imageData, vtkOpenGLTexture } = volume;
-      const numSlices = imageData.getDimensions()[2];
-      const slicesToUpdate = [...Array(numSlices).keys()];
-      slicesToUpdate.forEach(i => {
-        vtkOpenGLTexture.setUpdatedFrame(i);
+          // Unsubscribe from the event
+          unsubscribe(EVENT);
+        }
       });
-      imageData.modified();
     },
   };
 
@@ -650,7 +642,6 @@ function commandsModule({
       storeContexts: [],
       options: {},
     },
-
     deleteMeasurement: {
       commandFn: actions.deleteMeasurement,
     },
@@ -752,22 +743,17 @@ function commandsModule({
     setSingleViewportColormap: {
       commandFn: actions.setSingleViewportColormap,
     },
-    setDerviedDisplaySetsInGridViewports: {
-      commandFn: actions.setDerviedDisplaySetsInGridViewports,
-      storeContexts: [],
-      options: {},
-      storePresentation: {
-        commandFn: actions.storePresentation,
-      },
-      setToolbarToggled: {
-        commandFn: actions.setToolbarToggled,
-      },
-      cleanUpCrosshairs: {
-        commandFn: actions.cleanUpCrosshairs,
-      },
-      updateVolumeData: {
-        commandFn: actions.updateVolumeData,
-      },
+    storePresentation: {
+      commandFn: actions.storePresentation,
+    },
+    setToolbarToggled: {
+      commandFn: actions.setToolbarToggled,
+    },
+    cleanUpCrosshairs: {
+      commandFn: actions.cleanUpCrosshairs,
+    },
+    attachProtocolViewportDataListener: {
+      commandFn: actions.attachProtocolViewportDataListener,
     },
   };
 
