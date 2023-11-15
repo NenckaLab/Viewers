@@ -69,7 +69,7 @@ async function defaultRouteInit(
       filters,
     })
   );
-
+  console.log(allRetrieves);
   // log the error if this fails, otherwise it's so difficult to tell what went wrong...
   allRetrieves.forEach(retrieve => {
     retrieve.catch(error => {

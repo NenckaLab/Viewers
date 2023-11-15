@@ -3,7 +3,7 @@ import getWADORSImageId from './getWADORSImageId';
 function buildInstanceWadoUrl(config, instance) {
   const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID } = instance;
   const params = [];
-
+  console.log(instance);
   params.push('requestType=WADO');
   params.push(`studyUID=${StudyInstanceUID}`);
   params.push(`seriesUID=${SeriesInstanceUID}`);
@@ -12,7 +12,7 @@ function buildInstanceWadoUrl(config, instance) {
   params.push('transferSyntax=*');
 
   const paramString = params.join('&');
-
+  console.log(paramString);
   return `${config.wadoUriRoot}?${paramString}`;
 }
 

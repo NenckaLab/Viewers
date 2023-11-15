@@ -1,6 +1,7 @@
 import dcmjs from 'dcmjs';
 import { sortStudySeries, sortingCriteria } from '@ohif/core/src/utils/sortStudy';
 import RetrieveMetadataLoader from './retrieveMetadataLoader';
+import { api } from 'dicomweb-client';
 
 /**
  * Creates an immutable series loader object which loads each series sequentially using the iterator interface
@@ -36,17 +37,20 @@ export default class RetrieveMetadataLoaderAsync extends RetrieveMetadataLoader 
    */
   *getPreLoaders() {
     const preLoaders = [];
+    console.log(this);
     const { studyInstanceUID, filters: { seriesInstanceUID } = {}, client } = this;
-
-    if (seriesInstanceUID) {
-      const options = {
-        studyInstanceUID,
-        queryParams: { SeriesInstanceUID: seriesInstanceUID },
-      };
-      preLoaders.push(client.searchForSeries.bind(client, options));
+    console.log(client);
+    if (client.qidoURL) {
+      if (seriesInstanceUID) {
+        const options = {
+          studyInstanceUID,
+          queryParams: { SeriesInstanceUID: seriesInstanceUID },
+        };
+        preLoaders.push(searchForSeries.bind(client, options));
+      }
     }
     // Fallback preloader
-    preLoaders.push(client.searchForSeries.bind(client, { studyInstanceUID }));
+    preLoaders.push(searchForSeries.bind(client, { studyInstanceUID }));
 
     yield* preLoaders;
   }
@@ -54,6 +58,7 @@ export default class RetrieveMetadataLoaderAsync extends RetrieveMetadataLoader 
   async preLoad() {
     const preLoaders = this.getPreLoaders();
     const result = await this.runLoaders(preLoaders);
+    console.log(result);
     const sortCriteria = this.sortCriteria;
     const sortFunction = this.sortFunction;
 
@@ -92,4 +97,21 @@ export default class RetrieveMetadataLoaderAsync extends RetrieveMetadataLoader 
       promises,
     };
   }
+}
+function searchForSeries(options = {}) {
+  let url = this.qidoURL;
+  if ('studyInstanceUID' in options) {
+    console.log(`search series of study ${options.studyInstanceUID}`);
+    url += `/data/experiments/${options.studyInstanceUID}`;
+    // url += `/data/experiments/XNAT_E00001`;
+  }
+  url += '/scans';
+  if ('queryParams' in options) {
+    url += api.DICOMwebClient._parseQueryParameters(options.queryParams);
+  }
+  let withCredentials = true;
+  console.log(url);
+  const headers = { Accept: 'application/json' };
+  const responseType = 'json';
+  return this._httpGet(url, headers, responseType, false, withCredentials);
 }

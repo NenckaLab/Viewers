@@ -253,20 +253,22 @@ function WorkList({
     const rowKey = key + 1;
     const isExpanded = expandedRows.some(k => k === rowKey);
     const {
-      studyInstanceUid,
+      StudyInstanceUID,
       accession,
       modalities,
       instances,
       description,
-      mrn,
-      patientName,
-      date,
+      PatientID,
+      PatientName,
+      StudyDate,
       time,
     } = study;
     const studyDate =
-      date &&
-      moment(date, ['YYYYMMDD', 'YYYY.MM.DD'], true).isValid() &&
-      moment(date, ['YYYYMMDD', 'YYYY.MM.DD']).format(t('Common:localDateFormat', 'MMM-DD-YYYY'));
+      StudyDate &&
+      moment(StudyDate, ['YYYYMMDD', 'YYYY.MM.DD'], true).isValid() &&
+      moment(StudyDate, ['YYYYMMDD', 'YYYY.MM.DD']).format(
+        t('Common:localDateFormat', 'MMM-DD-YYYY')
+      );
     const studyTime =
       time &&
       moment(time, ['HH', 'HHmm', 'HHmmss', 'HHmmss.SSS']).isValid() &&
@@ -275,31 +277,31 @@ function WorkList({
       );
 
     return {
-      dataCY: `studyRow-${studyInstanceUid}`,
+      dataCY: `studyRow-${StudyInstanceUID}`,
       row: [
         {
-          key: 'patientName',
-          content: patientName ? (
-            <TooltipClipboard>{patientName}</TooltipClipboard>
+          key: 'PatientName',
+          content: PatientName ? (
+            <TooltipClipboard>{PatientName}</TooltipClipboard>
           ) : (
             <span className="text-gray-700">(Empty)</span>
           ),
           gridCol: 4,
         },
         {
-          key: 'mrn',
-          content: <TooltipClipboard>{mrn}</TooltipClipboard>,
+          key: 'PatientID',
+          content: <TooltipClipboard>{PatientID}</TooltipClipboard>,
           gridCol: 3,
         },
         {
-          key: 'studyDate',
+          key: 'StudyDate',
           content: (
             <>
-              {studyDate && <span className="mr-4">{studyDate}</span>}
+              {StudyDate && <span className="mr-4">{StudyDate}</span>}
               {studyTime && <span>{studyTime}</span>}
             </>
           ),
-          title: `${studyDate || ''} ${studyTime || ''}`,
+          title: `${StudyDate || ''} ${studyTime || ''}`,
           gridCol: 5,
         },
         {
@@ -347,8 +349,8 @@ function WorkList({
             instances: t('StudyList:Instances'),
           }}
           seriesTableDataSource={
-            seriesInStudiesMap.has(studyInstanceUid)
-              ? seriesInStudiesMap.get(studyInstanceUid).map(s => {
+            seriesInStudiesMap.has(StudyInstanceUID)
+              ? seriesInStudiesMap.get(StudyInstanceUID).map(s => {
                 return {
                   description: s.description || '(empty)',
                   seriesNumber: s.seriesNumber ?? '',
@@ -377,7 +379,7 @@ function WorkList({
               if (filterValues.configUrl) {
                 query.append('configUrl', filterValues.configUrl);
               }
-              query.append('StudyInstanceUIDs', studyInstanceUid);
+              query.append('StudyInstanceUIDs', StudyInstanceUID);
               return (
                 mode.displayName && (
                   <Link
@@ -401,7 +403,7 @@ function WorkList({
                       disabled={!isValidMode}
                       endIcon={<Icon name="launch-arrow" />} // launch-arrow | launch-info
                       onClick={() => { }}
-                      data-cy={`mode-${mode.routeName}-${studyInstanceUid}`}
+                      data-cy={`mode-${mode.routeName}-${StudyInstanceUID}`}
                     >
                       {t(`Modes:${mode.displayName}`)}
                     </LegacyButton>
@@ -564,8 +566,8 @@ WorkList.propTypes = {
 };
 
 const defaultFilterValues = {
-  patientName: '',
-  mrn: '',
+  PatientName: '',
+  PatientID: '',
   studyDate: {
     startDate: null,
     endDate: null,
@@ -593,8 +595,8 @@ function _tryParseInt(str, defaultValue) {
 
 function _getQueryFilterValues(params) {
   const queryFilterValues = {
-    patientName: params.get('patientname'),
-    mrn: params.get('mrn'),
+    PatientName: params.get('PatientName'),
+    PatientID: params.get('PatientID'),
     studyDate: {
       startDate: params.get('startdate') || null,
       endDate: params.get('enddate') || null,
@@ -620,8 +622,8 @@ function _getQueryFilterValues(params) {
 
 function _sortStringDates(s1, s2, sortModifier) {
   // TODO: Delimiters are non-standard. Should we support them?
-  const s1Date = moment(s1.date, ['YYYYMMDD', 'YYYY.MM.DD'], true);
-  const s2Date = moment(s2.date, ['YYYYMMDD', 'YYYY.MM.DD'], true);
+  const s1Date = moment(s1.StudyDate, ['YYYYMMDD', 'YYYY.MM.DD'], true);
+  const s2Date = moment(s2.StudyDate, ['YYYYMMDD', 'YYYY.MM.DD'], true);
 
   if (s1Date.isValid() && s2Date.isValid()) {
     return (s1Date.toISOString() > s2Date.toISOString() ? 1 : -1) * sortModifier;

@@ -42,40 +42,39 @@ function processResults(qidoStudies) {
   }
   const studies = [];
   qidoStudies.forEach(qidoStudy => {
-    console.log(qidoStudy);
-    // studies.push({
-    //   studyInstanceUid: getString(qidoStudy['0020000D']),
-    //   date: getString(qidoStudy['00080020']), // YYYYMMDD
-    //   time: getString(qidoStudy['00080030']), // HHmmss.SSS (24-hour, minutes, seconds, fractional seconds)
-    //   accession: getString(qidoStudy['00080050']) || '', // short string, probably a number?
-    //   mrn: getString(qidoStudy['00100020']) || '', // medicalRecordNumber
-    //   patientName: utils.formatPN(getName(qidoStudy['00100010'])) || '',
-    //   instances: Number(getString(qidoStudy['00201208'])) || 0, // number
-    //   description: getString(qidoStudy['00081030']) || '',
-    //   modalities: getString(getModalities(qidoStudy['00080060'], qidoStudy['00080061'])) || '',
-    // });
     studies.push({
-      StudyInstanceUID: qidoStudy['UID'],
-      // 00080005 = SpecificCharacterSet
-      StudyDate: qidoStudy['date'],
-      StudyTime: qidoStudy['time'],
-      AccessionNumber: DICOMWeb.getString(qidoStudy['dcmAccessionNumber']),
-      // referringPhysicianName: DICOMWeb.getString(study['00080090']),
-      // 00081190 = URL
-      PatientName: qidoStudy['dcmPatientName'],
-      PatientID: qidoStudy['dcmPatientId'],
-      // PatientBirthdate: DICOMWeb.getString(study['00100030']),
-      // patientSex: DICOMWeb.getString(study['00100040']),
-      studyID: qidoStudy['subject_ID'],
-      // numberOfStudyRelatedSeries: DICOMWeb.getString(study['00201206']),
-      // numberOfStudyRelatedInstances: DICOMWeb.getString(study['00201208']),
-      description: qidoStudy['00081030'],
-      // Modality: DICOMWeb.getString(study['00080060']),
-      // ModalitiesInStudy: DICOMWeb.getString(study['00080061']),
-      modalities: qidoStudy['modality'],
-      uri: qidoStudy['URI'],
-      projectID: qidoStudy['project'],
+      StudyInstanceUid: getString(qidoStudy['0020000D']),
+      StudyDate: getString(qidoStudy['00080020']), // YYYYMMDD
+      StudyTime: getString(qidoStudy['00080030']), // HHmmss.SSS (24-hour, minutes, seconds, fractional seconds)
+      AccessionNumber: getString(qidoStudy['00080050']) || '', // short string, probably a number?
+      mrn: getString(qidoStudy['00100020']) || '', // medicalRecordNumber
+      PatientName: utils.formatPN(getName(qidoStudy['00100010'])) || '',
+      instances: Number(getString(qidoStudy['00201208'])) || 0, // number
+      description: getString(qidoStudy['00081030']) || '',
+      modalities: getString(getModalities(qidoStudy['00080060'], qidoStudy['00080061'])) || '',
     });
+    // studies.push({
+    //   StudyInstanceUID: qidoStudy['UID'],
+    //   // 00080005 = SpecificCharacterSet
+    //   StudyDate: qidoStudy['date'],
+    //   StudyTime: qidoStudy['time'],
+    //   AccessionNumber: DICOMWeb.getString(qidoStudy['dcmAccessionNumber']),
+    //   // referringPhysicianName: DICOMWeb.getString(study['00080090']),
+    //   // 00081190 = URL
+    //   PatientName: qidoStudy['dcmPatientName'],
+    //   PatientID: qidoStudy['dcmPatientId'],
+    //   // PatientBirthdate: DICOMWeb.getString(study['00100030']),
+    //   // patientSex: DICOMWeb.getString(study['00100040']),
+    //   studyID: qidoStudy['subject_ID'],
+    //   // numberOfStudyRelatedSeries: DICOMWeb.getString(study['00201206']),
+    //   // numberOfStudyRelatedInstances: DICOMWeb.getString(study['00201208']),
+    //   description: qidoStudy['00081030'],
+    //   // Modality: DICOMWeb.getString(study['00080060']),
+    //   // ModalitiesInStudy: DICOMWeb.getString(study['00080061']),
+    //   modalities: qidoStudy['modality'],
+    //   uri: qidoStudy['URI'],
+    //   projectID: qidoStudy['project'],
+    // });
   });
   return studies;
 }
@@ -127,7 +126,6 @@ async function search(dicomWebClient, studyInstanceUid, seriesInstanceUid, query
     studyInstanceUid: undefined,
     queryParams: queryParameters,
   });
-  console.log(searchResult);
   return searchResult;
 }
 
@@ -139,6 +137,7 @@ async function search(dicomWebClient, studyInstanceUid, seriesInstanceUid, query
 export function seriesInStudy(dicomWebClient, studyURI) {
   // Series Description
   // Already included?
+  console.log('Series in study: ' + studyURI);
   const commaSeparatedFields = ['0008103E', '00080021'].join(',');
   const queryParams = {
     includefield: commaSeparatedFields,
@@ -157,23 +156,42 @@ export default function searchStudies(server, filter) {
 }
 export function searchForSeries(dicomWebClient, options = {}) {
   let url = `${dicomWebClient.qidoURL}`;
+  console.log(options.studyURI);
   if ('studyURI' in options) {
     console.log(`search series of study ${options.studyURI}`);
-    url += `${options.studyURI}/scans`;
+    if (dicomWebClient.qidoURL == 'https://devxnat.rcc.mcw.edu') {
+      url += `${options.studyURI}/scans`;
+    } else {
+      url += `/${options.studyURI}/series`;
+    }
+    console.log(url);
   }
   if ('queryParams' in options) {
     url += api.DICOMwebClient._parseQueryParameters(options.queryParams);
   }
-  let withCredentials = true;
+  let withCredentials = false;
   let headers = { Accept: 'application/json' };
   let responseType = 'json';
-  return dicomWebClient._httpGet(url, headers, responseType, false, withCredentials);
+  if ('withCredentials' in options) {
+    if (options.withCredentials) {
+      withCredentials = options.withCredentials;
+    }
+  }
+  let result = dicomWebClient._httpGet(url, headers, responseType, false, withCredentials);
+  console.log(result);
+  return result;
 }
 
 export function searchForStudies(dicomWebClient, options = {}) {
   console.log('search for studies');
-  let withCredentials = true;
-  let url = `${dicomWebClient.qidoURL}/data/experiments`;
+  let withCredentials = false;
+  console.log(dicomWebClient);
+  let url = `${dicomWebClient.qidoURL}`;
+  if (dicomWebClient.qidoURL == 'https://devxnat.rcc.mcw.edu') {
+    url += `/data/experiments`;
+  } else {
+    url += `/studies`;
+  }
   if ('queryParams' in options) {
     try {
       url += api.DICOMwebClient._parseQueryParameters(options.queryParams);
@@ -182,14 +200,16 @@ export function searchForStudies(dicomWebClient, options = {}) {
       console.log(err);
     }
   }
-  // if ('withCredentials' in options) {
-  //   if (options.withCredentials) {
-  //     withCredentials = options.withCredentials;
-  //   }
-  // }
+  console.log(options);
+  if ('withCredentials' in options) {
+    if (options.withCredentials) {
+      withCredentials = options.withCredentials;
+    }
+  }
   let headers = { Accept: 'application/json' };
   let responseType = 'json';
-  return dicomWebClient._httpGet(url, headers, responseType, false, withCredentials);
+  let response = dicomWebClient._httpGet(url, headers, responseType, false, withCredentials);
+  return response;
 }
 /**
  * Produces a QIDO URL given server details and a set of specified search filter
@@ -240,7 +260,7 @@ function mapParams(params, options = {}) {
     includefield: commaSeparatedFields, // serverSupportsQIDOIncludeField ? commaSeparatedFields : 'all',
     format: 'json',
     columns:
-      'UID,project,label,xistype,date,subject_ID,dcmPatientId,dcmPatientName,modality,time,dcmAccessionNumber,project',
+      'UID,project,label,xistype,date,subject_ID,dcmPatientId,dcmPatientName,modality,time,dcmAccessionNumber,project,frames',
   };
 
   // build the StudyDate range parameter

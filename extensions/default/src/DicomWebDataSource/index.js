@@ -4,7 +4,7 @@ import { DicomMetadataStore, IWebApiDataSource, utils, errorHandler, classes } f
 import {
   mapParams,
   search as qidoSearch,
-  seriesInStudy,
+  seriesInStudy as seriesSearch,
   processResults,
   processSeriesResults,
 } from './qido.js';
@@ -123,8 +123,11 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
 
           const results = await qidoSearch(qidoDicomWebClient, undefined, undefined, mappedParams);
           console.log(results);
-          console.log(processResults(results.ResultSet.Result));
-          return processResults(results.ResultSet.Result);
+          if (qidoDicomWebClient.qidoURL == 'https://devxnat.rcc.mcw.edu') {
+            return processResults(results.ResultSet.Result);
+          } else {
+            return processResults(results);
+          }
         },
         processResults: processResults.bind(),
       },
@@ -133,8 +136,7 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
         search: async function (studyInstanceUid) {
           qidoDicomWebClient.headers = getAuthorizationHeader();
           console.log(studyInstanceUid);
-          const results = await seriesInStudy(qidoDicomWebClient, studyInstanceUid);
-          console.log(results.ResultSet.Result);
+          const results = await seriesSearch(qidoDicomWebClient, studyInstanceUid);
           return processSeriesResults(results);
         },
         // processResults: processResults.bind(),
@@ -179,17 +181,6 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
           return ret;
         });
       },
-      bulkDataURI: async ({ StudyInstanceUID, BulkDataURI }) => {
-        const options = {
-          multipart: false,
-          BulkDataURI,
-          StudyInstanceUID,
-        };
-        return qidoDicomWebClient.retrieveBulkData(options).then(val => {
-          const ret = (val && val[0]) || undefined;
-          return ret;
-        });
-      },
       series: {
         metadata: async ({
           StudyInstanceUID,
@@ -201,7 +192,7 @@ function createDicomWebApi(dicomWebConfig, userAuthenticationService) {
           if (!StudyInstanceUID) {
             throw new Error('Unable to query for SeriesMetadata without StudyInstanceUID');
           }
-
+          console.log(StudyInstanceUID);
           if (dicomWebConfig.enableStudyLazyLoad) {
             return implementation._retrieveSeriesMetadataAsync(
               StudyInstanceUID,

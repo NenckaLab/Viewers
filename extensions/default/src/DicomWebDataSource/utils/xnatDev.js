@@ -21,16 +21,13 @@ function _isLoggedIn() {
       reject('There: Error checking logged-in to XNAT' + xhr.responseText);
     };
     // xhr.setRequestHeader('Accept', 'application/json');
-    console.log(xhr);
     xhr.timeout = 5000;
     xhr.send();
-    console.log(document.cookie);
   });
 }
 
 function _getSessionID() {
   let value = '';
-  console.log(document.cookie);
   if (document.cookie !== '') {
     value = document.cookie.split('; ').find(row => row.startsWith('XNAT_JSESSIONID'));
     if (value) {
@@ -48,7 +45,6 @@ function _getCsrfToken() {
       value = value.split('=')[1];
     }
   }
-  console.log(value);
   return value;
 }
 
@@ -56,12 +52,9 @@ export async function isLoggedIn() {
   let loggedIn = false;
   try {
     let res = await _isLoggedIn();
-    console.log(res);
     const sessionID = _getSessionID();
-    console.log(sessionID);
     res = res.split(';');
     const csrfToken = res.length > 1 ? res[1].trim().split('=')[1] : '';
-    console.log(csrfToken);
     document.cookie = `XNAT_CSRF=${csrfToken}`;
     if (sessionID === res[0]) {
       loggedIn = true;
@@ -121,9 +114,7 @@ function _xnatAuthenticate(csrfToken) {
     xhr.setRequestHeader('Authorization', 'Basic ' + btoa(`${XNAT_USERNAME}:${XNAT_PASSWORD}`));
     xhr.timeout = 5000;
     console.log(xhr);
-    console.log(xhr.getAllResponseHeaders());
     xhr.send();
-    console.log('SENT');
   });
 }
 export function reassignInstanceUrls(studies) {

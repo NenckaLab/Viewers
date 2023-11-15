@@ -49,14 +49,14 @@ const getDirectURL = (config, params) => {
   const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID } = instance;
   const BulkDataURI =
     (value && value.BulkDataURI) ||
-    `series/${SeriesInstanceUID}/instances/${SOPInstanceUID}${defaultPath}`;
+    `/${SeriesInstanceUID}/instances/${SOPInstanceUID}${defaultPath}`;
   const hasQuery = BulkDataURI.indexOf('?') !== -1;
   const hasAccept = BulkDataURI.indexOf('accept=') !== -1;
   const acceptUri =
     BulkDataURI + (hasAccept ? '' : (hasQuery ? '&' : '?') + `accept=${defaultType}`);
 
   if (tag === 'PixelData' || tag === 'EncapsulatedDocument') {
-    return `${wadoRoot}/studies/${StudyInstanceUID}/series/${SeriesInstanceUID}/instances/${SOPInstanceUID}/rendered`;
+    return `${wadoRoot}/data/experiments/${StudyInstanceUID}/series/${SeriesInstanceUID}/instances/${SOPInstanceUID}/rendered`;
   }
 
   // The DICOMweb standard states that the default is multipart related, and then

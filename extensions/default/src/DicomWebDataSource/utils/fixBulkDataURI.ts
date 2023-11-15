@@ -27,7 +27,7 @@ function fixBulkDataURI(value, instance, dicomWebConfig) {
       dicomWebConfig.bulkDataURI?.relativeResolution === 'series' ||
       !dicomWebConfig.bulkDataURI?.relativeResolution
     ) {
-      value.BulkDataURI = `${dicomWebConfig.wadoRoot}/studies/${instance.StudyInstanceUID}/series/${instance.SeriesInstanceUID}/${value.BulkDataURI}`;
+      value.BulkDataURI = `${dicomWebConfig.wadoRoot}/studies/${instance.StudyInstanceUID}/scans/${instance.SeriesInstanceUID}/${value.BulkDataURI}`;
     }
 
     return;

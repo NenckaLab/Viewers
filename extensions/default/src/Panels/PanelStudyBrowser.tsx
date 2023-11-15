@@ -78,7 +78,7 @@ function PanelStudyBrowser({
       } catch (error) {
         console.warn(error);
       }
-
+      console.log(qidoStudiesForPatient);
       const mappedStudies = _mapDataSourceStudies(qidoStudiesForPatient);
       const actuallyMappedStudies = mappedStudies.map(qidoStudy => {
         return {

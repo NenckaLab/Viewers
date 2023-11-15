@@ -26,7 +26,6 @@ export default class RetrieveMetadataLoader {
     const preLoadData = await this.preLoad();
     const loadData = await this.load(preLoadData);
     const postLoadData = await this.posLoad(loadData);
-
     return postLoadData;
   }
 
@@ -36,6 +35,7 @@ export default class RetrieveMetadataLoader {
    */
   async runLoaders(loaders) {
     let result;
+    console.log(loaders);
     for (const loader of loaders) {
       try {
         result = await loader();
@@ -43,6 +43,7 @@ export default class RetrieveMetadataLoader {
           break; // closes iterator in case data is retrieved successfully
         }
       } catch (e) {
+        console.log(e);
         throw e;
       }
     }
