@@ -33,7 +33,12 @@ export default function getToolbarModule({ commandsManager, servicesManager }: w
       name: 'ohif.toolBoxButton',
       defaultComponent: ToolBoxButtonWrapper,
     },
-    // legacy
+    // legacy will get removed in the future
+    // legacy will get removed in the future
+    // legacy will get removed in the future
+    // legacy will get removed in the future
+    // legacy will get removed in the future
+    // legacy will get removed in the future
     {
       name: 'ohif.radioGroup',
       defaultComponent: ToolbarButtonLegacy,
@@ -59,27 +64,6 @@ export default function getToolbarModule({ commandsManager, servicesManager }: w
     {
       name: 'ohif.progressDropdown',
       defaultComponent: ProgressDropdownWithService,
-    },
-    {
-      name: 'evaluate.group.promoteToPrimary',
-      evaluate: ({ viewportId, button, itemId }) => {
-        const { items } = button.props;
-
-        if (!itemId) {
-          return {
-            primary: button.props.primary,
-            items,
-          };
-        }
-
-        // other wise we can move the clicked tool to the primary button
-        const clickedItemProps = items.find(item => item.id === itemId || item.itemId === itemId);
-
-        return {
-          primary: clickedItemProps,
-          items,
-        };
-      },
     },
     {
       name: 'evaluate.cine',

@@ -16,6 +16,10 @@ import { panelGroupDefinition } from './constants/panels';
  * @param width the max and min width to set on the element
  */
 const setMinMaxWidth = (elem, width?) => {
+  if (!elem) {
+    return;
+  }
+
   elem.style.minWidth = width === undefined ? '' : `${width}px`;
   elem.style.maxWidth = elem.style.minWidth;
 };
@@ -24,7 +28,9 @@ const useResizablePanels = (
   leftPanelClosed,
   setLeftPanelClosed,
   rightPanelClosed,
-  setRightPanelClosed
+  setRightPanelClosed,
+  hasLeftPanels,
+  hasRightPanels
 ) => {
   const [leftPanelExpandedWidth, setLeftPanelExpandedWidth] = useState(
     panelGroupDefinition.left.initialExpandedWidth
@@ -152,6 +158,8 @@ const useResizablePanels = (
     rightPanelExpandedWidth,
     leftResizablePanelMinimumSize,
     rightResizablePanelMinimumSize,
+    hasLeftPanels,
+    hasRightPanels,
   ]);
 
   /**

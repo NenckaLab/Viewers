@@ -1,12 +1,13 @@
 import queryString from 'query-string';
 import dicomParser from 'dicom-parser';
+import { utilities } from '@cornerstonejs/core';
 import { imageIdToURI } from '../utils';
-import getPixelSpacingInformation from '../utils/metadataProvider/getPixelSpacingInformation';
 import DicomMetadataStore from '../services/DicomMetadataStore';
 import fetchPaletteColorLookupTableData from '../utils/metadataProvider/fetchPaletteColorLookupTableData';
 import toNumber from '../utils/toNumber';
 import combineFrameInstance from '../utils/combineFrameInstance';
 import formatPN from '../utils/formatPN';
+const { calibratedPixelSpacingMetadataProvider, getPixelSpacingInformation } = utilities;
 
 class MetadataProvider {
   private readonly imageURIToUIDs: Map<string, any> = new Map();
@@ -512,12 +513,12 @@ export default metadataProvider;
 
 const WADO_IMAGE_LOADER = {
   imagePlaneModule: instance => {
-    const { ImageOrientationPatient } = instance;
+    const { ImageOrientationPatient, ImagePositionPatient } = instance;
 
     // Fallback for DX images.
     // TODO: We should use the rest of the results of this function
     // to update the UI somehow
-    const { PixelSpacing } = getPixelSpacingInformation(instance);
+    const { PixelSpacing, type } = getPixelSpacingInformation(instance) || {};
 
     let rowPixelSpacing;
     let columnPixelSpacing;
@@ -525,14 +526,38 @@ const WADO_IMAGE_LOADER = {
     let rowCosines;
     let columnCosines;
 
+    let usingDefaultValues = false;
+    let isDefaultValueSetForRowCosine = false;
+    let isDefaultValueSetForColumnCosine = false;
+    let imageOrientationPatient;
     if (PixelSpacing) {
-      rowPixelSpacing = PixelSpacing[0];
-      columnPixelSpacing = PixelSpacing[1];
+      [rowPixelSpacing, columnPixelSpacing] = PixelSpacing;
+      calibratedPixelSpacingMetadataProvider.add(instance.imageId, {
+        rowPixelSpacing: parseFloat(PixelSpacing[0]),
+        columnPixelSpacing: parseFloat(PixelSpacing[1]),
+        type,
+      });
+    } else {
+      rowPixelSpacing = columnPixelSpacing = 1;
+      usingDefaultValues = true;
     }
 
     if (ImageOrientationPatient) {
-      rowCosines = ImageOrientationPatient.slice(0, 3);
-      columnCosines = ImageOrientationPatient.slice(3, 6);
+      rowCosines = toNumber(ImageOrientationPatient.slice(0, 3));
+      columnCosines = toNumber(ImageOrientationPatient.slice(3, 6));
+      imageOrientationPatient = toNumber(ImageOrientationPatient);
+    } else {
+      rowCosines = [1, 0, 0];
+      columnCosines = [0, 1, 0];
+      imageOrientationPatient = [1, 0, 0, 0, 1, 0];
+      usingDefaultValues = true;
+      isDefaultValueSetForRowCosine = true;
+      isDefaultValueSetForColumnCosine = true;
+    }
+
+    const imagePositionPatient = toNumber(ImagePositionPatient) || [0, 0, 0];
+    if (!ImagePositionPatient) {
+      usingDefaultValues = true;
     }
 
     return {
@@ -540,17 +565,18 @@ const WADO_IMAGE_LOADER = {
       rows: toNumber(instance.Rows),
       columns: toNumber(instance.Columns),
       spacingBetweenSlices: toNumber(instance.SpacingBetweenSlices),
-      imageOrientationPatient: toNumber(ImageOrientationPatient) || [0, 1, 0, 0, 0, -1],
-      rowCosines: toNumber(rowCosines || [0, 1, 0]),
-      isDefaultValueSetForRowCosine: toNumber(rowCosines) ? false : true,
-      columnCosines: toNumber(columnCosines || [0, 0, -1]),
-      isDefaultValueSetForColumnCosine: toNumber(columnCosines) ? false : true,
-      imagePositionPatient: toNumber(instance.ImagePositionPatient || [0, 0, 0]),
+      imageOrientationPatient,
+      rowCosines,
+      isDefaultValueSetForRowCosine,
+      columnCosines,
+      isDefaultValueSetForColumnCosine,
+      imagePositionPatient,
       sliceThickness: toNumber(instance.SliceThickness),
       sliceLocation: toNumber(instance.SliceLocation),
       pixelSpacing: toNumber(PixelSpacing || 1),
-      rowPixelSpacing: rowPixelSpacing ? toNumber(rowPixelSpacing) : null,
-      columnPixelSpacing: columnPixelSpacing ? toNumber(columnPixelSpacing) : null,
+      rowPixelSpacing,
+      columnPixelSpacing,
+      usingDefaultValues,
     };
   },
 };

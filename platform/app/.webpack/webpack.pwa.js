@@ -78,6 +78,18 @@ module.exports = (env, argv) => {
         // Hoisted Yarn Workspace Modules
         path.resolve(__dirname, '../../../node_modules'),
         SRC_DIR,
+        path.resolve(
+          __dirname,
+          '/Users/zpick/Desktop/Viewers/modes/longitudinal/node_modules'
+        ),
+        path.resolve(
+          __dirname,
+          '/Users/zpick/Desktop/Viewers/modes/lytic-lesions/node_modules'
+        ),
+        path.resolve(
+          __dirname,
+          '/Users/zpick/Desktop/Viewers/extensions/extension-lytic-lesion/node_modules'
+        ),
       ],
     },
     plugins: [
@@ -99,6 +111,16 @@ module.exports = (env, argv) => {
               // Ignore our configuration files
               ignore: ['**/config/**', '**/html-templates/**', '.DS_Store'],
             },
+          },
+          {
+            from: '../../../node_modules/onnxruntime-web/dist',
+            to: `${DIST_DIR}/ort`,
+          },
+          // Short term solution to make sure GCloud config is available in output
+          // for our docker implementation
+          {
+            from: `${PUBLIC_DIR}/config/google.js`,
+            to: `${DIST_DIR}/google.js`,
           },
           // Copy over and rename our target app config file
           {
@@ -147,6 +169,12 @@ module.exports = (env, argv) => {
       },
       proxy: {
         '/dicomweb': 'http://localhost:5000',
+        '/dicom-microscopy-viewer': {
+          target: 'http://localhost:3000',
+          pathRewrite: {
+            '^/dicom-microscopy-viewer': `/${PUBLIC_URL}/dicom-microscopy-viewer`,
+          },
+        },
       },
       static: [
         {

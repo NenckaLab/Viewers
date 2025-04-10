@@ -24,7 +24,7 @@ const defaultProtocol = {
   // additional viewports are added using the layout tool
   defaultViewport: {
     viewportOptions: {
-      viewportType: 'stack',
+      viewportType: 'orthographic',
       toolGroupId: 'default',
       allowUnmatchedView: true,
       syncGroups: [
@@ -84,8 +84,7 @@ const defaultProtocol = {
       viewports: [
         {
           viewportOptions: {
-            viewportType: 'stack',
-            viewportId: 'default',
+            viewportType: 'orthographic',
             toolGroupId: 'default',
             // This will specify the initial image options index if it matches in the URL
             // and will otherwise not specify anything.

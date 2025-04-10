@@ -64,6 +64,7 @@ const MEASUREMENT_SCHEMA_KEYS = [
   'isSelected',
   'textBox',
   'referencedImageId',
+  'isDirty',
 ];
 
 const EVENTS = {
@@ -91,6 +92,11 @@ const VALUE_TYPES = {
   ROI_THRESHOLD: 'value_type::roiThreshold',
   ROI_THRESHOLD_MANUAL: 'value_type::roiThresholdManual',
 };
+
+enum MeasurementChangeType {
+  HandlesUpdated = 'HandlesUpdated',
+  LabelChange = 'LabelChange',
+}
 
 export type MeasurementFilter = (measurement) => boolean;
 
@@ -121,6 +127,7 @@ class MeasurementService extends PubSubService {
 
   private measurements = new Map();
   private unmappedMeasurements = new Map();
+  private isMeasurementDeletedIndividually: boolean;
 
   private sources = {};
   private mappings = {};
@@ -259,7 +266,7 @@ class MeasurementService extends PubSubService {
   getSource(name, version) {
     const { sources } = this;
     const uid = this._getSourceUID(name, version);
-
+    console.log(sources[uid]);
     return sources[uid];
   }
 
@@ -338,7 +345,8 @@ class MeasurementService extends PubSubService {
 
     const measurement = this.getMeasurement(measurementUID);
     const mapping = this._getMappingByMeasurementSource(measurement, annotationType);
-
+    console.log(measurement);
+    console.log(mapping);
     if (mapping) {
       return mapping.toAnnotationSchema(measurement, annotationType);
     }
@@ -389,7 +397,6 @@ class MeasurementService extends PubSubService {
       log.warn('Invalid source. Exiting early.');
       return;
     }
-
     const sourceInfo = this._getSourceToString(source);
 
     if (!annotationType) {
@@ -405,11 +412,14 @@ class MeasurementService extends PubSubService {
     let measurement = {};
     try {
       measurement = toMeasurementSchema(data);
+      if (!measurement) {
+        return;
+      }
       measurement.source = source;
     } catch (error) {
       log.warn(
         `Failed to map '${sourceInfo}' measurement for annotationType ${annotationType}:`,
-        error.message
+        error
       );
       return;
     }
@@ -491,7 +501,7 @@ class MeasurementService extends PubSubService {
         return;
       }
       const { toMeasurementSchema } = sourceMapping;
-
+      console.log(sourceAnnotationDetail);
       /* Convert measurement */
       measurement = toMeasurementSchema(sourceAnnotationDetail);
       if (!measurement) {
@@ -540,6 +550,11 @@ class MeasurementService extends PubSubService {
       uid: internalUID,
     };
 
+    newMeasurement.isDirty =
+      sourceAnnotationDetail.changeType === MeasurementChangeType.HandlesUpdated ||
+      sourceAnnotationDetail.changeType === MeasurementChangeType.LabelChange ||
+      oldMeasurement?.isDirty;
+
     if (oldMeasurement) {
       // TODO: Ultimately, each annotation should have a selected flag right from the source.
       // For now, it is just added in OHIF here and in setMeasurementSelected.
@@ -583,10 +598,35 @@ class MeasurementService extends PubSubService {
 
     this.unmappedMeasurements.delete(measurementUID);
     this.measurements.delete(measurementUID);
+    this.isMeasurementDeletedIndividually = true;
     this._broadcastEvent(this.EVENTS.MEASUREMENT_REMOVED, {
       source,
       measurement: measurementUID,
     });
+  }
+
+  /**
+   * Remove multiple measurements at once.
+   */
+  removeMany(measurementUIDs: string[]): void {
+    const measurements = [];
+    for (const measurementUID of measurementUIDs) {
+      const measurement =
+        this.measurements.get(measurementUID) || this.unmappedMeasurements.get(measurementUID);
+
+      if (!measurementUID || !measurement) {
+        console.debug(`No uid provided, or unable to find measurement by uid.`);
+        continue;
+      }
+
+      this.unmappedMeasurements.delete(measurementUID);
+      this.measurements.delete(measurementUID);
+      measurements.push(measurement);
+    }
+    if (!measurements.length) {
+      return;
+    }
+    this._broadcastEvent(this.EVENTS.MEASUREMENTS_CLEARED, { measurements });
   }
 
   /**
@@ -643,8 +683,11 @@ class MeasurementService extends PubSubService {
       measurement,
     });
 
-    this._broadcastEvent(EVENTS.JUMP_TO_MEASUREMENT_VIEWPORT, consumableEvent);
+    // Important: we should broadcast the layout event first, since
+    // in the layout there might be a viewport that we can match and choose
+    // and jump in it before we decide on changing the orientation of different viewports
     this._broadcastEvent(EVENTS.JUMP_TO_MEASUREMENT_LAYOUT, consumableEvent);
+    this._broadcastEvent(EVENTS.JUMP_TO_MEASUREMENT_VIEWPORT, consumableEvent);
   }
 
   _getSourceUID(name, version) {
@@ -655,7 +698,7 @@ class MeasurementService extends PubSubService {
 
       return source.name === name && source.version === version;
     });
-
+    console.log(sourceUID);
     return sourceUID;
   }
 
@@ -769,7 +812,7 @@ class MeasurementService extends PubSubService {
     });
   }
 
-  public toggleVisibilityMeasurement(measurementUID: string): void {
+  public toggleVisibilityMeasurement(measurementUID: string, visibility?: boolean): void {
     const measurement = this.measurements.get(measurementUID);
 
     if (!measurement) {
@@ -777,13 +820,20 @@ class MeasurementService extends PubSubService {
       return;
     }
 
-    measurement.isVisible = !measurement.isVisible;
+    if (measurement.isVisible === visibility && visibility !== undefined) {
+      return;
+    }
+    measurement.isVisible = visibility !== undefined ? visibility : !measurement.isVisible;
 
     this._broadcastEvent(this.EVENTS.MEASUREMENT_UPDATED, {
       source: measurement.source,
       measurement,
       notYetUpdatedAtSource: true,
     });
+  }
+
+  public toggleVisibilityMeasurementMany(measurementUIDs: string[], visibility?: boolean): void {
+    return measurementUIDs.forEach(uid => this.toggleVisibilityMeasurement(uid, visibility));
   }
 
   public updateColorMeasurement(measurementUID: string, color: number[]): void {
@@ -802,6 +852,14 @@ class MeasurementService extends PubSubService {
       notYetUpdatedAtSource: true,
     });
   }
+
+  public setIsMeasurementDeletedIndividually = isDeletedIndividually => {
+    this.isMeasurementDeletedIndividually = isDeletedIndividually;
+  };
+
+  public getIsMeasurementDeletedIndividually = () => {
+    return this.isMeasurementDeletedIndividually;
+  };
 }
 
 export default MeasurementService;

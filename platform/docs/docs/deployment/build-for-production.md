@@ -110,6 +110,26 @@ npx serve ./dist -c ../public/serve.json
 
 
 
+### Build for non-root path
+
+If you would like to access the viewer from a non-root path (e.g., `/my-awesome-viewer` instead of `/`),
+You can achieve so by using the `PUBLIC_URL` environment variable AND the `routerBasename` configuration option.
+
+1. use a config (e.g. config/myConfig.js) file that is using the `routerBasename` of your choice `/my-awesome-viewer` (note there is only one / - it is not /my-awesome-viewer/).
+2. build the viewer with `PUBLIC_URL=/my-awesome-viewer/ APP_CONFIG=config/myConfig.js yarn build` (note there are two / - it is not /my-awesome-viewer).
+
+
+:::tip
+The PUBLIC_URL tells the application where to find the static assets and the routerBasename will tell the application how to handle the routes
+:::
+
+:::tip
+Testing, you can use `npx http-server` to serve the files in the generated `dist` folder and access the viewer from `http://localhost:8080/my-awesome-viewer`. To achieve
+so, you should first rename the `dist` folder to `my-awesome-viewer` and then change the working directory
+to the `platform/app` folder and run `npx http-server ./`. Then on the browser, you can access the viewer from `http://localhost:8080/my-awesome-viewer`
+:::
+
+
 ### Automating Builds and Deployments
 
 If you found setting up your environment and running all of these steps to be a
