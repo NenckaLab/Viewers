@@ -240,6 +240,10 @@ const modeInstance = {
     // Call the basic mode's onModeEnter first
     basicModeInstance.onModeEnter({ servicesManager, extensionManager, commandsManager });
 
+    // Register XNAT-specific toolbar buttons
+    const { toolbarService } = servicesManager.services;
+    toolbarService.register(toolbarButtons);
+
     // Log the current mode state
     const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
     console.log('XNAT Mode Enter:', isOverreadMode ? 'Overread Mode' : 'Regular Mode');
@@ -251,7 +255,6 @@ const modeInstance = {
     }
 
     const {
-      toolbarService,
       customizationService,
     } = servicesManager.services;
 
