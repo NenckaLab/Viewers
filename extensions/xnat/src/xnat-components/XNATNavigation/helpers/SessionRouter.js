@@ -196,6 +196,19 @@ export default class SessionRouter {
             params += `&parentProjectId=${this.parentProjectId}`;
         }
 
+        try {
+            const currentSearchParams = new URLSearchParams(window.location.search || '');
+            const isOverreadModeActive =
+                currentSearchParams.get('overreadMode') === 'true' ||
+                (window.location.pathname && window.location.pathname.includes('/overreads'));
+
+            if (isOverreadModeActive && !params.includes('overreadMode')) {
+                params += `&overreadMode=true`;
+            }
+        } catch (error) {
+            console.warn('SessionRouter: Unable to determine overread mode state from current URL.', error);
+        }
+
         const { xnatRootUrl } = sessionMap;
 
         // Ensure we don't have double slashes

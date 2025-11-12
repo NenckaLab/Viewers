@@ -215,7 +215,22 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
    */
   onLaunchViewerClick(): void {
     const { subjectId, projectId, ID, label } = this.props;
-    const viewerUrl = `/VIEWER/?subjectId=${subjectId}&projectId=${projectId}&experimentId=${ID}&experimentLabel=${label}`;
+    let viewerUrl = `/VIEWER/?subjectId=${subjectId}&projectId=${projectId}&experimentId=${ID}&experimentLabel=${label}`;
+
+    // Check if overreadMode=true is present in current URL and add it to viewer URL
+    try {
+      const currentSearchParams = new URLSearchParams(window.location.search || '');
+      const isOverreadModeActive =
+        currentSearchParams.get('overreadMode') === 'true' ||
+        (window.location.pathname && window.location.pathname.includes('/overreads'));
+
+      if (isOverreadModeActive) {
+        viewerUrl += `&overreadMode=true`;
+      }
+    } catch (error) {
+      console.warn('XNATSession: Unable to determine overread mode state from current URL.', error);
+    }
+
     window.open(viewerUrl, '_blank');
   }
 
