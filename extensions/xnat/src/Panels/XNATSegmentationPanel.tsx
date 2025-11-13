@@ -5,8 +5,11 @@ import { metaData } from '@cornerstonejs/core';
 import { useSystem } from '@ohif/core/src';
 import XNATSegmentationImportMenu from '../xnat-components/XNATSegmentationImportMenu/XNATSegmentationImportMenu';
 
-export default function XNATSegmentationPanel({ configuration }) {
-  const { commandsManager, servicesManager } = useSystem();
+export default function XNATSegmentationPanel({ configuration, commandsManager, servicesManager }) {
+  // Use props if provided, otherwise fall back to useSystem
+  const systemContext = useSystem();
+  commandsManager = commandsManager || systemContext.commandsManager;
+  servicesManager = servicesManager || systemContext.servicesManager;
   const { customizationService, displaySetService, viewportGridService } = servicesManager.services;
   const [showImportMenu, setShowImportMenu] = useState(false);
   const [viewportData, setViewportData] = useState<any>(null);
@@ -18,12 +21,12 @@ export default function XNATSegmentationPanel({ configuration }) {
   const segmentationTableMode = customizationService.getCustomization(
     'panelSegmentation.tableMode'
   ) as unknown as string;
-  
+
   const onSegmentationAdd = async () => {
     try {
       const activeViewportId = viewportGridService.getActiveViewportId();
-      await commandsManager.runCommand('createLabelmapForViewport', { 
-        viewportId: activeViewportId 
+      await commandsManager.runCommand('createLabelmapForViewport', {
+        viewportId: activeViewportId
       });
     } catch (error) {
       console.warn('Error creating segmentation:', error);
@@ -35,14 +38,14 @@ export default function XNATSegmentationPanel({ configuration }) {
   const onImportFromXNAT = () => {
     // Get current viewport data
     const { activeViewportId, viewports } = viewportGridService.getState();
-    
+
     if (activeViewportId && viewports.has(activeViewportId)) {
       const viewport = viewports.get(activeViewportId);
       const displaySetInstanceUID = viewport.displaySetInstanceUIDs[0];
-      
+
       if (displaySetInstanceUID) {
         const displaySet = displaySetService.getDisplaySetByUID(displaySetInstanceUID);
-        
+
         if (displaySet) {
           setViewportData({
             studyInstanceUID: displaySet.StudyInstanceUID,
@@ -63,74 +66,74 @@ export default function XNATSegmentationPanel({ configuration }) {
     setShowImportMenu(false);
     setViewportData(null);
   };
-  
+
   const disableEditing = customizationService.getCustomization('panelSegmentation.disableEditing') || configuration?.disableEditing;
   const showAddSegment = customizationService.getCustomization('panelSegmentation.showAddSegment');
 
   // Create handlers object for all command runs
   const handlers = {
     onSegmentationClick: (segmentationId: string) => {
-      commandsManager.run('setActiveSegmentation', { segmentationId });
+      commandsManager.runCommand('setActiveSegmentation', { segmentationId });
     },
     onSegmentAdd: segmentationId => {
-      commandsManager.run('addSegment', { segmentationId });
+      commandsManager.runCommand('addSegment', { segmentationId });
     },
     onSegmentClick: (segmentationId, segmentIndex) => {
-      commandsManager.run('setActiveSegmentAndCenter', { segmentationId, segmentIndex });
+      commandsManager.runCommand('setActiveSegmentAndCenter', { segmentationId, segmentIndex });
     },
     onSegmentEdit: (segmentationId, segmentIndex) => {
-      commandsManager.run('editSegmentLabel', { segmentationId, segmentIndex });
+      commandsManager.runCommand('editSegmentLabel', { segmentationId, segmentIndex });
     },
     onSegmentationEdit: segmentationId => {
-      commandsManager.run('editSegmentationLabel', { segmentationId });
+      commandsManager.runCommand('editSegmentationLabel', { segmentationId });
     },
     onSegmentColorClick: (segmentationId, segmentIndex) => {
-      commandsManager.run('editSegmentColor', { segmentationId, segmentIndex });
+      commandsManager.runCommand('editSegmentColor', { segmentationId, segmentIndex });
     },
     onSegmentDelete: (segmentationId, segmentIndex) => {
-      commandsManager.run('deleteSegment', { segmentationId, segmentIndex });
+      commandsManager.runCommand('deleteSegment', { segmentationId, segmentIndex });
     },
     onToggleSegmentVisibility: (segmentationId, segmentIndex, type) => {
-      commandsManager.run('toggleSegmentVisibility', { segmentationId, segmentIndex, type });
+      commandsManager.runCommand('toggleSegmentVisibility', { segmentationId, segmentIndex, type });
     },
     onToggleSegmentLock: (segmentationId, segmentIndex) => {
-      commandsManager.run('toggleSegmentLock', { segmentationId, segmentIndex });
+      commandsManager.runCommand('toggleSegmentLock', { segmentationId, segmentIndex });
     },
     onToggleSegmentationRepresentationVisibility: (segmentationId, type) => {
-      commandsManager.run('toggleSegmentationVisibility', { segmentationId, type });
+      commandsManager.runCommand('toggleSegmentationVisibility', { segmentationId, type });
     },
     onSegmentationDownload: segmentationId => {
-      commandsManager.run('downloadSegmentation', { segmentationId });
+      commandsManager.runCommand('downloadSegmentation', { segmentationId });
     },
     setStyle: (segmentationId, type, key, value) => {
-      commandsManager.run('setSegmentationStyle', { segmentationId, type, key, value });
+      commandsManager.runCommand('setSegmentationStyle', { segmentationId, type, key, value });
     },
     toggleRenderInactiveSegmentations: () => {
-      commandsManager.run('toggleRenderInactiveSegmentations');
+      commandsManager.runCommand('toggleRenderInactiveSegmentations');
     },
     onSegmentationRemoveFromViewport: segmentationId => {
-      commandsManager.run('removeSegmentationFromViewport', { segmentationId });
+      commandsManager.runCommand('removeSegmentationFromViewport', { segmentationId });
     },
     onSegmentationDelete: segmentationId => {
-      commandsManager.run('deleteSegmentation', { segmentationId });
+      commandsManager.runCommand('deleteSegmentation', { segmentationId });
     },
     setFillAlpha: ({ type }, value) => {
-      commandsManager.run('setFillAlpha', { type, value });
+      commandsManager.runCommand('setFillAlpha', { type, value });
     },
     setOutlineWidth: ({ type }, value) => {
-      commandsManager.run('setOutlineWidth', { type, value });
+      commandsManager.runCommand('setOutlineWidth', { type, value });
     },
     setRenderFill: ({ type }, value) => {
-      commandsManager.run('setRenderFill', { type, value });
+      commandsManager.runCommand('setRenderFill', { type, value });
     },
     setRenderOutline: ({ type }, value) => {
-      commandsManager.run('setRenderOutline', { type, value });
+      commandsManager.runCommand('setRenderOutline', { type, value });
     },
     setFillAlphaInactive: ({ type }, value) => {
-      commandsManager.run('setFillAlphaInactive', { type, value });
+      commandsManager.runCommand('setFillAlphaInactive', { type, value });
     },
     getRenderInactiveSegmentations: () => {
-      return commandsManager.run('getRenderInactiveSegmentations');
+      return commandsManager.runCommand('getRenderInactiveSegmentations');
     },
   };
 
@@ -222,18 +225,18 @@ export default function XNATSegmentationPanel({ configuration }) {
         </DropdownMenuItem>
         {hasActiveSegmentation && (
           <>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               onClick={() => handlers.onSegmentationDownload(activeSegmentationId)}
             >
               💾 Download DICOM SEG
             </DropdownMenuItem>
-            {/* <DropdownMenuItem 
-              onClick={() => commandsManager.run('downloadRTSS', { segmentationId: activeSegmentationId })}
+            {/* <DropdownMenuItem
+              onClick={() => commandsManager.runCommand('downloadRTSS', { segmentationId: activeSegmentationId })}
             >
               💾 Download RTSS
             </DropdownMenuItem> */}
-            <DropdownMenuItem 
-              onClick={() => commandsManager.run('XNATExportSegmentation', { segmentationId: activeSegmentationId })}
+            <DropdownMenuItem
+              onClick={() => commandsManager.runCommand('XNATExportSegmentation', { segmentationId: activeSegmentationId })}
             >
               📤 Export to XNAT as SEG
             </DropdownMenuItem>

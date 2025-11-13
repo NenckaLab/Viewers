@@ -10,7 +10,6 @@ import {
   extensionDependencies as basicDependencies,
   basicLayout,
   basicRoute,
-  initToolGroups,
   cornerstone,
   ohif,
   dicomsr,
@@ -20,6 +19,9 @@ import {
   dicomPmap,
   dicomRT,
 } from '../../basic/src/index';
+
+// Import segmentation tools initialization
+import { createTools } from '../../segmentation/src/initToolGroups';
 
 const xnat = {
   xnatNavList: '@ohif/extension-xnat.panelModule.xnatNavigation',
@@ -241,8 +243,39 @@ const modeInstance = {
     basicModeInstance.onModeEnter({ servicesManager, extensionManager, commandsManager });
 
     // Register XNAT-specific toolbar buttons
-    const { toolbarService } = servicesManager.services;
+    const { toolbarService, toolGroupService } = servicesManager.services;
     toolbarService.register(toolbarButtons);
+
+    // Replace the basic 'default' tool group with segmentation tools plus basic measurement tools
+    const segmentationTools = createTools({ commandsManager, utilityModule: extensionManager.getModuleEntry('@ohif/extension-cornerstone.utilityModule.tools') });
+
+    // Add missing basic measurement tools that are not in segmentation tools
+    const basicMeasurementTools = {
+      passive: [
+        { toolName: 'Length' },
+        { toolName: 'Bidirectional' },
+        { toolName: 'ArrowAnnotate' },
+        { toolName: 'Angle' },
+        { toolName: 'CobbAngle' },
+        { toolName: 'Probe' },
+        { toolName: 'RectangleROI' },
+        { toolName: 'CircleROI' },
+        { toolName: 'EllipticalROI' },
+        { toolName: 'SplineROI' },
+        { toolName: 'LivewireContour' },
+      ]
+    };
+
+    // Merge segmentation tools with basic measurement tools
+    const allTools = {
+      active: segmentationTools.active,
+      passive: [...segmentationTools.passive, ...basicMeasurementTools.passive],
+      disabled: segmentationTools.disabled || [],
+    };
+
+    // Destroy the basic tool group and recreate with combined tools
+    toolGroupService.destroyToolGroup('default');
+    toolGroupService.createToolGroupAndAddTools('default', allTools);
 
     // Log the current mode state
     const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
@@ -392,4 +425,4 @@ const mode = {
 };
 
 export default mode;
-export { initToolGroups, toolbarButtons };
+export { toolbarButtons };
