@@ -67,17 +67,17 @@ export async function exportSegmentationToXNAT(
   }
 
   // Generate the DICOM SEG dataset
-  const generatedData = generateSegmentation(
+  const dataset = generateSegmentation(
     { segmentationId },
     { segmentationService }
   );
 
-  if (!generatedData || !generatedData.dataset) {
+  if (!dataset) {
     throw new Error('Error during segmentation generation');
   }
 
   // Convert dataset to blob
-  const segBlob = datasetToBlob(generatedData.dataset);
+  const segBlob = datasetToBlob(dataset);
 
   // Try multiple approaches to get the experiment ID
   let experimentId = null;

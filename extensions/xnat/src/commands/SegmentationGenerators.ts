@@ -3,7 +3,7 @@
  * Extracted from segmentationCommands.ts
  */
 
-import { cache } from '@cornerstonejs/core';
+import { cache, metaData } from '@cornerstonejs/core';
 import { segmentation as cornerstoneToolsSegmentation } from '@cornerstonejs/tools';
 import { adaptersSEG } from '@cornerstonejs/adapters';
 
@@ -128,10 +128,11 @@ export function generateSegmentation(
     },
   } = adaptersSEG;
 
-  const dataset = csGenerateSegmentation({
+  const dataset = csGenerateSegmentation(
+    referencedImages,
     labelmap3D,
-    imageIds: referencedImages.map(img => img.imageId),
-    options: {
+    metaData,
+    {
       ...options,
       SeriesDescription: options.SeriesDescription || 'AI Segmentation',
       SeriesNumber: options.SeriesNumber || '300',
@@ -139,8 +140,13 @@ export function generateSegmentation(
       Manufacturer: options.Manufacturer || 'Cornerstone.js',
       ManufacturerModelName: options.ManufacturerModelName || 'Cornerstone3D',
       SoftwareVersions: options.SoftwareVersions || '1.0.0',
-    },
-  });
+      TransferSyntaxUID: options.TransferSyntaxUID || '1.2.840.10008.1.2', // Implicit VR Little Endian
+      ImplementationClassUID: options.ImplementationClassUID || '1.2.40.0.13.1.1',
+      ImplementationVersionName: options.ImplementationVersionName || 'OHIF_XNAT',
+    }
+  );
 
-  return { dataset };
+  // The Cornerstone adapters return a Segmentation object with a .dataset property
+  // Extract the actual DICOM dataset for compatibility with dcmjs
+  return dataset.dataset;
 }
