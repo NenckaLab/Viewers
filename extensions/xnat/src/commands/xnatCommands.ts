@@ -42,6 +42,9 @@ export const createXNATCommands = (
 
         XNATStoreSegmentation: async ({ segmentationId }) => {
             try {
+                // Import the segmentation export function
+                const { exportSegmentationToXNAT } = await import('./SegmentationExporters');
+
                 // Get the series instance UID from the current viewport
                 const { viewportGridService, displaySetService } = servicesManager.services;
                 const { activeViewportId } = viewportGridService.getState();
@@ -60,11 +63,16 @@ export const createXNATCommands = (
 
                 const seriesInstanceUID = displaySet.SeriesInstanceUID;
 
-                // Call the actual export function
-                await commandsManager.runCommand('exportSegmentationToXNAT', {
-                    segmentationId,
-                    seriesInstanceUID
-                });
+                // Call the actual export function directly
+                await exportSegmentationToXNAT(
+                    { segmentationId, seriesInstanceUID },
+                    {
+                        uiNotificationService: servicesManager.services.uiNotificationService,
+                        servicesManager,
+                        displaySet,
+                        segmentationService: servicesManager.services.segmentationService
+                    }
+                );
             } catch (error) {
                 console.error('Error exporting segmentation to XNAT:', error);
                 const { uiNotificationService } = servicesManager.services;

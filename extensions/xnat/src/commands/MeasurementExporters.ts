@@ -143,6 +143,8 @@ export async function XNATStoreMeasurements({
             dashedLine: false,
             visible: true,
             frameOfReferenceUID: m.FrameOfReferenceUID || m.metadata?.FrameOfReferenceUID || undefined,
+            frameNumber: Number(sopToFrame[m.SOPInstanceUID] ?? 0),
+            imageIndex: Number(sopToFrame[m.SOPInstanceUID] ?? 0),
             imageReference: {
                 SOPInstanceUID: m.SOPInstanceUID,
                 frameIndex: Number(sopToFrame[m.SOPInstanceUID] ?? 0),
@@ -150,6 +152,7 @@ export async function XNATStoreMeasurements({
             viewport: {},
             data: {},
             measurements: [],
+            coordinateList: points.map(pt => [Number(pt[0]), Number(pt[1]), Number(pt[2] || 0)]),
         };
 
         console.log(`🔍 DEBUG: Exporting measurement ${m.uid}:`);
@@ -367,29 +370,32 @@ export async function XNATStoreMeasurements({
     };
 
     // Build the measurement collection
-    const measurementObjects = measurements.map(buildMeasurementObject);
-    const now = new Date();
-    const nowFormatted = formatDateTime(now);
+    const imageMeasurements = measurements.map(buildMeasurementObject);
 
+    // Build the measurement collection in the format expected by XNAT
     const measurementCollection = {
-        version: '1.0',
-        description: 'OHIF Measurement Collection',
-        created: nowFormatted,
-        modified: nowFormatted,
-        collectionType: 'measurement',
-        collectionId: DicomMetaDictionary.uid(),
-        studyInstanceUID,
-        seriesInstanceUID,
-        experimentId,
-        imageCollection,
-        measurementGroups: [
-            {
-                groupId: DicomMetaDictionary.uid(),
-                groupDescription: 'Default Measurement Group',
-                measurements: measurementObjects,
-            },
-        ],
-    };
+        uuid: DicomMetaDictionary.uid(),
+        name: userLabel.substring(0, 64),
+        description: '',
+        created: formatDateTime(new Date()),
+        modified: '',
+        revision: 1,
+        user: { name: '', loginName: '' },
+        subject: { name: '', id: '', birthDate: '' },
+        equipment: {
+            manufacturerName: displaySet.Manufacturer || '',
+            manufacturerModelName: 'XNAT-OHIF-Viewer',
+            softwareVersion: '',
+        },
+        imageReference: {
+            PatientID: displaySet.PatientID || '',
+            StudyInstanceUID: studyInstanceUID,
+            SeriesInstanceUID: seriesInstanceUID,
+            Modality: displaySet.Modality || '',
+            imageCollection,
+        },
+        imageMeasurements, // array built above
+    } as any;
 
     console.log('🔍 DEBUG: Final measurement collection:', measurementCollection);
 
