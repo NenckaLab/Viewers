@@ -6,9 +6,54 @@
 import { cache, metaData } from '@cornerstonejs/core';
 import { segmentation as cornerstoneToolsSegmentation } from '@cornerstonejs/tools';
 import { adaptersSEG } from '@cornerstonejs/adapters';
+import dcmjs from 'dcmjs';
 
 export interface SegmentationGeneratorParams {
   segmentationService: any;
+}
+
+const DEFAULT_RGBA = [255, 0, 0, 255];
+
+function getSegmentColor(
+  representation: any,
+  segmentIndex: number
+): number[] {
+  if (!representation?.colorLUT) {
+    return DEFAULT_RGBA;
+  }
+
+  const { colorLUT } = representation;
+
+  if (Array.isArray(colorLUT)) {
+    return colorLUT[segmentIndex] || DEFAULT_RGBA;
+  }
+
+  if (colorLUT instanceof Map) {
+    return colorLUT.get(segmentIndex) || DEFAULT_RGBA;
+  }
+
+  if (
+    typeof colorLUT === 'object' &&
+    colorLUT !== null &&
+    segmentIndex in colorLUT
+  ) {
+    return colorLUT[segmentIndex] || DEFAULT_RGBA;
+  }
+
+  return DEFAULT_RGBA;
+}
+
+function rgbaToDICOMLab(rgba: number[]): number[] {
+  const rgbSource =
+    Array.isArray(rgba) && rgba.length >= 3 ? rgba : DEFAULT_RGBA;
+  const rgb = rgbSource.slice(0, 3).map(value =>
+    Math.min(255, Math.max(0, value))
+  );
+  const normalized = rgb.map(value => value / 255);
+
+  const cielab = dcmjs.data.Colors.rgb2DICOMLAB(normalized);
+
+  return cielab.map((value: number) => Math.round(value));
 }
 
 /**
@@ -103,16 +148,15 @@ export function generateSegmentation(
 
     // Use the first representation to get color information
     const representation = representations && representations.length > 0 ? representations[0] : null;
-    const color = representation
-      ? representation.colorLUT?.[segmentIndex] || [255, 0, 0, 255] // Default red
-      : [255, 0, 0, 255];
+    const rgbaColor = getSegmentColor(representation, Number(segmentIndex));
+    const RecommendedDisplayCIELabValue = rgbaToDICOMLab(rgbaColor);
 
     labelmap3D.metadata[parseInt(segmentIndex)] = {
       SegmentNumber: segmentIndex,
       SegmentLabel: segmentLabel,
       SegmentAlgorithmType: 'MANUAL',
       SegmentAlgorithmName: 'Manual',
-      RecommendedDisplayCIELabValue: color,
+      RecommendedDisplayCIELabValue,
       SegmentedPropertyCategoryCodeSequence: {
         CodeValue: 'T-D000A',
         CodingSchemeDesignator: 'SRT',
