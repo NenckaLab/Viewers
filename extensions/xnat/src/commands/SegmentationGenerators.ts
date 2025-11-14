@@ -54,10 +54,15 @@ export function generateSegmentation(
   const segImages = imageIds.map(imageId => cache.getImage(imageId));
   const referencedImages = segImages.map(image => cache.getImage(image.referencedImageId));
 
+  // Reverse the order of images for DICOM SEG export
+  // ITK-Snap shows frames flipped, so reverse the current order
+  const reversedReferencedImages = [...referencedImages].reverse();
+  const reversedSegImages = [...segImages].reverse();
+
   const labelmaps2D = [];
   let z = 0;
 
-  for (const segImage of segImages) {
+  for (const segImage of reversedSegImages) {
     const segmentsOnLabelmap = new Set();
     const pixelData = segImage.getPixelData();
     const { rows, columns } = segImage;
@@ -129,7 +134,7 @@ export function generateSegmentation(
   } = adaptersSEG;
 
   const dataset = csGenerateSegmentation(
-    referencedImages,
+    reversedReferencedImages,
     labelmap3D,
     metaData,
     {

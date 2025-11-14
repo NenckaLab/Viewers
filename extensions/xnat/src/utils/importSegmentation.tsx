@@ -132,10 +132,16 @@ export const importSegmentation = async ({
     if (results.segMetadata && results.segMetadata.data) {
       results.segMetadata.data.forEach((data, i) => {
         if (i > 0) {
-          data.rgba = data.RecommendedDisplayCIELabValue;
+          const cielabColor = data.RecommendedDisplayCIELabValue;
 
-          if (data.rgba) {
-            data.rgba = dicomlabToRGB(data.rgba);
+          if (cielabColor) {
+            const rgbColor = dicomlabToRGB(cielabColor);
+            if (rgbColor) {
+              data.rgba = rgbColor;
+            } else {
+              usedRecommendedDisplayCIELabValue = false;
+              data.rgba = CONSTANTS.COLOR_LUT[i % CONSTANTS.COLOR_LUT.length];
+            }
           } else {
             usedRecommendedDisplayCIELabValue = false;
             data.rgba = CONSTANTS.COLOR_LUT[i % CONSTANTS.COLOR_LUT.length];
