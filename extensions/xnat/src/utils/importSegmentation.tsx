@@ -22,7 +22,7 @@ const CONSTANTS = {
 // Helper function to convert DICOM Lab color to RGB using dcmjs
 function dicomlabToRGB(cielab) {
   if (!cielab || cielab.length < 3) return null;
-  
+
   try {
     // Use dcmjs proper DICOM Lab to RGB conversion
     const rgb = dcmjs.data.Colors.dicomlab2RGB(cielab).map(x => Math.round(x * 255));
@@ -44,7 +44,7 @@ function ensureCentroidsStructure(centroids, segMetadata) {
   if (segMetadata && segMetadata.data) {
     segMetadata.data.forEach((segmentInfo, index) => {
       if (index === 0) return; // Skip background segment
-      
+
       if (!centroids.has(index)) {
         console.warn(`Missing centroid for segment ${index}, creating default`);
         centroids.set(index, {
@@ -165,7 +165,7 @@ export const importSegmentation = async ({
 
     // Create a unique segmentation ID
     const segmentationId = `imported_seg_${Date.now()}`;
-    
+
     // Create a segDisplaySet object similar to what cornerstone-dicom-seg creates
     const segmentationLabel = label || `XNAT Import ${new Date().toLocaleTimeString()}`;
     const segDisplaySet = {
@@ -187,7 +187,7 @@ export const importSegmentation = async ({
     );
     // Get the active viewport ID
     const activeViewportId = viewportGridService.getActiveViewportId();
-    
+
     // Add segmentation representation to the viewport
     await segmentationService.addSegmentationRepresentation(activeViewportId, {
       segmentationId: createdSegmentationId,
