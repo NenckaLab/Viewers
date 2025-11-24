@@ -23,6 +23,7 @@ import mrDwi from './hangingprotocols/mrDwi';
 import mrAdc from './hangingprotocols/mrAdc';
 import mrOblique from './hangingprotocols/mrOblique';
 import mrThickSlab from './hangingprotocols/mrThickSlab';
+import mrSubjectComparison from './hangingprotocols/mrSubjectComparison';
 
 const defaultProtocol = {
     id: 'default',
@@ -297,6 +298,10 @@ function getHangingProtocolModule() {
         {
             name: mrThickSlab.id,
             protocol: mrThickSlab,
+        },
+        {
+            name: mrSubjectComparison.id,
+            protocol: mrSubjectComparison,
         },
     ];
 }

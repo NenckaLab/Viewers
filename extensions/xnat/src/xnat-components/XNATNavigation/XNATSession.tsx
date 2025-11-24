@@ -209,11 +209,143 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
   }
 
   /**
-   * onLaunchViewerClick - Constructs the viewer URL and opens it in a new tab.
+   * onLaunchViewerClick - Constructs the viewer URL for comparison with current study.
    *
    * @returns {null}
    */
-  onLaunchViewerClick(): void {
+  async onLaunchViewerClick(): Promise<void> {
+    const { subjectId, projectId, ID, label } = this.props;
+
+    try {
+      // Get current study UID from sessionStorage
+      const currentStudyUID = sessionStorage.getItem('xnat_studyInstanceUID');
+
+      if (!currentStudyUID) {
+        console.error('XNATSession: Current study UID not found in sessionStorage');
+        // Fallback to opening in new tab
+        this._fallbackToNewTab();
+        return;
+      }
+
+      // Fetch the selected session's study UID from XNAT API
+      const selectedStudyUID = await this._fetchSelectedStudyUID();
+
+      if (!selectedStudyUID) {
+        console.error('XNATSession: Could not fetch selected study UID');
+        // Fallback to opening in new tab
+        this._fallbackToNewTab();
+        return;
+      }
+
+      // If the selected study is the same as current, just navigate to it
+      if (selectedStudyUID === currentStudyUID) {
+        this._fallbackToNewTab();
+        return;
+      }
+
+      // Get current XNAT session parameters to maintain mode compatibility
+      const sessionStorageProjectId = sessionStorage.getItem('xnat_projectId');
+      const sessionStorageSubjectId = sessionStorage.getItem('xnat_subjectId');
+      const sessionStorageParentProjectId = sessionStorage.getItem('xnat_parentProjectId');
+      const sessionStorageExperimentId = sessionStorage.getItem('xnat_experimentId');
+
+      const currentProjectId = sessionMap.getProject() || sessionStorageProjectId;
+      const currentSubjectId = sessionMap.getSubject() || sessionStorageSubjectId;
+      const currentParentProjectId = sessionMap.getParentProject() || sessionStorageParentProjectId;
+      const currentExperimentId = sessionStorageExperimentId;
+
+      // Construct comparison URL with both studies, hanging protocol, and XNAT parameters
+      let viewerUrl = `/VIEWER/?StudyInstanceUIDs=${currentStudyUID}&StudyInstanceUIDs=${selectedStudyUID}&hangingprotocolId=@ohif/mrSubjectComparison`;
+
+      // Add XNAT parameters from current session to maintain mode compatibility
+      if (currentProjectId) {
+        viewerUrl += `&projectId=${encodeURIComponent(currentProjectId)}`;
+      }
+      if (currentSubjectId) {
+        viewerUrl += `&subjectId=${encodeURIComponent(currentSubjectId)}`;
+      }
+      if (currentParentProjectId) {
+        viewerUrl += `&parentProjectId=${encodeURIComponent(currentParentProjectId)}`;
+      }
+
+      // Add study-specific project/experiment mappings for deterministic loading
+      if (currentProjectId) {
+        viewerUrl += `&projectIds=${encodeURIComponent(currentProjectId)}`;
+      }
+      viewerUrl += `&projectIds=${encodeURIComponent(projectId)}`;
+
+      if (currentExperimentId) {
+        viewerUrl += `&experimentIds=${encodeURIComponent(currentExperimentId)}`;
+      }
+      viewerUrl += `&experimentIds=${encodeURIComponent(ID)}`;
+
+      // Add selected experiment info for context (though not required for comparison)
+      viewerUrl += `&experimentId=${encodeURIComponent(ID)}&experimentLabel=${encodeURIComponent(label || '')}`;
+
+      // Check if overreadMode=true is present in current URL and add it to viewer URL
+      try {
+        const currentSearchParams = new URLSearchParams(window.location.search || '');
+        const isOverreadModeActive =
+          currentSearchParams.get('overreadMode') === 'true' ||
+          (window.location.pathname && window.location.pathname.includes('/overreads'));
+
+        if (isOverreadModeActive) {
+          viewerUrl += `&overreadMode=true`;
+        }
+      } catch (error) {
+        console.warn('XNATSession: Unable to determine overread mode state from current URL.', error);
+      }
+
+      // Navigate to the comparison view
+      window.location.href = viewerUrl;
+    } catch (error) {
+      console.error('XNATSession: Error launching comparison viewer:', error);
+      // Fallback to opening in new tab
+      this._fallbackToNewTab();
+    }
+  }
+
+  /**
+   * _fetchSelectedStudyUID - Fetches the StudyInstanceUID for the selected session.
+   *
+   * @returns {Promise<string|null>} The study UID or null if not found
+   */
+  async _fetchSelectedStudyUID(): Promise<string | null> {
+    const { projectId, ID } = this.props;
+
+    try {
+      const url = `/data/projects/${projectId}/experiments/${ID}?format=json`;
+      const response = await fetch(url, {
+        credentials: 'include',
+        headers: {
+          'Accept': '*/*'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`XNAT API request failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (!data || !data.items || !data.items[0] || !data.items[0].data_fields) {
+        return null;
+      }
+
+      const sessionData = data.items[0].data_fields;
+      return sessionData.UID || null;
+    } catch (error) {
+      console.error('XNATSession: Error fetching selected study UID:', error);
+      return null;
+    }
+  }
+
+  /**
+   * _fallbackToNewTab - Fallback method to open session in new tab (original behavior).
+   *
+   * @returns {null}
+   */
+  _fallbackToNewTab(): void {
     const { subjectId, projectId, ID, label } = this.props;
     let viewerUrl = `/VIEWER/?subjectId=${subjectId}&projectId=${projectId}&experimentId=${ID}&experimentLabel=${label}`;
 

@@ -31,9 +31,36 @@ export const mpr: Types.HangingProtocol.Protocol = {
   availableTo: {},
   editableBy: {},
   numberOfPriorsReferenced: 0,
-  protocolMatchingRules: [],
+  protocolMatchingRules: [
+    {
+      // Very low weight rule that matches any study
+      // This allows MPR to be selected as a fallback when no specific protocols match
+      weight: 0.01,
+      attribute: 'StudyInstanceUID',
+      constraint: {
+        contains: '',
+      },
+      required: false,
+    },
+  ],
   imageLoadStrategy: 'nth',
   callbacks: {},
+  // Default viewport for when MPR is selected as fallback
+  defaultViewport: {
+    viewportOptions: {
+      viewportType: 'volume',
+      toolGroupId: 'mpr',
+      orientation: 'axial',
+      initialImageOptions: {
+        preset: 'middle',
+      },
+    },
+    displaySets: [
+      {
+        id: 'activeDisplaySet',
+      },
+    ],
+  },
   displaySetSelectors: {
     activeDisplaySet: {
       seriesMatchingRules: [

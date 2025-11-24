@@ -183,7 +183,7 @@ export function generateSegmentation(
     metaData,
     {
       ...options,
-      SeriesDescription: options.SeriesDescription || 'AI Segmentation',
+      SeriesDescription: options.SeriesDescription || 'Segmentation',
       SeriesNumber: options.SeriesNumber || '300',
       InstanceNumber: options.InstanceNumber || '1',
       Manufacturer: options.Manufacturer || 'Cornerstone.js',

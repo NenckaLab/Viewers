@@ -34,6 +34,7 @@ export default class SessionRouter {
         // Store these in sessionStorage for recovery if needed
         try {
             sessionStorage.setItem('xnat_projectId', projectId);
+            sessionStorage.setItem('xnat_parentProjectId', this.parentProjectId || '');
             sessionStorage.setItem('xnat_experimentId', experimentId);
             sessionStorage.setItem('xnat_subjectId', subjectId);
         } catch (e) {

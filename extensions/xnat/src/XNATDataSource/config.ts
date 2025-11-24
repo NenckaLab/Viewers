@@ -36,15 +36,59 @@ export class XNATDataSourceConfigManager {
 
         this.xnatConfig.xnat = this.xnatConfig.xnat || {};
 
-        const queryProjectId = params?.projectId || query?.get('projectId');
-        const queryExperimentId = params?.experimentId || query?.get('experimentId');
-        const querySessionId = params?.sessionId || query?.get('sessionId');
-        const querySubjectId = params?.subjectId || query?.get('subjectId');
+        const queryProjectId = params?.projectId || query?.get?.('projectId');
+        const queryExperimentId = params?.experimentId || query?.get?.('experimentId');
+        const querySessionId = params?.sessionId || query?.get?.('sessionId');
+        const querySubjectId = params?.subjectId || query?.get?.('subjectId');
 
         if (queryProjectId) this.xnatConfig.xnat.projectId = queryProjectId;
         if (queryExperimentId) this.xnatConfig.xnat.experimentId = queryExperimentId;
         if (querySessionId) this.xnatConfig.xnat.sessionId = querySessionId;
         if (querySubjectId) this.xnatConfig.xnat.subjectId = querySubjectId;
+
+        const getAllFromQuery = (key: string) =>
+            typeof query?.getAll === 'function' ? query.getAll(key) : [];
+
+        const studyInstanceUIDsFromQuery = [
+            ...getAllFromQuery('StudyInstanceUIDs'),
+            ...getAllFromQuery('studyInstanceUIDs'),
+        ].filter(uid => !!uid);
+
+        const projectIdsFromQuery = getAllFromQuery('projectIds');
+        const experimentIdsFromQuery = getAllFromQuery('experimentIds');
+
+        const studyMappingsFromParams = params?.studyMappings;
+
+        if (studyMappingsFromParams && typeof studyMappingsFromParams === 'object') {
+            this.xnatConfig.xnat.studyMappings = {
+                ...(this.xnatConfig.xnat.studyMappings || {}),
+                ...studyMappingsFromParams,
+            };
+        }
+
+        if (studyInstanceUIDsFromQuery.length) {
+            this.xnatConfig.xnat.studyMappings = this.xnatConfig.xnat.studyMappings || {};
+
+            studyInstanceUIDsFromQuery.forEach((studyUID, index) => {
+                if (!studyUID) {
+                    return;
+                }
+
+                const existingMapping = this.xnatConfig.xnat.studyMappings[studyUID] || {};
+                const projectIdFromQuery =
+                    projectIdsFromQuery[index] || existingMapping.projectId || this.xnatConfig.xnat.projectId;
+                const experimentIdFromQuery =
+                    experimentIdsFromQuery[index] ||
+                    existingMapping.experimentId ||
+                    this.xnatConfig.xnat.experimentId ||
+                    this.xnatConfig.xnat.sessionId;
+
+                this.xnatConfig.xnat.studyMappings[studyUID] = {
+                    projectId: projectIdFromQuery,
+                    experimentId: experimentIdFromQuery,
+                };
+            });
+        }
 
         if (this.xnatConfig.onConfiguration && typeof this.xnatConfig.onConfiguration === 'function') {
             this.xnatConfig = this.xnatConfig.onConfiguration(this.xnatConfig, {

@@ -24,6 +24,7 @@ import mrDwi from './mrDwi';
 import mrAdc from './mrAdc';
 import mrOblique from './mrOblique';
 import mrThickSlab from './mrThickSlab';
+import mrSubjectComparison from './mrSubjectComparison';
 export * from './hpMNGrid';
 
 export {
@@ -52,4 +53,5 @@ export {
   mrAdc,
   mrOblique,
   mrThickSlab,
+  mrSubjectComparison,
 };
