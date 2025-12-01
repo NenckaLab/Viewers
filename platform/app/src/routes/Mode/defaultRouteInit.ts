@@ -14,9 +14,15 @@ const { getSplitParam } = utils;
  * @returns array of subscriptions to cancel
  */
 export async function defaultRouteInit(
-  { servicesManager, studyInstanceUIDs, dataSource, filters, appConfig }: withAppTypes,
-  hangingProtocolId,
-  stageIndex
+  { servicesManager, studyInstanceUIDs, dataSource, filters, appConfig }: {
+    servicesManager: any;
+    studyInstanceUIDs: string[];
+    dataSource: any;
+    filters?: any;
+    appConfig?: any;
+  },
+  hangingProtocolId: string,
+  stageIndex: number
 ) {
   console.log('Default route init called with:', {
     servicesManager,
@@ -65,29 +71,47 @@ export async function defaultRouteInit(
       return;
     }
 
-    // Gets the studies list to use
-    const studies = getStudies(studyInstanceUIDs, displaySets);
+    // Check if this is a comparison view (hpCompare protocol)
+    const isComparisonView = hangingProtocolId === '@ohif/hpCompare';
 
-    console.log('applyHangingProtocol: Studies from getStudies:', studies.map(s => ({
+    // For comparison views, extract study UIDs from display sets since they may be synthetic
+    let studiesForProtocol;
+    if (isComparisonView) {
+      // Get unique study UIDs from display sets
+      const studyUIDsFromDisplaySets = [...new Set(displaySets.map(ds => ds.StudyInstanceUID).filter(Boolean))] as string[];
+      console.log('applyHangingProtocol: Comparison view - study UIDs from display sets:', studyUIDsFromDisplaySets);
+
+      // Get studies for these UIDs
+      studiesForProtocol = getStudies(studyUIDsFromDisplaySets, []);
+      console.log('applyHangingProtocol: Comparison view - studies from display set UIDs:', studiesForProtocol.map(s => ({
+        StudyInstanceUID: s.StudyInstanceUID,
+        studyInstanceUIDsIndex: s.studyInstanceUIDsIndex
+      })));
+    } else {
+      // For regular views, use the normal approach
+      studiesForProtocol = getStudies(studyInstanceUIDs, displaySets);
+    }
+
+    console.log('applyHangingProtocol: Studies for protocol:', studiesForProtocol.map(s => ({
       StudyInstanceUID: s.StudyInstanceUID,
       studyInstanceUIDsIndex: s.studyInstanceUIDsIndex,
       ModalitiesInStudy: s.ModalitiesInStudy
     })));
 
     // study being displayed, and is thus the "active" study.
-    const activeStudy = studies[0];
+    const activeStudy = studiesForProtocol[0];
 
     console.log('applyHangingProtocol: About to run hanging protocol with:', {
       hangingProtocolId,
-      studyInstanceUIDs,
+      studyInstanceUIDs: isComparisonView ? studiesForProtocol.map(s => s.StudyInstanceUID) : studyInstanceUIDs,
       activeStudy: activeStudy?.StudyInstanceUID,
       displaySetsCount: displaySets.length,
-      studiesCount: studies.length
+      studiesCount: studiesForProtocol.length
     });
 
     // run the hanging protocol matching on the displaySets with the predefined
     // hanging protocol in the mode configuration
-    hangingProtocolService.run({ studies, activeStudy, displaySets }, hangingProtocolId, {
+    hangingProtocolService.run({ studies: studiesForProtocol, activeStudy, displaySets }, hangingProtocolId, {
       stageIndex,
     });
   }
@@ -216,6 +240,9 @@ export async function defaultRouteInit(
     }
 
     promises.forEach(promise => {
+      if (promise.status !== 'fulfilled' || !promise.value) {
+        return;
+      }
       const retrieveSeriesMetadataPromise = promise.value;
       if (!Array.isArray(retrieveSeriesMetadataPromise)) {
         return;
