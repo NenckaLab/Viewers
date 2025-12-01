@@ -217,28 +217,28 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
     const { subjectId, projectId, ID, label } = this.props;
 
     try {
-      // Get current study UID from sessionStorage
-      const currentStudyUID = sessionStorage.getItem('xnat_studyInstanceUID');
+      // Get current experiment ID from sessionStorage (XNAT uses experiment IDs, not study UIDs)
+      const currentExperimentId = sessionStorage.getItem('xnat_experimentId');
 
-      if (!currentStudyUID) {
-        console.error('XNATSession: Current study UID not found in sessionStorage');
+      if (!currentExperimentId) {
+        console.error('XNATSession: Current experiment ID not found in sessionStorage');
         // Fallback to opening in new tab
         this._fallbackToNewTab();
         return;
       }
 
-      // Fetch the selected session's study UID from XNAT API
-      const selectedStudyUID = await this._fetchSelectedStudyUID();
+      // For comparison, we need the selected experiment ID (passed as ID prop)
+      const selectedExperimentId = ID;
 
-      if (!selectedStudyUID) {
-        console.error('XNATSession: Could not fetch selected study UID');
+      if (!selectedExperimentId) {
+        console.error('XNATSession: Selected experiment ID not available');
         // Fallback to opening in new tab
         this._fallbackToNewTab();
         return;
       }
 
-      // If the selected study is the same as current, just navigate to it
-      if (selectedStudyUID === currentStudyUID) {
+      // If the selected experiment is the same as current, just navigate to it
+      if (selectedExperimentId === currentExperimentId) {
         this._fallbackToNewTab();
         return;
       }
@@ -247,40 +247,20 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
       const sessionStorageProjectId = sessionStorage.getItem('xnat_projectId');
       const sessionStorageSubjectId = sessionStorage.getItem('xnat_subjectId');
       const sessionStorageParentProjectId = sessionStorage.getItem('xnat_parentProjectId');
-      const sessionStorageExperimentId = sessionStorage.getItem('xnat_experimentId');
 
       const currentProjectId = sessionMap.getProject() || sessionStorageProjectId;
       const currentSubjectId = sessionMap.getSubject() || sessionStorageSubjectId;
       const currentParentProjectId = sessionMap.getParentProject() || sessionStorageParentProjectId;
-      const currentExperimentId = sessionStorageExperimentId;
 
-      // Construct comparison URL with both studies, hanging protocol, and XNAT parameters
-      let viewerUrl = `/VIEWER/?StudyInstanceUIDs=${currentStudyUID}&StudyInstanceUIDs=${selectedStudyUID}&hangingprotocolId=@ohif/mrSubjectComparison`;
+      // Construct comparison URL using experiment IDs (XNAT's native identifiers)
+      let viewerUrl = `/VIEWER/?experimentIds=${currentExperimentId}&experimentIds=${selectedExperimentId}&hangingprotocolId=@ohif/hpCompare`;
 
-      // Add XNAT parameters from current session to maintain mode compatibility
+      // Add essential XNAT parameters for data access - pass projectIds for each experiment
       if (currentProjectId) {
-        viewerUrl += `&projectId=${encodeURIComponent(currentProjectId)}`;
+        viewerUrl += `&projectIds=${encodeURIComponent(currentProjectId)}&projectIds=${encodeURIComponent(currentProjectId)}&projectId=${encodeURIComponent(currentProjectId)}`;
       }
-      if (currentSubjectId) {
-        viewerUrl += `&subjectId=${encodeURIComponent(currentSubjectId)}`;
-      }
-      if (currentParentProjectId) {
-        viewerUrl += `&parentProjectId=${encodeURIComponent(currentParentProjectId)}`;
-      }
-
-      // Add study-specific project/experiment mappings for deterministic loading
-      if (currentProjectId) {
-        viewerUrl += `&projectIds=${encodeURIComponent(currentProjectId)}`;
-      }
-      viewerUrl += `&projectIds=${encodeURIComponent(projectId)}`;
-
-      if (currentExperimentId) {
-        viewerUrl += `&experimentIds=${encodeURIComponent(currentExperimentId)}`;
-      }
-      viewerUrl += `&experimentIds=${encodeURIComponent(ID)}`;
-
-      // Add selected experiment info for context (though not required for comparison)
-      viewerUrl += `&experimentId=${encodeURIComponent(ID)}&experimentLabel=${encodeURIComponent(label || '')}`;
+      // Keep the current experiment ID for context
+      viewerUrl += `&experimentId=${encodeURIComponent(currentExperimentId)}`;
 
       // Check if overreadMode=true is present in current URL and add it to viewer URL
       try {

@@ -1242,6 +1242,15 @@ export default class HangingProtocolService extends PubSubService {
     displaySetMatchDetails: Map<string, HangingProtocol.DisplaySetMatchDetails>;
   } {
     this.activeStudy ||= this.studies[0];
+
+    if (!this.activeStudy) {
+      console.warn('No valid studies available for hanging protocol matching');
+      return {
+        matchedViewports: 0,
+        viewportMatchDetails,
+        displaySetMatchDetails,
+      };
+    }
     let matchedViewports = 0;
     stageModel.viewports.forEach(viewport => {
       const viewportId = viewport.viewportOptions.viewportId;
@@ -1358,7 +1367,16 @@ export default class HangingProtocolService extends PubSubService {
     // DisplaySets for the viewport, Note: this is not the actual displaySet,
     // but it is a info to locate the displaySet from the displaySetService
     const displaySetsInfo = [];
-    const { StudyInstanceUID: activeStudyUID } = this.activeStudy;
+    const activeStudyUID = this.activeStudy?.StudyInstanceUID;
+
+    if (!activeStudyUID) {
+      console.warn('No active study available for viewport matching');
+      return {
+        displaySetsInfo: [],
+        viewportOptions,
+      };
+    }
+
     viewport.displaySets.forEach(displaySetOptions => {
       const { id, matchedDisplaySetsIndex = 0 } = displaySetOptions;
       const reuseDisplaySetUIDs =
@@ -1504,6 +1522,9 @@ export default class HangingProtocolService extends PubSubService {
     // TODO: matching is applied on study and series level, instance
     // level matching needs to be added in future
 
+    // Filter out null/invalid display sets to prevent errors
+    this.displaySets = this.displaySets.filter(displaySet => displaySet && displaySet.StudyInstanceUID);
+
     // Todo: handle fusion viewports by not taking the first displaySet rule for the viewport
     const { id, studyMatchingRules = [], seriesMatchingRules } = displaySetRules;
 
@@ -1518,7 +1539,7 @@ export default class HangingProtocolService extends PubSubService {
       }
 
       const studyDisplaySets = this.displaySets.filter(
-        it => it.StudyInstanceUID === study.StudyInstanceUID && !it?.unsupported
+        it => it && it.StudyInstanceUID === study.StudyInstanceUID && !it?.unsupported
       );
       const studyMatchDetails = this.protocolEngine.findMatch(study, studyMatchingRules, {
         studies: this.studies,

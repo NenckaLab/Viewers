@@ -184,7 +184,18 @@ export const createViewportCommands = (
         openDICOMTagViewer({ displaySetInstanceUID }: { displaySetInstanceUID?: string }) {
             const { activeViewportId, viewports } = viewportGridService.getState();
             const activeViewportSpecificData = viewports.get(activeViewportId);
+
+            if (!activeViewportSpecificData) {
+                console.warn('No active viewport data available for DICOM tag viewer');
+                return;
+            }
+
             const { displaySetInstanceUIDs } = activeViewportSpecificData;
+
+            if (!displaySetInstanceUIDs || displaySetInstanceUIDs.length === 0) {
+                console.warn('No display sets available in active viewport for DICOM tag viewer');
+                return;
+            }
 
             const displaySets = displaySetService.activeDisplaySets;
             const { UIModalService } = servicesManager.services;

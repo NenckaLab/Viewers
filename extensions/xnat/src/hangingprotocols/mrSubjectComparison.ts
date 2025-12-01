@@ -1,65 +1,29 @@
 import { Types } from '@ohif/core';
 
 const defaultDisplaySetSelector = {
-    studyMatchingRules: [
-        {
-            // The priorInstance is a study counter that indicates what position this study is in
-            // and the value comes from the options parameter.
-            attribute: 'studyInstanceUIDsIndex',
-            from: 'options',
-            required: true,
-            constraint: {
-                equals: { value: 0 },
-            },
-        },
-    ],
     seriesMatchingRules: [
+        // Match any display set - very permissive for comparison
         {
+            weight: 1,
             attribute: 'numImageFrames',
             constraint: {
-                greaterThan: { value: 0 },
+                greaterThanOrEqual: { value: 0 }, // Match any display set with 0 or more frames
             },
-        },
-        // This display set will select the specified items by preference
-        // It has no affect if nothing is specified in the URL.
-        {
-            attribute: 'isDisplaySetFromUrl',
-            weight: 20,
-            constraint: {
-                equals: true,
-            },
+            required: false,
         },
     ],
 };
 
 const priorDisplaySetSelector = {
-    studyMatchingRules: [
-        {
-            // The priorInstance is a study counter that indicates what position this study is in
-            // and the value comes from the options parameter.
-            attribute: 'studyInstanceUIDsIndex',
-            from: 'options',
-            required: true,
-            constraint: {
-                equals: { value: 1 },
-            },
-        },
-    ],
     seriesMatchingRules: [
+        // Match any display set - very permissive for comparison
         {
+            weight: 1,
             attribute: 'numImageFrames',
             constraint: {
-                greaterThan: { value: 0 },
+                greaterThanOrEqual: { value: 0 }, // Match any display set with 0 or more frames
             },
-        },
-        // This display set will select the specified items by preference
-        // It has no affect if nothing is specified in the URL.
-        {
-            attribute: 'isDisplaySetFromUrl',
-            weight: 20,
-            constraint: {
-                equals: true,
-            },
+            required: false,
         },
     ],
 };
@@ -76,38 +40,25 @@ const currentViewport0 = {
     viewportOptions: {
         toolGroupId: 'default',
         allowUnmatchedView: true,
-        viewportType: 'volume',
-        orientation: 'axial',
-        initialImageOptions: {
-            preset: 'middle',
-        },
+        viewportType: 'stack',
+        syncGroups: [
+            {
+                type: 'hydrateseg',
+                id: 'sameFORId',
+                source: true,
+                target: true,
+                options: {
+                    matchingRules: ['sameFOR'],
+                },
+            },
+        ],
     },
     displaySets: [currentDisplaySet],
-};
-
-const currentViewport1 = {
-    ...currentViewport0,
-    displaySets: [
-        {
-            ...currentDisplaySet,
-            matchedDisplaySetsIndex: 1,
-        },
-    ],
 };
 
 const priorViewport0 = {
     ...currentViewport0,
     displaySets: [priorDisplaySet],
-};
-
-const priorViewport1 = {
-    ...priorViewport0,
-    displaySets: [
-        {
-            ...priorDisplaySet,
-            matchedDisplaySetsIndex: 1,
-        },
-    ],
 };
 
 /**
@@ -117,27 +68,8 @@ const mrSubjectComparison: Types.HangingProtocol.Protocol = {
     id: '@ohif/mrSubjectComparison',
     description: 'Compare two MR studies from the same subject',
     name: 'MR Subject Comparison',
-    numberOfPriorsReferenced: 1,
-    protocolMatchingRules: [
-        {
-            id: 'Two MR Studies',
-            weight: 1000,
-            // Check that we have a second study (prior)
-            attribute: 'StudyInstanceUID',
-            from: 'prior',
-            required: true,
-            constraint: {
-                notNull: true,
-            },
-        },
-        {
-            // Ensure both studies contain MR modality
-            attribute: 'ModalitiesInStudy',
-            constraint: {
-                contains: ['MR'],
-            },
-        },
-    ],
+    numberOfPriorsReferenced: -1, // Allow any number of studies
+    protocolMatchingRules: [],
     toolGroupIds: ['default'],
     displaySetSelectors: {
         defaultDisplaySetId: defaultDisplaySetSelector,
@@ -145,13 +77,20 @@ const mrSubjectComparison: Types.HangingProtocol.Protocol = {
     },
     defaultViewport: {
         viewportOptions: {
-            viewportType: 'volume',
+            viewportType: 'stack',
             toolGroupId: 'default',
             allowUnmatchedView: true,
-            orientation: 'axial',
-            initialImageOptions: {
-                preset: 'middle',
-            },
+            syncGroups: [
+                {
+                    type: 'hydrateseg',
+                    id: 'sameFORId',
+                    source: true,
+                    target: true,
+                    options: {
+                        matchingRules: ['sameFOR'],
+                    },
+                },
+            ],
         },
         displaySets: [
             {
@@ -162,26 +101,10 @@ const mrSubjectComparison: Types.HangingProtocol.Protocol = {
     },
     stages: [
         {
-            name: '2x2 Comparison',
+            name: 'Side-by-Side Comparison',
             stageActivation: {
                 enabled: {
-                    minViewportsMatched: 4,
-                },
-            },
-            viewportStructure: {
-                layoutType: 'grid',
-                properties: {
-                    rows: 2,
-                    columns: 2,
-                },
-            },
-            viewports: [currentViewport0, priorViewport0, currentViewport1, priorViewport1],
-        },
-        {
-            name: '2x1 Comparison',
-            stageActivation: {
-                enabled: {
-                    minViewportsMatched: 2,
+                    minViewportsMatched: 1, // Lower threshold to activate even with partial matches
                 },
             },
             viewportStructure: {

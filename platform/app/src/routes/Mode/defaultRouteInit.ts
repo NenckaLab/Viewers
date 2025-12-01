@@ -18,13 +18,13 @@ export async function defaultRouteInit(
   hangingProtocolId,
   stageIndex
 ) {
-  console.log('Default route init called with:', { 
-    servicesManager, 
-    studyInstanceUIDs, 
-    dataSource, 
-    filters, 
+  console.log('Default route init called with:', {
+    servicesManager,
+    studyInstanceUIDs,
+    dataSource,
+    filters,
     appConfig,
-    hangingProtocolId, 
+    hangingProtocolId,
     stageIndex
   });
 
@@ -36,17 +36,54 @@ export async function defaultRouteInit(
    * @returns
    */
   function applyHangingProtocol() {
-    const displaySets = displaySetService.getActiveDisplaySets();
+    const allDisplaySets = displaySetService.getActiveDisplaySets();
 
-    if (!displaySets || !displaySets.length) {
+    console.log('applyHangingProtocol: All display sets:', allDisplaySets.map(ds => ({
+      StudyInstanceUID: ds.StudyInstanceUID,
+      displaySetInstanceUID: ds.displaySetInstanceUID,
+      Modality: ds.Modality,
+      SeriesDescription: ds.SeriesDescription
+    })));
+
+    if (!allDisplaySets || !allDisplaySets.length) {
+      return;
+    }
+
+    // Filter out invalid display sets (those with null/undefined StudyInstanceUID)
+    const displaySets = allDisplaySets.filter(displaySet => {
+      return displaySet && displaySet.StudyInstanceUID;
+    });
+
+    console.log('applyHangingProtocol: Filtered display sets:', displaySets.map(ds => ({
+      StudyInstanceUID: ds.StudyInstanceUID,
+      displaySetInstanceUID: ds.displaySetInstanceUID,
+      Modality: ds.Modality
+    })));
+
+    if (!displaySets.length) {
+      console.warn('No valid display sets found after filtering');
       return;
     }
 
     // Gets the studies list to use
     const studies = getStudies(studyInstanceUIDs, displaySets);
 
+    console.log('applyHangingProtocol: Studies from getStudies:', studies.map(s => ({
+      StudyInstanceUID: s.StudyInstanceUID,
+      studyInstanceUIDsIndex: s.studyInstanceUIDsIndex,
+      ModalitiesInStudy: s.ModalitiesInStudy
+    })));
+
     // study being displayed, and is thus the "active" study.
     const activeStudy = studies[0];
+
+    console.log('applyHangingProtocol: About to run hanging protocol with:', {
+      hangingProtocolId,
+      studyInstanceUIDs,
+      activeStudy: activeStudy?.StudyInstanceUID,
+      displaySetsCount: displaySets.length,
+      studiesCount: studies.length
+    });
 
     // run the hanging protocol matching on the displaySets with the predefined
     // hanging protocol in the mode configuration
@@ -60,7 +97,7 @@ export async function defaultRouteInit(
   const { unsubscribe: instanceAddedUnsubscribe } = DicomMetadataStore.subscribe(
     DicomMetadataStore.EVENTS.INSTANCES_ADDED,
     function ({ StudyInstanceUID, SeriesInstanceUID, madeInClient = false }) {
-      
+
       const seriesMetadata = DicomMetadataStore.getSeries(StudyInstanceUID, SeriesInstanceUID);
 
       // checks if the series filter was used, if it exists
@@ -100,11 +137,11 @@ export async function defaultRouteInit(
   );
   // const allRetrieves = studyInstanceUIDs.map(StudyInstanceUID => {
   //   console.log(`Initiating retrieval for study: ${StudyInstanceUID}`);
-    
+
   //   // Get the server configuration from DicomMetadataStore if available
   //   const studies = DicomMetadataStore.getStudies();
   //   const study = studies.find(s => s.StudyInstanceUID === StudyInstanceUID);
-    
+
   //   // Create a safe retrieval request with required configuration
   //   const retrieveParams = {
   //     StudyInstanceUID,
@@ -112,7 +149,7 @@ export async function defaultRouteInit(
   //     returnPromises: true,
   //     sortCriteria: customizationService.getCustomization('sortingCriteria'),
   //   };
-    
+
   //   // Add server info from study if available (for XNAT DICOMweb)
   //   if (study && study.wadoRoot) {
   //     console.log(`Using stored server config for study ${StudyInstanceUID}`);
@@ -133,9 +170,9 @@ export async function defaultRouteInit(
   //       supportsWildcard: true,
   //     };
   //   }
-    
+
   //   const retrievePromise = dataSource.retrieve.series.metadata(retrieveParams);
-    
+
   //   // Add a handler to track when retrieval starts
   //   retrievePromise.then(result => {
   //     console.log(`Retrieval for study ${StudyInstanceUID} succeeded:`, {
@@ -143,7 +180,7 @@ export async function defaultRouteInit(
   //       length: Array.isArray(result) ? result.length : 'n/a'
   //     });
   //   });
-    
+
   //   return retrievePromise;
   // });
 

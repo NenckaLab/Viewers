@@ -167,6 +167,12 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
           }
 
           const retrieveSeriesMetadataAsync = async () => {
+            console.log(`XNATDataSource: retrieveSeriesMetadataAsync called for StudyInstanceUID: ${StudyInstanceUID}`);
+
+            // Check if this is a comparison view (declare early for scope)
+            const isComparisonView = ['@ohif/mrSubjectComparison', '@ohif/hpCompare'].includes((configManager.getConfig() as any)?.xnat?.hangingProtocolId);
+            const isSyntheticExperimentUID = StudyInstanceUID.startsWith('xnat_experiment_');
+
             let seriesAndInstances;
             try {
               if (!configManager.getConfig()) {
@@ -182,6 +188,18 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
               let resolvedProjectId = mappedEntry.projectId;
               let resolvedExperimentId = mappedEntry.experimentId;
 
+              // Handle synthetic UIDs for experiment-based comparison
+              if (isSyntheticExperimentUID && !resolvedExperimentId) {
+                // Extract experimentId from synthetic UID: xnat_experiment_{index}_{experimentId}
+                const parts = StudyInstanceUID.split('_');
+                if (parts.length >= 4) {
+                  resolvedExperimentId = parts.slice(3).join('_'); // Join back in case experimentId contains underscores
+                  console.log(`XNATDataSource: Extracted experimentId ${resolvedExperimentId} from synthetic UID ${StudyInstanceUID}`);
+                }
+              }
+
+              console.log(`XNATDataSource: For ${StudyInstanceUID} - resolvedProjectId: ${resolvedProjectId}, resolvedExperimentId: ${resolvedExperimentId}, isSynthetic: ${isSyntheticExperimentUID}, isComparisonView: ${isComparisonView}`);
+
               if (!resolvedProjectId || !resolvedExperimentId) {
                 const parsed = getXNATStatusFromStudyInstanceUID(
                   StudyInstanceUID,
@@ -193,6 +211,11 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                 if (parsed.projectId && parsed.experimentId) {
                   log.warn(
                     `XNAT: Using parsed projectId ${parsed.projectId} and experimentId ${parsed.experimentId} from StudyInstanceUID ${StudyInstanceUID}`
+                  );
+                } else if (isComparisonView) {
+                  // For comparison views, try to use the parsed values even if incomplete
+                  log.warn(
+                    `XNAT: Comparison view - attempting to resolve study ${StudyInstanceUID} with incomplete project/experiment info`
                   );
                 }
               }
@@ -237,9 +260,33 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
               return [];
             }
 
-            const study = seriesAndInstances.studies.find(s => s.StudyInstanceUID === StudyInstanceUID);
+            // For synthetic UIDs, find the study in the experiment data (which has the real DICOM StudyInstanceUID)
+            // and modify it to use our synthetic StudyInstanceUID
+            let study;
+            if (isSyntheticExperimentUID) {
+              // For synthetic UIDs, use the first (and typically only) study from the experiment
+              study = seriesAndInstances.studies[0];
+              if (study) {
+                // Extract the index from the synthetic UID: xnat_experiment_{index}_{experimentId}
+                const parts = StudyInstanceUID.split('_');
+                const studyIndex = parseInt(parts[2], 10) || 0;
+
+                // Create a copy of the study with the synthetic StudyInstanceUID
+                study = {
+                  ...study,
+                  StudyInstanceUID: StudyInstanceUID, // Replace with synthetic UID
+                  studyInstanceUIDsIndex: studyIndex, // Add the index for hanging protocol matching
+                };
+                console.log(`XNATDataSource: Modified study for synthetic UID ${StudyInstanceUID}, original was ${seriesAndInstances.studies[0].StudyInstanceUID}, index: ${studyIndex}`);
+              }
+            } else {
+              // For regular DICOM UIDs, find the matching study
+              study = seriesAndInstances.studies.find(s => s.StudyInstanceUID === StudyInstanceUID);
+            }
+
             if (!study || !study.series || study.series.length === 0) {
-              log.warn(`XNAT: No series found for StudyInstanceUID ${StudyInstanceUID} within the experiment data.`);
+              const logLevel = isComparisonView ? 'debug' : 'warn';
+              log[logLevel](`XNAT: No series found for StudyInstanceUID ${StudyInstanceUID} within the experiment data.${isComparisonView ? ' (Comparison view - this is expected for cross-experiment studies)' : ''}`);
               return [];
             }
 
@@ -364,7 +411,7 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
             // Add Series level metadata (summary) to DicomMetadataStore
             const seriesSummaryMetadata = study.series.map(s => {
               return {
-                StudyInstanceUID,
+                StudyInstanceUID, // This will be the synthetic UID for synthetic cases
                 SeriesInstanceUID: s.SeriesInstanceUID,
                 Modality: s.Modality || "Unknown",
                 SeriesDescription: s.SeriesDescription || "XNAT Series",

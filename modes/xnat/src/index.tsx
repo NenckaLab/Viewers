@@ -117,6 +117,29 @@ const xnatRoute = {
   },
   init: async ({ servicesManager, extensionManager, studyInstanceUIDs }) => {
     console.log('XNAT Route Init: Called with studyInstanceUIDs:', studyInstanceUIDs);
+
+    // Parse identifiers from URL query parameters for comparison views
+    const query = new URLSearchParams(window.location.search);
+    const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
+    const experimentIdsFromURL = query.getAll('experimentIds');
+
+    // Check if we're in a comparison view (either experiment-based or study-based)
+    const isComparisonView = experimentIdsFromURL.length > 1 || studyUIDsFromURL.length > 1;
+
+    if (experimentIdsFromURL.length > 1) {
+      // XNAT native approach: use experiment IDs for comparison
+      // Create synthetic study UIDs based on experiment IDs with index for OHIF framework compatibility
+      studyInstanceUIDs = experimentIdsFromURL.map((expId, index) => `xnat_experiment_${index}_${expId}`);
+      console.log('XNAT Route Init: Created synthetic study UIDs for experiment-based comparison:', studyInstanceUIDs);
+    } else if (studyUIDsFromURL.length > 0) {
+      // Traditional approach: use parsed study UIDs
+      studyInstanceUIDs = studyUIDsFromURL;
+      console.log('XNAT Route Init: Parsed studyInstanceUIDs from URL:', studyInstanceUIDs);
+    } else if (!isComparisonView) {
+      // For single study views, keep the original studyInstanceUIDs from SessionRouter
+      console.log('XNAT Route Init: Using original studyInstanceUIDs from SessionRouter:', studyInstanceUIDs);
+    }
+
     const hangingProtocolService = servicesManager.services.hangingProtocolService;
 
     // Initialize data source
@@ -133,11 +156,16 @@ const xnatRoute = {
           subjectId: query.get('subjectId'),
           parentProjectId: query.get('parentProjectId'),
           experimentLabel: query.get('experimentLabel'),
+          hangingProtocolId: query.get('hangingprotocolId'), // Pass to data source for special handling
         };
 
         const projectIdsFromURL = query.getAll('projectIds');
         const experimentIdsFromURL = query.getAll('experimentIds');
         const studyUIDsFromURL = studyInstanceUIDs || [];
+
+        // Check if we're using experiment IDs for comparison (XNAT native approach)
+        const experimentIdsParam = query.getAll('experimentIds');
+        const isExperimentBasedComparison = experimentIdsParam.length > 1;
 
         const buildStudyMappings = () => {
           const mappings: Record<
@@ -148,22 +176,55 @@ const xnatRoute = {
             }
           > = {};
 
-          studyUIDsFromURL.forEach((uid, index) => {
-            if (!uid) {
-              return;
-            }
+          // For comparison views with hangingprotocolId, allow cross-experiment studies
+          const isComparisonView = ['@ohif/mrSubjectComparison', '@ohif/hpCompare'].includes(query.get('hangingprotocolId'));
 
-            const projectIdForUID = projectIdsFromURL[index] || params.projectId || sessionStorage.getItem('xnat_projectId');
-            const experimentIdForUID =
-              experimentIdsFromURL[index] || params.experimentId || sessionStorage.getItem('xnat_experimentId');
+          if (isExperimentBasedComparison) {
+            // Handle experiment ID based comparison (XNAT native)
+            console.log('XNAT Route Init: Using experiment IDs for comparison:', experimentIdsParam);
+            experimentIdsParam.forEach((experimentId, index) => {
+              if (experimentId) {
+                // Create mapping key using the synthetic UID format that matches what we created above
+                const mappingKey = `xnat_experiment_${index}_${experimentId}`;
+                mappings[mappingKey] = {
+                  projectId: params.projectId || sessionStorage.getItem('xnat_projectId'),
+                  experimentId: experimentId,
+                };
+                console.log(`XNAT Route Init: Created mapping for ${mappingKey} -> experimentId: ${experimentId}`);
+              }
+            });
+          } else {
+            // Handle traditional study UID based approach
+            studyUIDsFromURL.forEach((uid, index) => {
+              if (!uid) {
+                return;
+              }
 
-            if (projectIdForUID || experimentIdForUID) {
-              mappings[uid] = {
-                projectId: projectIdForUID,
-                experimentId: experimentIdForUID,
-              };
-            }
-          });
+              // Try to get project/experiment from URL arrays first
+              let projectIdForUID = projectIdsFromURL[index];
+              let experimentIdForUID = experimentIdsFromURL[index];
+
+              // For comparison views, if we don't have specific mappings,
+              // allow the data source to determine them dynamically
+              if (isComparisonView && !projectIdForUID && !experimentIdForUID) {
+                // For comparison views, we'll let the data source try to resolve
+                // each study individually rather than restricting to one experiment
+                console.log(`XNAT Route Init: Allowing dynamic resolution for study ${uid} in comparison view`);
+                return; // Skip adding a mapping, let data source resolve dynamically
+              }
+
+              // Fallback to single values from URL or session storage
+              projectIdForUID = projectIdForUID || params.projectId || sessionStorage.getItem('xnat_projectId');
+              experimentIdForUID = experimentIdForUID || params.experimentId || sessionStorage.getItem('xnat_experimentId');
+
+              if (projectIdForUID || experimentIdForUID) {
+                mappings[uid] = {
+                  projectId: projectIdForUID,
+                  experimentId: experimentIdForUID,
+                };
+              }
+            });
+          }
 
           if (!Object.keys(mappings).length) {
             try {
@@ -203,11 +264,18 @@ const xnatRoute = {
     // Check if we're in overread mode
     const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
 
-    // Set appropriate hanging protocol based on number of studies
-    if (studyInstanceUIDs && studyInstanceUIDs.length > 1) {
-      // For multi-study scenarios (comparison views), prioritize the MR Subject Comparison protocol
-      hangingProtocolService.setActiveProtocolIds(['@ohif/mrSubjectComparison', 'default']);
-      console.log('XNAT Route Init: Set hanging protocol for multi-study comparison');
+    // Set appropriate hanging protocol based on number of studies or explicit request
+    let hangingProtocolId;
+
+    // Check if comparison protocol is explicitly requested
+    const params = new URLSearchParams(window.location.search);
+    const explicitProtocolId = params.get('hangingprotocolId');
+
+    if (explicitProtocolId === '@ohif/mrSubjectComparison' || explicitProtocolId === '@ohif/hpCompare' || (studyInstanceUIDs && studyInstanceUIDs.length > 1)) {
+      // For multi-study scenarios or explicit comparison requests, use the built-in hpCompare protocol
+      hangingProtocolId = '@ohif/hpCompare';
+      hangingProtocolService.setActiveProtocolIds(['@ohif/hpCompare', 'default']);
+      console.log('XNAT Route Init: Set hanging protocol for multi-study comparison using hpCompare');
     } else {
       // For single study, use the default hanging protocols
       // In overread mode, prioritize MPR if the scan supports it
@@ -259,15 +327,18 @@ const xnatRoute = {
     console.log('XNAT Route Init: About to call defaultRouteInit with studyInstanceUIDs:', studyInstanceUIDs);
 
     // @ts-ignore
-    await defaultRouteInit({
+    const result = await defaultRouteInit({
       servicesManager,
       extensionManager,
       studyInstanceUIDs,
       dataSource: dataSourceForDefaultRoute,
-    });
+    }, hangingProtocolId);
+
+    console.log('XNAT Route Init: defaultRouteInit returned:', result);
 
     console.log('XNAT Route Init: Returning studyInstanceUIDs:', studyInstanceUIDs);
-    return studyInstanceUIDs;
+    // For comparison views, return null to prevent core routing from processing original UIDs
+    return isComparisonView ? null : studyInstanceUIDs;
   },
 };
 
