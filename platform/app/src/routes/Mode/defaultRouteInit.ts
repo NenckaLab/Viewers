@@ -71,8 +71,8 @@ export async function defaultRouteInit(
       return;
     }
 
-    // Check if this is a comparison view (hpCompare protocol)
-    const isComparisonView = hangingProtocolId === '@ohif/hpCompare';
+    // Check if this is a comparison view (hpCompare protocol or mrSubjectComparison)
+    const isComparisonView = hangingProtocolId === '@ohif/hpCompare' || hangingProtocolId === '@ohif/mrSubjectComparison';
 
     // For comparison views, extract study UIDs from display sets since they may be synthetic
     let studiesForProtocol;

@@ -253,7 +253,8 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
       const currentParentProjectId = sessionMap.getParentProject() || sessionStorageParentProjectId;
 
       // Construct comparison URL using experiment IDs (XNAT's native identifiers)
-      let viewerUrl = `/VIEWER/?experimentIds=${currentExperimentId}&experimentIds=${selectedExperimentId}&hangingprotocolId=@ohif/hpCompare`;
+      // Use mrSubjectComparison for MPR 3x2 comparison view
+      let viewerUrl = `/VIEWER/?experimentIds=${currentExperimentId}&experimentIds=${selectedExperimentId}&hangingprotocolId=@ohif/mrSubjectComparison`;
 
       // Add essential XNAT parameters for data access - pass projectIds for each experiment
       if (currentProjectId) {
