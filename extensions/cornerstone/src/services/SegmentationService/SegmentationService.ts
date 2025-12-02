@@ -82,7 +82,9 @@ const EVENTS = {
   // loading completed for all segments
   SEGMENTATION_LOADING_COMPLETE: 'event::segmentation_loading_complete',
   // fired when a contour annotation cut merge process is completed
-  ANNOTATION_CUT_MERGE_PROCESS_COMPLETED: 'event::annotation_cut_merge_process_completed',
+  SEGMENTATION_ANNOTATION_CUT_MERGE_PROCESS_COMPLETED:
+    'event::annotation_cut_merge_process_completed',
+  SEGMENTATION_STYLE_MODIFIED: 'event::segmentation_style_modified',
 };
 
 const VALUE_TYPES = {};
@@ -276,11 +278,13 @@ class SegmentationService extends PubSubService {
     viewportId: string,
     {
       segmentationId,
+      predecessorImageId,
       type,
       config,
       suppressEvents = false,
     }: {
       segmentationId: string;
+      predecessorImageId?: string;
       type?: csToolsEnums.SegmentationRepresentations;
       config?: {
         blendMode?: csEnums.BlendModes;
@@ -289,6 +293,9 @@ class SegmentationService extends PubSubService {
     }
   ): Promise<void> {
     const segmentation = this.getSegmentation(segmentationId);
+    if (segmentation && !segmentation.predecessorImageId && predecessorImageId) {
+      segmentation.predecessorImageId = predecessorImageId;
+    }
     const csViewport = this.getAndValidateViewport(viewportId);
 
     if (!csViewport) {
@@ -834,9 +841,15 @@ class SegmentationService extends PubSubService {
       segmentationId?: string;
       segmentIndex?: number;
     },
-    style: cstTypes.LabelmapStyle | cstTypes.ContourStyle | cstTypes.SurfaceStyle
+    style: cstTypes.LabelmapStyle | cstTypes.ContourStyle | cstTypes.SurfaceStyle,
+    merge: boolean = true
   ) => {
-    cstSegmentation.config.style.setStyle(specifier, style);
+    cstSegmentation.config.style.setStyle(specifier, style, merge);
+    this._broadcastEvent(EVENTS.SEGMENTATION_STYLE_MODIFIED, {
+      specifier,
+      style,
+      merge,
+    });
   };
 
   public resetToGlobalStyle = () => {
@@ -1696,13 +1709,6 @@ class SegmentationService extends PubSubService {
 
     if (hideOthers) {
       throw new Error('hideOthers is not working right now');
-      for (let i = 0; i < segments.length; i++) {
-        if (i !== segmentIndex) {
-          newSegmentSpecificConfig[i] = {
-            fillAlpha: 0,
-          };
-        }
-      }
     }
 
     const { fillAlpha } = this.getStyle({
@@ -1743,7 +1749,8 @@ class SegmentationService extends PubSubService {
             segmentIndex,
             type: LABELMAP,
           },
-          {}
+          {},
+          false
         );
       }
     };
@@ -1928,7 +1935,7 @@ class SegmentationService extends PubSubService {
 
   private _onAnnotationCutMergeProcessCompletedFromSource = evt => {
     const { segmentationId } = evt.detail;
-    this._broadcastEvent(this.EVENTS.ANNOTATION_CUT_MERGE_PROCESS_COMPLETED, {
+    this._broadcastEvent(this.EVENTS.SEGMENTATION_ANNOTATION_CUT_MERGE_PROCESS_COMPLETED, {
       segmentationId,
     });
   };

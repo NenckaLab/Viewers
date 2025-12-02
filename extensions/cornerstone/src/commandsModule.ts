@@ -1671,15 +1671,13 @@ function commandsModule({
      * Stores a segmentation and shows it in the viewport
      * @param props.segmentationId - The ID of the segmentation to store
      */
-    storeSegmentationCommand: async ({ segmentationId }) => {
+    storeSegmentationCommand: async args => {
+      const { segmentationId } = args;
       const { segmentationService, viewportGridService } = servicesManager.services;
 
       const displaySetInstanceUIDs = await createReportAsync({
         servicesManager,
-        getReport: () =>
-          commandsManager.runCommand('storeSegmentation', {
-            segmentationId,
-          }),
+        getReport: () => commandsManager.runCommand('storeSegmentation', args),
         reportType: 'Segmentation',
       });
 
@@ -1785,6 +1783,16 @@ function commandsModule({
     },
 
     /**
+     * Sets whether to render fill for inactive segmentations of a segmentation type
+     * @param props.type - The type of segmentation
+     * @param props.value - Whether to render fill for inactive segmentations
+     */
+    setRenderFillInactiveCommand: ({ type, value }) => {
+      const { segmentationService } = servicesManager.services;
+      segmentationService.setStyle({ type }, { renderFillInactive: value });
+    },
+
+    /**
      * Sets whether to render outline for a segmentation type
      * @param props.type - The type of segmentation
      * @param props.value - Whether to render outline
@@ -1795,13 +1803,36 @@ function commandsModule({
     },
 
     /**
-     * Sets the fill alpha for inactive segmentations
+     * Sets whether to render outline for inactive segmentations of a segmentation type
+     * @param props.type - The type of segmentation
+     * @param props.value - Whether to render outline for inactive segmentations
+     */
+    setRenderOutlineInactiveCommand: ({ type, value }) => {
+      const { segmentationService } = servicesManager.services;
+      segmentationService.setStyle({ type }, { renderOutlineInactive: value });
+    },
+
+    /**
+     * Sets the fill alpha for inactive segmentations.
+     * If no type is provided, the fill alpha for all types will be set.
      * @param props.type - The type of segmentation
      * @param props.value - The alpha value to set
      */
     setFillAlphaInactiveCommand: ({ type, value }) => {
       const { segmentationService } = servicesManager.services;
-      segmentationService.setStyle({ type }, { fillAlphaInactive: value });
+
+      if (type) {
+        segmentationService.setStyle({ type }, { fillAlphaInactive: value });
+      } else {
+        segmentationService.setStyle(
+          { type: SegmentationRepresentations.Labelmap },
+          { fillAlphaInactive: value }
+        );
+        segmentationService.setStyle(
+          { type: SegmentationRepresentations.Contour },
+          { fillAlphaInactive: value }
+        );
+      }
     },
 
     editSegmentLabel: async ({ segmentationId, segmentIndex }) => {
@@ -2341,7 +2372,6 @@ function commandsModule({
       const interpolationConfig = {
         interpolation: {
           enabled: interpolateContours,
-          showInterpolationPolyline: true,
         },
       };
       toolGroup.setToolConfiguration(activeTool, interpolationConfig);
@@ -2407,7 +2437,6 @@ function commandsModule({
           break;
         default:
           throw new Error('Unsupported logical operation');
-          break;
       }
     },
     copyContourSegment: ({
@@ -2768,8 +2797,14 @@ function commandsModule({
     setRenderFill: {
       commandFn: actions.setRenderFillCommand,
     },
+    setRenderFillInactive: {
+      commandFn: actions.setRenderFillInactiveCommand,
+    },
     setRenderOutline: {
       commandFn: actions.setRenderOutlineCommand,
+    },
+    setRenderOutlineInactive: {
+      commandFn: actions.setRenderOutlineInactiveCommand,
     },
     setFillAlphaInactive: {
       commandFn: actions.setFillAlphaInactiveCommand,
