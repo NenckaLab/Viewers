@@ -3,12 +3,57 @@
  * Extracted from segmentationCommands.ts
  */
 
-import { cache } from '@cornerstonejs/core';
+import { cache, metaData } from '@cornerstonejs/core';
 import { segmentation as cornerstoneToolsSegmentation } from '@cornerstonejs/tools';
 import { adaptersSEG } from '@cornerstonejs/adapters';
+import dcmjs from 'dcmjs';
 
 export interface SegmentationGeneratorParams {
   segmentationService: any;
+}
+
+const DEFAULT_RGBA = [255, 0, 0, 255];
+
+function getSegmentColor(
+  representation: any,
+  segmentIndex: number
+): number[] {
+  if (!representation?.colorLUT) {
+    return DEFAULT_RGBA;
+  }
+
+  const { colorLUT } = representation;
+
+  if (Array.isArray(colorLUT)) {
+    return colorLUT[segmentIndex] || DEFAULT_RGBA;
+  }
+
+  if (colorLUT instanceof Map) {
+    return colorLUT.get(segmentIndex) || DEFAULT_RGBA;
+  }
+
+  if (
+    typeof colorLUT === 'object' &&
+    colorLUT !== null &&
+    segmentIndex in colorLUT
+  ) {
+    return colorLUT[segmentIndex] || DEFAULT_RGBA;
+  }
+
+  return DEFAULT_RGBA;
+}
+
+function rgbaToDICOMLab(rgba: number[]): number[] {
+  const rgbSource =
+    Array.isArray(rgba) && rgba.length >= 3 ? rgba : DEFAULT_RGBA;
+  const rgb = rgbSource.slice(0, 3).map(value =>
+    Math.min(255, Math.max(0, value))
+  );
+  const normalized = rgb.map(value => value / 255);
+
+  const cielab = dcmjs.data.Colors.rgb2DICOMLAB(normalized);
+
+  return cielab.map((value: number) => Math.round(value));
 }
 
 /**
@@ -54,10 +99,15 @@ export function generateSegmentation(
   const segImages = imageIds.map(imageId => cache.getImage(imageId));
   const referencedImages = segImages.map(image => cache.getImage(image.referencedImageId));
 
+  // Reverse the order of images for DICOM SEG export
+  // ITK-Snap shows frames flipped, so reverse the current order
+  const reversedReferencedImages = [...referencedImages].reverse();
+  const reversedSegImages = [...segImages].reverse();
+
   const labelmaps2D = [];
   let z = 0;
 
-  for (const segImage of segImages) {
+  for (const segImage of reversedSegImages) {
     const segmentsOnLabelmap = new Set();
     const pixelData = segImage.getPixelData();
     const { rows, columns } = segImage;
@@ -98,16 +148,15 @@ export function generateSegmentation(
 
     // Use the first representation to get color information
     const representation = representations && representations.length > 0 ? representations[0] : null;
-    const color = representation
-      ? representation.colorLUT?.[segmentIndex] || [255, 0, 0, 255] // Default red
-      : [255, 0, 0, 255];
+    const rgbaColor = getSegmentColor(representation, Number(segmentIndex));
+    const RecommendedDisplayCIELabValue = rgbaToDICOMLab(rgbaColor);
 
     labelmap3D.metadata[parseInt(segmentIndex)] = {
       SegmentNumber: segmentIndex,
       SegmentLabel: segmentLabel,
       SegmentAlgorithmType: 'MANUAL',
       SegmentAlgorithmName: 'Manual',
-      RecommendedDisplayCIELabValue: color,
+      RecommendedDisplayCIELabValue,
       SegmentedPropertyCategoryCodeSequence: {
         CodeValue: 'T-D000A',
         CodingSchemeDesignator: 'SRT',
@@ -128,19 +177,25 @@ export function generateSegmentation(
     },
   } = adaptersSEG;
 
-  const dataset = csGenerateSegmentation({
+  const dataset = csGenerateSegmentation(
+    reversedReferencedImages,
     labelmap3D,
-    imageIds: referencedImages.map(img => img.imageId),
-    options: {
+    metaData,
+    {
       ...options,
-      SeriesDescription: options.SeriesDescription || 'AI Segmentation',
+      SeriesDescription: options.SeriesDescription || 'Segmentation',
       SeriesNumber: options.SeriesNumber || '300',
       InstanceNumber: options.InstanceNumber || '1',
       Manufacturer: options.Manufacturer || 'Cornerstone.js',
       ManufacturerModelName: options.ManufacturerModelName || 'Cornerstone3D',
       SoftwareVersions: options.SoftwareVersions || '1.0.0',
-    },
-  });
+      TransferSyntaxUID: options.TransferSyntaxUID || '1.2.840.10008.1.2', // Implicit VR Little Endian
+      ImplementationClassUID: options.ImplementationClassUID || '1.2.40.0.13.1.1',
+      ImplementationVersionName: options.ImplementationVersionName || 'OHIF_XNAT',
+    }
+  );
 
-  return { dataset };
+  // The Cornerstone adapters return a Segmentation object with a .dataset property
+  // Extract the actual DICOM dataset for compatibility with dcmjs
+  return dataset.dataset;
 }

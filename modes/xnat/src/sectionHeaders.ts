@@ -19,15 +19,21 @@ export const sectionHeaders: Button[] = [
     },
     {
         id: 'SegmentationUtilities',
-        uiType: 'ohif.toolButtonList',
+        uiType: 'ohif.toolBoxButtonGroup',
         props: {
+            id: 'SegmentationUtilities',
+            icon: 'tab-segmentation',
+            label: 'Segmentation Utilities',
             buttonSection: 'SegmentationUtilities',
         },
     },
     {
         id: 'SegmentationTools',
-        uiType: 'ohif.toolButtonList',
+        uiType: 'ohif.toolBoxButtonGroup',
         props: {
+            id: 'SegmentationTools',
+            icon: 'tab-segmentation',
+            label: 'Segmentation Tools',
             buttonSection: 'SegmentationTools',
         },
     },

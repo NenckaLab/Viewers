@@ -22,7 +22,7 @@ const CONSTANTS = {
 // Helper function to convert DICOM Lab color to RGB using dcmjs
 function dicomlabToRGB(cielab) {
   if (!cielab || cielab.length < 3) return null;
-  
+
   try {
     // Use dcmjs proper DICOM Lab to RGB conversion
     const rgb = dcmjs.data.Colors.dicomlab2RGB(cielab).map(x => Math.round(x * 255));
@@ -44,7 +44,7 @@ function ensureCentroidsStructure(centroids, segMetadata) {
   if (segMetadata && segMetadata.data) {
     segMetadata.data.forEach((segmentInfo, index) => {
       if (index === 0) return; // Skip background segment
-      
+
       if (!centroids.has(index)) {
         console.warn(`Missing centroid for segment ${index}, creating default`);
         centroids.set(index, {
@@ -132,10 +132,16 @@ export const importSegmentation = async ({
     if (results.segMetadata && results.segMetadata.data) {
       results.segMetadata.data.forEach((data, i) => {
         if (i > 0) {
-          data.rgba = data.RecommendedDisplayCIELabValue;
+          const cielabColor = data.RecommendedDisplayCIELabValue;
 
-          if (data.rgba) {
-            data.rgba = dicomlabToRGB(data.rgba);
+          if (cielabColor) {
+            const rgbColor = dicomlabToRGB(cielabColor);
+            if (rgbColor) {
+              data.rgba = rgbColor;
+            } else {
+              usedRecommendedDisplayCIELabValue = false;
+              data.rgba = CONSTANTS.COLOR_LUT[i % CONSTANTS.COLOR_LUT.length];
+            }
           } else {
             usedRecommendedDisplayCIELabValue = false;
             data.rgba = CONSTANTS.COLOR_LUT[i % CONSTANTS.COLOR_LUT.length];
@@ -159,7 +165,7 @@ export const importSegmentation = async ({
 
     // Create a unique segmentation ID
     const segmentationId = `imported_seg_${Date.now()}`;
-    
+
     // Create a segDisplaySet object similar to what cornerstone-dicom-seg creates
     const segmentationLabel = label || `XNAT Import ${new Date().toLocaleTimeString()}`;
     const segDisplaySet = {
@@ -181,7 +187,7 @@ export const importSegmentation = async ({
     );
     // Get the active viewport ID
     const activeViewportId = viewportGridService.getActiveViewportId();
-    
+
     // Add segmentation representation to the viewport
     await segmentationService.addSegmentationRepresentation(activeViewportId, {
       segmentationId: createdSegmentationId,

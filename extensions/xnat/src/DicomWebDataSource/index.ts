@@ -104,7 +104,7 @@ function createDicomWebApi(dicomWebConfig: DicomWebConfig, servicesManager) {
     wadoConfig,
     qidoDicomWebClient,
     wadoDicomWebClient;
-  
+
   // Create basic configs and initialize clients immediately
   qidoConfig = {
     url: dicomWebConfig.qidoRoot,
@@ -112,27 +112,27 @@ function createDicomWebApi(dicomWebConfig: DicomWebConfig, servicesManager) {
     singlepart: dicomWebConfig.singlepart,
     errorInterceptor: errorHandler.getHTTPErrorHandler(),
   };
-  
+
   wadoConfig = {
     url: dicomWebConfig.wadoRoot,
     staticWado: dicomWebConfig.staticWado,
     singlepart: dicomWebConfig.singlepart,
     errorInterceptor: errorHandler.getHTTPErrorHandler(),
   };
-  
+
   // Initialize clients right away
   try {
     qidoDicomWebClient = dicomWebConfig.staticWado
       ? new StaticWadoClient(qidoConfig)
       : new api.DICOMwebClient(qidoConfig);
-    
+
     wadoDicomWebClient = dicomWebConfig.staticWado
       ? new StaticWadoClient(wadoConfig)
       : new api.DICOMwebClient(wadoConfig);
   } catch (error) {
     console.error('Error initializing DICOMweb clients on module load:', error);
   }
-  
+
   const generateWadoHeader = () => {
     const authorizationHeader = getAuthorizationHeader();
     //Generate accept header depending on config params
@@ -147,7 +147,7 @@ function createDicomWebApi(dicomWebConfig: DicomWebConfig, servicesManager) {
       Accept: formattedAcceptHeader,
     };
   };
-  
+
   const getAuthorizationHeader = () => {
     try {
       const xhrRequestHeaders = {};
@@ -163,7 +163,7 @@ function createDicomWebApi(dicomWebConfig: DicomWebConfig, servicesManager) {
       return {};
     }
   };
-  
+
   // Default to enabling bulk data retrieves
   dicomWebConfig.bulkDataURI ||= { enabled: true };
   const implementation = {
@@ -182,8 +182,8 @@ function createDicomWebApi(dicomWebConfig: DicomWebConfig, servicesManager) {
         staticWado: dicomWebConfig.staticWado,
         singlepart: dicomWebConfig.singlepart,
         headers: userAuthenticationService?.getAuthorizationHeader
-        ? userAuthenticationService.getAuthorizationHeader()
-        : undefined,
+          ? userAuthenticationService.getAuthorizationHeader()
+          : undefined,
         errorInterceptor: errorHandler.getHTTPErrorHandler(),
         supportsFuzzyMatching: dicomWebConfig.supportsFuzzyMatching,
       };
@@ -192,8 +192,8 @@ function createDicomWebApi(dicomWebConfig: DicomWebConfig, servicesManager) {
         staticWado: dicomWebConfig.staticWado,
         singlepart: dicomWebConfig.singlepart,
         headers: userAuthenticationService?.getAuthorizationHeader
-        ? userAuthenticationService.getAuthorizationHeader()
-        : undefined,        
+          ? userAuthenticationService.getAuthorizationHeader()
+          : undefined,
         errorInterceptor: errorHandler.getHTTPErrorHandler(),
         supportsFuzzyMatching: dicomWebConfig.supportsFuzzyMatching,
       };
@@ -219,15 +219,15 @@ function createDicomWebApi(dicomWebConfig: DicomWebConfig, servicesManager) {
       studies: {
         mapParams: mapParams.bind(),
         search: async function (origParams) {
-          
+
           // Check client exists
           if (!qidoDicomWebClient) {
             console.error('qidoDicomWebClient not available - search may fail');
             return [];
           }
-          
+
           qidoDicomWebClient.headers = getAuthorizationHeader();
-          
+
           const { studyInstanceUid, seriesInstanceUid, ...mappedParams } =
             mapParams(origParams, {
               supportsFuzzyMatching: dicomWebConfig.supportsFuzzyMatching,
@@ -643,16 +643,21 @@ function createDicomWebApi(dicomWebConfig: DicomWebConfig, servicesManager) {
     getStudyInstanceUIDs({ params, query }) {
       const paramsStudyInstanceUIDs = params.StudyInstanceUIDs || params.studyInstanceUIDs;
 
-      const queryStudyInstanceUIDs = utils.splitComma(
-        query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'))
-      );
+      // Get all StudyInstanceUIDs from query parameters
+      const queryStudyInstanceUIDsRaw = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
+
+      // Filter out empty values and trim
+      const queryStudyInstanceUIDs = queryStudyInstanceUIDsRaw
+        .filter(uid => uid && uid.trim())
+        .flatMap(uid => uid.split(',').map(s => s.trim())) // Split by comma in case they're comma-separated
+        .filter(uid => uid); // Remove empty strings
 
       const StudyInstanceUIDs =
         (queryStudyInstanceUIDs.length && queryStudyInstanceUIDs) || paramsStudyInstanceUIDs;
       const StudyInstanceUIDsAsArray =
         StudyInstanceUIDs && Array.isArray(StudyInstanceUIDs)
           ? StudyInstanceUIDs
-          : [StudyInstanceUIDs];
+          : StudyInstanceUIDs ? [StudyInstanceUIDs] : [];
 
       return StudyInstanceUIDsAsArray;
     },

@@ -167,6 +167,12 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
           }
 
           const retrieveSeriesMetadataAsync = async () => {
+            console.log(`XNATDataSource: retrieveSeriesMetadataAsync called for StudyInstanceUID: ${StudyInstanceUID}`);
+
+            // Check if this is a comparison view (declare early for scope)
+            const isComparisonView = ['@ohif/mrSubjectComparison', '@ohif/hpCompare'].includes((configManager.getConfig() as any)?.xnat?.hangingProtocolId);
+            const isSyntheticExperimentUID = StudyInstanceUID.startsWith('xnat_experiment_');
+
             let seriesAndInstances;
             try {
               if (!configManager.getConfig()) {
@@ -174,24 +180,73 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                 // Config should be initialized by this point, this indicates a flow issue
                 throw new Error('Configuration not properly initialized');
               }
-              // Use configManager.getConfig().xnat which should be populated by initialize
-              const projectId = configManager.getConfig().xnat?.projectId;
-              const experimentId = configManager.getConfig().xnat?.experimentId || configManager.getConfig().xnat?.sessionId;
 
-              if (!projectId || !experimentId) {
-                log.error(`XNAT: Missing projectId or experimentId in config for StudyInstanceUID ${StudyInstanceUID}. projectId: ${projectId}, experimentId: ${experimentId}`);
-                // Attempt to parse from StudyInstanceUID as a fallback
-                const parsed = getXNATStatusFromStudyInstanceUID(StudyInstanceUID, configManager.getConfig());
-                if (parsed.projectId && parsed.experimentId) {
-                  log.warn(`XNAT: Using parsed projectId ${parsed.projectId} and experimentId ${parsed.experimentId} from StudyInstanceUID`);
-                  seriesAndInstances = await implementation.xnat.getExperimentMetadata(parsed.projectId, parsed.experimentId);
-                } else {
-                  log.error(`XNAT: Still unable to determine projectId or experimentId for ${StudyInstanceUID}. Cannot fetch experiment metadata.`);
-                  throw new Error(`Cannot determine XNAT projectId/experimentId for ${StudyInstanceUID}`);
+              const studyMappings =
+                (configManager.getConfig().xnat && configManager.getConfig().xnat?.studyMappings) || {};
+              const mappedEntry = studyMappings[StudyInstanceUID] || {};
+
+              let resolvedProjectId = mappedEntry.projectId;
+              let resolvedExperimentId = mappedEntry.experimentId;
+
+              // Handle synthetic UIDs for experiment-based comparison
+              if (isSyntheticExperimentUID && !resolvedExperimentId) {
+                // Extract experimentId from synthetic UID: xnat_experiment_{index}_{experimentId}
+                const parts = StudyInstanceUID.split('_');
+                if (parts.length >= 4) {
+                  resolvedExperimentId = parts.slice(3).join('_'); // Join back in case experimentId contains underscores
+                  console.log(`XNATDataSource: Extracted experimentId ${resolvedExperimentId} from synthetic UID ${StudyInstanceUID}`);
                 }
-              } else {
-                seriesAndInstances = await implementation.xnat.getExperimentMetadata(projectId, experimentId);
               }
+
+              console.log(`XNATDataSource: For ${StudyInstanceUID} - resolvedProjectId: ${resolvedProjectId}, resolvedExperimentId: ${resolvedExperimentId}, isSynthetic: ${isSyntheticExperimentUID}, isComparisonView: ${isComparisonView}`);
+
+              if (!resolvedProjectId || !resolvedExperimentId) {
+                const parsed = getXNATStatusFromStudyInstanceUID(
+                  StudyInstanceUID,
+                  configManager.getConfig()
+                );
+                resolvedProjectId = resolvedProjectId || parsed.projectId;
+                resolvedExperimentId = resolvedExperimentId || parsed.experimentId;
+
+                if (parsed.projectId && parsed.experimentId) {
+                  log.warn(
+                    `XNAT: Using parsed projectId ${parsed.projectId} and experimentId ${parsed.experimentId} from StudyInstanceUID ${StudyInstanceUID}`
+                  );
+                } else if (isComparisonView) {
+                  // For comparison views, try to use the parsed values even if incomplete
+                  log.warn(
+                    `XNAT: Comparison view - attempting to resolve study ${StudyInstanceUID} with incomplete project/experiment info`
+                  );
+                }
+              }
+
+              if (!resolvedProjectId) {
+                resolvedProjectId = configManager.getConfig().xnat?.projectId;
+              }
+
+              if (!resolvedExperimentId) {
+                resolvedExperimentId =
+                  configManager.getConfig().xnat?.experimentId || configManager.getConfig().xnat?.sessionId;
+              }
+
+              if (!resolvedProjectId || !resolvedExperimentId) {
+                log.error(
+                  `XNAT: Missing projectId or experimentId in config for StudyInstanceUID ${StudyInstanceUID}. projectId: ${resolvedProjectId}, experimentId: ${resolvedExperimentId}`
+                );
+                log.error(`XNAT: Unable to parse projectId/experimentId from StudyInstanceUID ${StudyInstanceUID}`);
+                throw new Error(`Cannot determine XNAT projectId/experimentId for ${StudyInstanceUID}`);
+              }
+
+              if (!mappedEntry.projectId || !mappedEntry.experimentId) {
+                log.warn(
+                  `XNAT: Using configured projectId ${resolvedProjectId} and experimentId ${resolvedExperimentId} for StudyInstanceUID ${StudyInstanceUID}`
+                );
+              }
+
+              seriesAndInstances = await implementation.xnat.getExperimentMetadata(
+                resolvedProjectId,
+                resolvedExperimentId
+              );
             } catch (e) {
               log.error(
                 `XNAT: Error fetching experiment metadata for StudyInstanceUID ${StudyInstanceUID}: `,
@@ -205,9 +260,33 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
               return [];
             }
 
-            const study = seriesAndInstances.studies.find(s => s.StudyInstanceUID === StudyInstanceUID);
+            // For synthetic UIDs, find the study in the experiment data (which has the real DICOM StudyInstanceUID)
+            // and modify it to use our synthetic StudyInstanceUID
+            let study;
+            if (isSyntheticExperimentUID) {
+              // For synthetic UIDs, use the first (and typically only) study from the experiment
+              study = seriesAndInstances.studies[0];
+              if (study) {
+                // Extract the index from the synthetic UID: xnat_experiment_{index}_{experimentId}
+                const parts = StudyInstanceUID.split('_');
+                const studyIndex = parseInt(parts[2], 10) || 0;
+
+                // Create a copy of the study with the synthetic StudyInstanceUID
+                study = {
+                  ...study,
+                  StudyInstanceUID: StudyInstanceUID, // Replace with synthetic UID
+                  studyInstanceUIDsIndex: studyIndex, // Add the index for hanging protocol matching
+                };
+                console.log(`XNATDataSource: Modified study for synthetic UID ${StudyInstanceUID}, original was ${seriesAndInstances.studies[0].StudyInstanceUID}, index: ${studyIndex}`);
+              }
+            } else {
+              // For regular DICOM UIDs, find the matching study
+              study = seriesAndInstances.studies.find(s => s.StudyInstanceUID === StudyInstanceUID);
+            }
+
             if (!study || !study.series || study.series.length === 0) {
-              log.warn(`XNAT: No series found for StudyInstanceUID ${StudyInstanceUID} within the experiment data.`);
+              const logLevel = isComparisonView ? 'debug' : 'warn';
+              log[logLevel](`XNAT: No series found for StudyInstanceUID ${StudyInstanceUID} within the experiment data.${isComparisonView ? ' (Comparison view - this is expected for cross-experiment studies)' : ''}`);
               return [];
             }
 
@@ -332,7 +411,7 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
             // Add Series level metadata (summary) to DicomMetadataStore
             const seriesSummaryMetadata = study.series.map(s => {
               return {
-                StudyInstanceUID,
+                StudyInstanceUID, // This will be the synthetic UID for synthetic cases
                 SeriesInstanceUID: s.SeriesInstanceUID,
                 Modality: s.Modality || "Unknown",
                 SeriesDescription: s.SeriesDescription || "XNAT Series",
@@ -529,16 +608,21 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
     getStudyInstanceUIDs({ params, query }) {
       const paramsStudyInstanceUIDs = params.StudyInstanceUIDs || params.studyInstanceUIDs;
 
-      const queryStudyInstanceUIDs = utils.splitComma(
-        query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'))
-      );
+      // Get all StudyInstanceUIDs from query parameters
+      const queryStudyInstanceUIDsRaw = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
+
+      // Filter out empty values and trim
+      const queryStudyInstanceUIDs = queryStudyInstanceUIDsRaw
+        .filter(uid => uid && uid.trim())
+        .flatMap(uid => uid.split(',').map(s => s.trim())) // Split by comma in case they're comma-separated
+        .filter(uid => uid); // Remove empty strings
 
       const StudyInstanceUIDs =
         (queryStudyInstanceUIDs.length && queryStudyInstanceUIDs) || paramsStudyInstanceUIDs;
       const StudyInstanceUIDsAsArray =
         StudyInstanceUIDs && Array.isArray(StudyInstanceUIDs)
           ? StudyInstanceUIDs
-          : [StudyInstanceUIDs];
+          : StudyInstanceUIDs ? [StudyInstanceUIDs] : [];
 
       return StudyInstanceUIDsAsArray;
     },

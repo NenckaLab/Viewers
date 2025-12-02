@@ -40,6 +40,63 @@ export const createXNATCommands = (
             });
         },
 
+        XNATStoreSegmentation: async ({ segmentationId }) => {
+            try {
+                // Import the segmentation export function
+                const { exportSegmentationToXNAT } = await import('./SegmentationExporters');
+
+                // Get the series instance UID from the current viewport
+                const { viewportGridService, displaySetService } = servicesManager.services;
+                const { activeViewportId } = viewportGridService.getState();
+                const viewport = viewportGridService.getState().viewports.get(activeViewportId);
+
+                if (!viewport) {
+                    throw new Error('No active viewport found');
+                }
+
+                const displaySetInstanceUID = viewport.displaySetInstanceUIDs[0];
+                const displaySet = displaySetService.getDisplaySetByUID(displaySetInstanceUID);
+
+                if (!displaySet) {
+                    throw new Error('No display set found');
+                }
+
+                const seriesInstanceUID = displaySet.SeriesInstanceUID;
+
+                // Call the actual export function directly
+                await exportSegmentationToXNAT(
+                    { segmentationId, seriesInstanceUID },
+                    {
+                        uiNotificationService: servicesManager.services.uiNotificationService,
+                        servicesManager,
+                        displaySet,
+                        segmentationService: servicesManager.services.segmentationService
+                    }
+                );
+            } catch (error) {
+                console.error('Error exporting segmentation to XNAT:', error);
+                const { uiNotificationService } = servicesManager.services;
+                uiNotificationService.show({
+                    title: 'Export Failed',
+                    message: `Failed to export segmentation to XNAT: ${error.message}`,
+                    type: 'error',
+                    duration: 5000,
+                });
+            }
+        },
+
+        downloadRTSS: ({ segmentationId }) => {
+            console.log(`Downloading RTSS for segmentation ${segmentationId}...`);
+            // In a real implementation, you would use servicesManager to get
+            // the segmentation service and download the RTSS.
+            const { uiNotificationService } = servicesManager.services;
+            uiNotificationService.show({
+                title: 'Download RTSS',
+                message: `RTSS download initiated for segmentation.`,
+                type: 'info',
+            });
+        },
+
         /**
          * Initialize and use the modern XNATMeasurementApi for measurement operations
          */

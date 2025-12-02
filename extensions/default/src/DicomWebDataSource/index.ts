@@ -691,16 +691,21 @@ function createDicomWebApi(dicomWebConfig: DicomWebConfig, servicesManager) {
     getStudyInstanceUIDs({ params, query }) {
       const paramsStudyInstanceUIDs = params.StudyInstanceUIDs || params.studyInstanceUIDs;
 
-      const queryStudyInstanceUIDs = utils.splitComma(
-        query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'))
-      );
+      // Get all StudyInstanceUIDs from query parameters
+      const queryStudyInstanceUIDsRaw = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
+
+      // Filter out empty values and trim
+      const queryStudyInstanceUIDs = queryStudyInstanceUIDsRaw
+        .filter(uid => uid && uid.trim())
+        .flatMap(uid => uid.split(',').map(s => s.trim())) // Split by comma in case they're comma-separated
+        .filter(uid => uid); // Remove empty strings
 
       const StudyInstanceUIDs =
         (queryStudyInstanceUIDs.length && queryStudyInstanceUIDs) || paramsStudyInstanceUIDs;
       const StudyInstanceUIDsAsArray =
         StudyInstanceUIDs && Array.isArray(StudyInstanceUIDs)
           ? StudyInstanceUIDs
-          : [StudyInstanceUIDs];
+          : StudyInstanceUIDs ? [StudyInstanceUIDs] : [];
 
       return StudyInstanceUIDsAsArray;
     },

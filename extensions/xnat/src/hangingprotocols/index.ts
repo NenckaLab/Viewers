@@ -11,6 +11,20 @@ import only3D from './only3D';
 import primary3D from './primary3D';
 import primaryAxial from './primaryAxial';
 import fourUp from './fourUp';
+// Import new MR protocols
+import mrAxial from './mrAxial';
+import mrSagittal from './mrSagittal';
+import mrCoronal from './mrCoronal';
+import mrMpr from './mrMpr';
+import mrT1 from './mrT1';
+import mrT2 from './mrT2';
+import mrFlair from './mrFlair';
+import mrMultiSequence from './mrMultiSequence';
+import mrDwi from './mrDwi';
+import mrAdc from './mrAdc';
+import mrOblique from './mrOblique';
+import mrThickSlab from './mrThickSlab';
+import mrSubjectComparison from './mrSubjectComparison';
 export * from './hpMNGrid';
 
 export {
@@ -26,4 +40,18 @@ export {
   primary3D,
   primaryAxial,
   registerHangingProtocolAttributes,
+  // MR-specific protocols
+  mrAxial,
+  mrSagittal,
+  mrCoronal,
+  mrMpr,
+  mrT1,
+  mrT2,
+  mrFlair,
+  mrMultiSequence,
+  mrDwi,
+  mrAdc,
+  mrOblique,
+  mrThickSlab,
+  mrSubjectComparison,
 };

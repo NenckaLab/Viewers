@@ -58,7 +58,7 @@ export async function importMeasurementCollection({
     };
     protectedMeasurements = new Map();
   }
-  
+
   const source = getMeasurementSource(measurementService);
 
   // Try to get extensionManager for data source access
@@ -183,7 +183,7 @@ export async function importMeasurementCollection({
         console.warn('Failed to get FrameOfReferenceUID from metadata:', e);
       }
     }
-    
+
     if (!measurementFrameOfReferenceUID) {
       try {
         const { cornerstoneViewportService } = servicesManager.services;
@@ -289,6 +289,9 @@ export async function importMeasurementCollection({
         imageReference,
         viewport,
         measurements,
+        imageIndex, // XNAT-specific property not in core schema
+        coordinateList, // XNAT-specific property not in core schema
+        frameOfReferenceUID, // XNAT-specific property not in core schema
         ...cleanIm
       } = im;
 
@@ -399,7 +402,7 @@ export async function importMeasurementCollection({
         secondary: [],
       };
     }
-    
+
     if (im.data?.cachedStats) {
       measurement.data = {
         cachedStats: im.data.cachedStats,
@@ -517,7 +520,7 @@ export async function importMeasurementCollection({
         if (measurement.toolName === 'SplineROI') {
           let validPoints = [];
 
-          if (measurement.points && measurement.points.length > 0) {  
+          if (measurement.points && measurement.points.length > 0) {
             validPoints = measurement.points
               .filter(pt => Array.isArray(pt) && pt.length >= 2 &&
                 typeof pt[0] === 'number' && typeof pt[1] === 'number' &&
@@ -678,7 +681,7 @@ export async function importMeasurementCollection({
         measurement.points = defaultPoints;
       }
     }
-    
+
     if (!measurement.data) {
       measurement.data = {};
     }
@@ -712,6 +715,7 @@ export async function importMeasurementCollection({
     }
 
     const rawDataForService = {
+      uid: measurement.uid,
       id: measurement.uid,
       measurement: measurement,
       annotation: {
@@ -1179,7 +1183,7 @@ export async function importMeasurementCollection({
             const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
             if (viewport) {
               const currentFrameOfRef = viewport.getFrameOfReferenceUID();
-                
+
               if (!currentFrameOfRef) {
                 const displaySets = cornerstoneViewportService.getViewportDisplaySets(viewportId);
                 if (displaySets && displaySets.length > 0) {

@@ -264,4 +264,5 @@ function initToolGroups(extensionManager, toolGroupService, commandsManager) {
   initVolume3DToolGroup(extensionManager, toolGroupService);
 }
 
+export { createTools };
 export default initToolGroups;

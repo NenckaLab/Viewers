@@ -10,7 +10,6 @@ import {
   extensionDependencies as basicDependencies,
   basicLayout,
   basicRoute,
-  initToolGroups,
   cornerstone,
   ohif,
   dicomsr,
@@ -20,6 +19,9 @@ import {
   dicomPmap,
   dicomRT,
 } from '../../basic/src/index';
+
+// Import segmentation tools initialization
+import { createTools } from '../../segmentation/src/initToolGroups';
 
 const xnat = {
   xnatNavList: '@ohif/extension-xnat.panelModule.xnatNavigation',
@@ -114,46 +116,143 @@ const xnatRoute = {
     };
   },
   init: async ({ servicesManager, extensionManager, studyInstanceUIDs }) => {
-    const layoutService = servicesManager.services.layoutService;
+    console.log('XNAT Route Init: Called with studyInstanceUIDs:', studyInstanceUIDs);
 
-    // Get the study UIDs from the session router if available
-    if (!studyInstanceUIDs || studyInstanceUIDs.length === 0) {
-      const sessionRouter = servicesManager.services.sessionRouter;
+    // Parse identifiers from URL query parameters for comparison views
+    const query = new URLSearchParams(window.location.search);
+    const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
+    const experimentIdsFromURL = query.getAll('experimentIds');
 
-      if (sessionRouter) {
-        try {
-          const studyUID = await sessionRouter.go();
+    // Check if we're in a comparison view (either experiment-based or study-based)
+    const isComparisonView = experimentIdsFromURL.length > 1 || studyUIDsFromURL.length > 1;
 
-          if (studyUID) {
-            studyInstanceUIDs = [studyUID];
-
-            // Explicitly update the data source
-            const dataSource = extensionManager.getActiveDataSource();
-            if (dataSource) {
-              // Make sure viewports are ready for the study
-              if (layoutService) {
-                layoutService.setViewportsForStudies(studyInstanceUIDs);
-              }
-
-              // Tell OHIF to show the default hanging protocol for this study
-              const hangingProtocolService = servicesManager.services.hangingProtocolService;
-              if (hangingProtocolService) {
-                hangingProtocolService.run({ studyInstanceUIDs });
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Route init - Error getting study from session router:', error);
-        }
-      }
+    if (experimentIdsFromURL.length > 1) {
+      // XNAT native approach: use experiment IDs for comparison
+      // Create synthetic study UIDs based on experiment IDs with index for OHIF framework compatibility
+      studyInstanceUIDs = experimentIdsFromURL.map((expId, index) => `xnat_experiment_${index}_${expId}`);
+      console.log('XNAT Route Init: Created synthetic study UIDs for experiment-based comparison:', studyInstanceUIDs);
+    } else if (studyUIDsFromURL.length > 0) {
+      // Traditional approach: use parsed study UIDs
+      studyInstanceUIDs = studyUIDsFromURL;
+      console.log('XNAT Route Init: Parsed studyInstanceUIDs from URL:', studyInstanceUIDs);
+    } else if (!isComparisonView) {
+      // For single study views, keep the original studyInstanceUIDs from SessionRouter
+      console.log('XNAT Route Init: Using original studyInstanceUIDs from SessionRouter:', studyInstanceUIDs);
     }
+
+    const hangingProtocolService = servicesManager.services.hangingProtocolService;
 
     // Initialize data source
     try {
       const [dataSource] = extensionManager.getActiveDataSource();
       if (dataSource && typeof dataSource.initialize === 'function') {
         const query = new URLSearchParams(window.location.search);
-        await dataSource.initialize({ params: {}, query });
+
+        // Extract XNAT parameters from query for data source initialization
+        const params: Record<string, any> = {
+          projectId: query.get('projectId'),
+          experimentId: query.get('experimentId'),
+          sessionId: query.get('experimentId'), // experimentId can be used as sessionId
+          subjectId: query.get('subjectId'),
+          parentProjectId: query.get('parentProjectId'),
+          experimentLabel: query.get('experimentLabel'),
+          hangingProtocolId: query.get('hangingprotocolId'), // Pass to data source for special handling
+        };
+
+        const projectIdsFromURL = query.getAll('projectIds');
+        const experimentIdsFromURL = query.getAll('experimentIds');
+        const studyUIDsFromURL = studyInstanceUIDs || [];
+
+        // Check if we're using experiment IDs for comparison (XNAT native approach)
+        const experimentIdsParam = query.getAll('experimentIds');
+        const isExperimentBasedComparison = experimentIdsParam.length > 1;
+
+        const buildStudyMappings = () => {
+          const mappings: Record<
+            string,
+            {
+              projectId?: string;
+              experimentId?: string;
+            }
+          > = {};
+
+          // For comparison views with hangingprotocolId, allow cross-experiment studies
+          const isComparisonView = ['@ohif/mrSubjectComparison', '@ohif/hpCompare'].includes(query.get('hangingprotocolId'));
+
+          if (isExperimentBasedComparison) {
+            // Handle experiment ID based comparison (XNAT native)
+            console.log('XNAT Route Init: Using experiment IDs for comparison:', experimentIdsParam);
+            experimentIdsParam.forEach((experimentId, index) => {
+              if (experimentId) {
+                // Create mapping key using the synthetic UID format that matches what we created above
+                const mappingKey = `xnat_experiment_${index}_${experimentId}`;
+                mappings[mappingKey] = {
+                  projectId: params.projectId || sessionStorage.getItem('xnat_projectId'),
+                  experimentId: experimentId,
+                };
+                console.log(`XNAT Route Init: Created mapping for ${mappingKey} -> experimentId: ${experimentId}`);
+              }
+            });
+          } else {
+            // Handle traditional study UID based approach
+            studyUIDsFromURL.forEach((uid, index) => {
+              if (!uid) {
+                return;
+              }
+
+              // Try to get project/experiment from URL arrays first
+              let projectIdForUID = projectIdsFromURL[index];
+              let experimentIdForUID = experimentIdsFromURL[index];
+
+              // For comparison views, if we don't have specific mappings,
+              // allow the data source to determine them dynamically
+              if (isComparisonView && !projectIdForUID && !experimentIdForUID) {
+                // For comparison views, we'll let the data source try to resolve
+                // each study individually rather than restricting to one experiment
+                console.log(`XNAT Route Init: Allowing dynamic resolution for study ${uid} in comparison view`);
+                return; // Skip adding a mapping, let data source resolve dynamically
+              }
+
+              // Fallback to single values from URL or session storage
+              projectIdForUID = projectIdForUID || params.projectId || sessionStorage.getItem('xnat_projectId');
+              experimentIdForUID = experimentIdForUID || params.experimentId || sessionStorage.getItem('xnat_experimentId');
+
+              if (projectIdForUID || experimentIdForUID) {
+                mappings[uid] = {
+                  projectId: projectIdForUID,
+                  experimentId: experimentIdForUID,
+                };
+              }
+            });
+          }
+
+          if (!Object.keys(mappings).length) {
+            try {
+              const cachedMappings = sessionStorage.getItem('xnat_studyMappings');
+              if (cachedMappings) {
+                return JSON.parse(cachedMappings);
+              }
+            } catch (error) {
+              console.warn('XNAT Route Init: Unable to parse cached study mappings:', error);
+            }
+          }
+
+          return mappings;
+        };
+
+        const studyMappings = buildStudyMappings();
+
+        // Filter out null/undefined values
+        Object.keys(params).forEach(key => {
+          if (!params[key]) delete params[key];
+        });
+
+        if (Object.keys(studyMappings).length) {
+          params.studyMappings = studyMappings;
+        }
+
+        console.log('XNAT Mode Route Init: Initializing data source with params:', params);
+        await dataSource.initialize({ params, query });
       } else {
         console.error('XNAT Mode Route Init: Could not find active data source or initialize function.');
       }
@@ -162,18 +261,84 @@ const xnatRoute = {
       return;
     }
 
+    // Check if we're in overread mode
+    const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
+
+    // Set appropriate hanging protocol based on number of studies or explicit request
+    let hangingProtocolId;
+
+    // Check if comparison protocol is explicitly requested
+    const params = new URLSearchParams(window.location.search);
+    const explicitProtocolId = params.get('hangingprotocolId');
+
+    if (explicitProtocolId === '@ohif/mrSubjectComparison' || explicitProtocolId === '@ohif/hpCompare' || (studyInstanceUIDs && studyInstanceUIDs.length > 1)) {
+      // For multi-study scenarios or explicit comparison requests, use the built-in hpCompare protocol
+      hangingProtocolId = '@ohif/hpCompare';
+      hangingProtocolService.setActiveProtocolIds(['@ohif/hpCompare', 'default']);
+      console.log('XNAT Route Init: Set hanging protocol for multi-study comparison using hpCompare');
+    } else {
+      // For single study, use the default hanging protocols
+      // In overread mode, prioritize MPR if the scan supports it
+      const protocolIds = isOverreadMode
+        ? [
+          'mpr', // Prioritize MPR in overread mode
+          'default',
+          'main3D',
+          'mprAnd3DVolumeViewport',
+          'only3D',
+          'primary3D',
+          'primaryAxial',
+          'fourUp'
+        ]
+        : [
+          'default',
+          'mpr',
+          'main3D',
+          'mprAnd3DVolumeViewport',
+          'only3D',
+          'primary3D',
+          'primaryAxial',
+          'fourUp'
+        ];
+
+      hangingProtocolService.setActiveProtocolIds(protocolIds);
+
+      // In overread mode, replace the default protocol with MPR to make it the true fallback
+      if (isOverreadMode) {
+        const mprProtocol = hangingProtocolService.getProtocolById('mpr');
+        if (mprProtocol) {
+          // Create a copy of MPR protocol but with id 'default' so it becomes the fallback
+          const overreadDefaultProtocol = {
+            ...mprProtocol,
+            id: 'default',
+            name: 'Overread Default (MPR)',
+          };
+          hangingProtocolService.addProtocol('default', overreadDefaultProtocol);
+          console.log('XNAT Route Init: Replaced default protocol with MPR for overread mode');
+        }
+      }
+
+      console.log(`XNAT Route Init: Set hanging protocols for single study${isOverreadMode ? ' (Overread Mode - MPR prioritized)' : ''}`);
+    }
+
     // Now call defaultRouteInit
     const [dataSourceForDefaultRoute] = extensionManager.getActiveDataSource();
 
+    console.log('XNAT Route Init: About to call defaultRouteInit with studyInstanceUIDs:', studyInstanceUIDs);
+
     // @ts-ignore
-    await defaultRouteInit({
+    const result = await defaultRouteInit({
       servicesManager,
       extensionManager,
       studyInstanceUIDs,
       dataSource: dataSourceForDefaultRoute,
-    });
+    }, hangingProtocolId);
 
-    return studyInstanceUIDs;
+    console.log('XNAT Route Init: defaultRouteInit returned:', result);
+
+    console.log('XNAT Route Init: Returning studyInstanceUIDs:', studyInstanceUIDs);
+    // For comparison views, return null to prevent core routing from processing original UIDs
+    return isComparisonView ? null : studyInstanceUIDs;
   },
 };
 
@@ -188,8 +353,12 @@ const modeInstance = {
   },
   onModeInit: ({ servicesManager, extensionManager, commandsManager, appConfig, query }) => {
     // Get query parameters
-    const { projectId, parentProjectId, subjectId, experimentId, experimentLabel, overreadMode } =
-      Object.fromEntries(query.entries());
+    const queryParams = Object.fromEntries(query.entries());
+    const { projectId, parentProjectId, subjectId, experimentId, experimentLabel, overreadMode } = queryParams;
+
+    // Check if we have StudyInstanceUIDs in the URL (for comparison views)
+    const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
+    const hasStudyInstanceUIDs = studyUIDsFromURL.length > 0;
 
     // Store overread mode flag in services manager for use in layout
     if (overreadMode === 'true') {
@@ -197,18 +366,34 @@ const modeInstance = {
       console.log('XNAT Mode: Overread mode detected');
     }
 
-    // Set session map parameters
+    // Set session map parameters if available
+    const safeSetSessionValue = (key: string, value?: string) => {
+      if (value) {
+        try {
+          sessionStorage.setItem(key, value);
+        } catch (error) {
+          console.warn(`XNAT Mode Init - Unable to persist ${key}:`, error);
+        }
+      }
+    };
+
     if (projectId) {
       sessionMap.setProject(projectId);
+      safeSetSessionValue('xnat_projectId', projectId);
     }
     if (subjectId) {
       sessionMap.setSubject(subjectId);
+      safeSetSessionValue('xnat_subjectId', subjectId);
     }
     if (parentProjectId) {
       sessionMap.setParentProject(parentProjectId);
+      safeSetSessionValue('xnat_parentProjectId', parentProjectId);
+    }
+    if (experimentId) {
+      safeSetSessionValue('xnat_experimentId', experimentId);
     }
 
-    // Initialize session router if we have experiment parameters
+    // Initialize session router if we have experiment parameters, or skip if we have StudyInstanceUIDs
     if (experimentId && projectId) {
       try {
         const sessionRouter = new SessionRouter(
@@ -232,6 +417,9 @@ const modeInstance = {
       } catch (error) {
         console.error('XNAT Mode Init - Error creating session router:', error);
       }
+    } else if (hasStudyInstanceUIDs) {
+      // We have StudyInstanceUIDs in the URL, let the route init handle study loading
+      console.log('XNAT Mode Init - StudyInstanceUIDs found in URL, skipping session router initialization');
     } else {
       console.warn('XNAT Mode Init - Missing required params for session router');
     }
@@ -241,8 +429,39 @@ const modeInstance = {
     basicModeInstance.onModeEnter({ servicesManager, extensionManager, commandsManager });
 
     // Register XNAT-specific toolbar buttons
-    const { toolbarService } = servicesManager.services;
+    const { toolbarService, toolGroupService } = servicesManager.services;
     toolbarService.register(toolbarButtons);
+
+    // Replace the basic 'default' tool group with segmentation tools plus basic measurement tools
+    const segmentationTools = createTools({ commandsManager, utilityModule: extensionManager.getModuleEntry('@ohif/extension-cornerstone.utilityModule.tools') });
+
+    // Add missing basic measurement tools that are not in segmentation tools
+    const basicMeasurementTools = {
+      passive: [
+        { toolName: 'Length' },
+        { toolName: 'Bidirectional' },
+        { toolName: 'ArrowAnnotate' },
+        { toolName: 'Angle' },
+        { toolName: 'CobbAngle' },
+        { toolName: 'Probe' },
+        { toolName: 'RectangleROI' },
+        { toolName: 'CircleROI' },
+        { toolName: 'EllipticalROI' },
+        { toolName: 'SplineROI' },
+        { toolName: 'LivewireContour' },
+      ]
+    };
+
+    // Merge segmentation tools with basic measurement tools
+    const allTools = {
+      active: segmentationTools.active,
+      passive: [...segmentationTools.passive, ...basicMeasurementTools.passive],
+      disabled: segmentationTools.disabled || [],
+    };
+
+    // Destroy the basic tool group and recreate with combined tools
+    toolGroupService.destroyToolGroup('default');
+    toolGroupService.createToolGroupAndAddTools('default', allTools);
 
     // Log the current mode state
     const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
@@ -392,4 +611,4 @@ const mode = {
 };
 
 export default mode;
-export { initToolGroups, toolbarButtons };
+export { toolbarButtons };
