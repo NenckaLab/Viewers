@@ -31,22 +31,37 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
   const [isOverreadMode, setIsOverreadMode] = useState<boolean>(false);
   const [userHasOverreadData, setUserHasOverreadData] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<{ userId: number; username: string } | null>(null);
+  const [availableExperiments, setAvailableExperiments] = useState<any[]>([]);
+  const [selectedExperimentId, setSelectedExperimentId] = useState<string>('');
 
   const { uiNotificationService } = servicesManager.services;
 
   // Get current experiment and project from multiple sources
   const getExperimentId = () => {
+    // If user has selected a specific experiment, use that
+    if (selectedExperimentId) return selectedExperimentId;
+
     // Try URL parameters first
     const urlParams = new URLSearchParams(window.location.search);
     const urlExperimentId = urlParams.get('experimentId') || urlParams.get('sessionId');
+
+    // If we have multiple experiments available, don't return a default
+    if (availableExperiments.length > 1) {
+      return null; // Let UI prompt for selection
+    }
+
+    // Single experiment case
     if (urlExperimentId) return urlExperimentId;
 
     // Try session map with different methods
     // @ts-ignore - getSession() without parameters returns all sessions
     const sessions = sessionMap.getSession();
     if (Array.isArray(sessions) && sessions.length > 0) {
-      const latestSession = sessions[sessions.length - 1];
-      if (latestSession?.experimentId) return latestSession.experimentId;
+      // If only one session, use it directly
+      if (sessions.length === 1) {
+        const session = sessions[0];
+        if (session?.experimentId) return session.experimentId;
+      }
     }
 
     // Try getting from services manager if available
@@ -80,6 +95,11 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     // Try session map first
     const sessionSubjectId = sessionMap.getSubject();
     if (sessionSubjectId) return sessionSubjectId;
+
+    // Try URL parameters - check both singular and plural forms
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlSubjectId = urlParams.get('subjectId') || urlParams.get('subjectIds');
+    if (urlSubjectId) return urlSubjectId;
 
     return null;
   };
@@ -121,6 +141,55 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     return isOverreadUrl || isOverreadService;
   }, [servicesManager]);
 
+  // Detect multiple experiments on component mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+
+    // Collect all experiment IDs from URL parameters
+    const allExperimentIds: string[] = [];
+
+    // Add single experimentId if present
+    const singleExperimentId = urlParams.get('experimentId');
+    if (singleExperimentId) {
+      allExperimentIds.push(singleExperimentId);
+    }
+
+    // Add multiple experimentIds if present
+    const experimentIdsParam = urlParams.getAll('experimentIds');
+    allExperimentIds.push(...experimentIdsParam);
+
+    // Remove duplicates
+    const uniqueExperimentIds = [...new Set(allExperimentIds)];
+
+    if (uniqueExperimentIds.length > 1) {
+      // Multiple experiments from URL
+      const experiments = uniqueExperimentIds.map(expId => ({
+        experimentId: expId,
+        experimentLabel: expId,
+        projectId: urlParams.get('projectId') || 'Unknown Project',
+        subjectId: urlParams.get('subjectId') || 'Unknown Subject'
+      }));
+
+      // Also update the subjectId state for form loading
+      const subjectIdFromUrl = urlParams.get('subjectId');
+      if (subjectIdFromUrl) {
+        // We can't directly set subjectId state here since it's computed
+        // But this will help with debugging
+        console.log('SubjectId from URL:', subjectIdFromUrl);
+      }
+      setAvailableExperiments(experiments);
+      console.log('Detected multiple experiments from URL:', experiments);
+    } else {
+      // Check session map for multiple sessions
+      // @ts-ignore - getSession() without parameters returns all sessions
+      const sessions = sessionMap.getSession();
+      if (Array.isArray(sessions) && sessions.length > 1) {
+        setAvailableExperiments(sessions);
+        console.log('Detected multiple experiments from session map:', sessions);
+      }
+    }
+  }, []); // Only run once on mount
+
   // Debug logging
   useEffect(() => {
     const overreadMode = detectOverreadMode();
@@ -131,23 +200,23 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
       projectId,
       subjectId,
       isOverreadMode: overreadMode,
-      // @ts-ignore - getSession() without parameters returns all sessions
-      sessionMap: sessionMap.getSession() || [],
+      availableExperiments: availableExperiments,
+      selectedExperimentId,
       urlParams: Object.fromEntries(new URLSearchParams(window.location.search)),
     });
-  }, [experimentId, projectId, subjectId, detectOverreadMode]);
+  }, [experimentId, projectId, subjectId, detectOverreadMode, selectedExperimentId, availableExperiments]);
 
   // Load custom forms for the project (form definitions)
   const loadCustomForms = useCallback(async () => {
     if (!projectId || !subjectId) {
-      setError('No project selected');
+      setError('No project or subject selected');
       return;
     }
 
     try {
       setLoading(true);
       setError('');
-      console.log('Loading custom forms for project:', projectId, subjectId, experimentId || 'Not detected');
+      console.log('Loading custom forms for project:', projectId, subjectId);
       const forms = await fetchCustomForms(projectId);
       console.log('Loaded custom forms:', forms);
       setCustomForms(forms);
@@ -169,7 +238,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     } finally {
       setLoading(false);
     }
-  }, [projectId, subjectId, experimentId, uiNotificationService]);
+  }, [projectId, subjectId, uiNotificationService]);
 
   // Load form data for the current experiment (form data)
   const loadFormData = useCallback(async () => {
@@ -183,12 +252,26 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
       setError('');
       console.log('Loading form data for experiment:', experimentId, subjectId, projectId, 'overread mode:', isOverreadMode);
 
-      // Use overread API if in overread mode, otherwise use regular API
-      const data = isOverreadMode
-        ? await getOverreadFormData(experimentId, selectedFormUuid)
-        : await getExperimentCustomFormData(experimentId);
+      // In overread mode, try overread API first, fall back to regular API
+      let data;
+      if (isOverreadMode) {
+        try {
+          data = await getOverreadFormData(experimentId, selectedFormUuid);
+          // If overread API returns no data (empty object), fall back to regular API
+          if (!data || Object.keys(data).length === 0) {
+            console.log('No overread data found, falling back to regular API');
+            data = await getExperimentCustomFormData(experimentId, selectedFormUuid);
+          }
+        } catch (error) {
+          console.log('Overread API failed, falling back to regular API:', error);
+          data = await getExperimentCustomFormData(experimentId, selectedFormUuid);
+        }
+      } else {
+        data = await getExperimentCustomFormData(experimentId, selectedFormUuid);
+      }
 
       console.log('Loaded form data:', data);
+      console.log('Selected form UUID:', selectedFormUuid);
       setFormData(data);
 
       // Detect form structures from existing data
@@ -197,9 +280,63 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
 
       // If we have a selected form, load its data for editing
       if (selectedFormUuid) {
+        console.log('Processing form data for selected form:', selectedFormUuid);
+        console.log('Raw data structure:', data);
+        let formData = null;
+
+        // Check for different data structures
         if (data[selectedFormUuid]) {
+          const formDataObj = data[selectedFormUuid];
+          // Check if it's nested under "1" key
+          if (formDataObj["1"]) {
+            formData = formDataObj["1"];
+          } else if (typeof formDataObj === 'object' && !Array.isArray(formDataObj)) {
+            // Check if it's direct field data
+            formData = formDataObj;
+          }
+        }
+
+        // Check for user-specific data structure (current API response)
+        // Look for data under a key that matches the current user's ID
+        if (!formData) {
+          const currentUserId = currentUser?.userId?.toString();
+          if (currentUserId && data[currentUserId]) {
+            console.log(`Found data under user ID key "${currentUserId}":`, data[currentUserId]);
+            formData = data[currentUserId];
+          } else if (data["1"]) {
+            // Fallback to "1" for backward compatibility
+            console.log('Found data under fallback "1" key:', data["1"]);
+            formData = data["1"];
+          }
+        }
+
+        console.log('Final formData result:', formData);
+
+        // Also check for flattened fields (formUuid_fieldName format)
+        if (!formData) {
+          const selectedForm = customForms.find(f => f.uuid === selectedFormUuid);
+          if (selectedForm) {
+            const flattenedData: { [fieldName: string]: any } = {};
+            let hasFlattenedData = false;
+
+            selectedForm.fields.forEach(field => {
+              const flattenedKey = `${selectedFormUuid}_${field.key}`;
+              if (data[flattenedKey] !== undefined) {
+                flattenedData[field.key] = data[flattenedKey];
+                hasFlattenedData = true;
+              }
+            });
+
+            if (hasFlattenedData) {
+              formData = flattenedData;
+            }
+          }
+        }
+
+        if (formData) {
           // Use existing data
-          setEditingData(data[selectedFormUuid]);
+          console.log('Setting editing data from existing data:', formData);
+          setEditingData(formData);
         } else {
           // Initialize form with field definitions from the selected form
           const selectedForm = customForms.find(f => f.uuid === selectedFormUuid);
@@ -208,6 +345,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
             selectedForm.fields.forEach(field => {
               initialData[field.key] = '';
             });
+            console.log('Initializing empty form data:', initialData);
             setEditingData(initialData);
           }
         }
@@ -474,10 +612,10 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
   }, [loadCustomForms]);
 
   useEffect(() => {
-    if (experimentId) {
+    if (experimentId && selectedFormUuid) {
       loadFormData();
     }
-  }, [experimentId, loadFormData]);
+  }, [experimentId, selectedExperimentId, selectedFormUuid, loadFormData]);
 
   // Load current user information
   useEffect(() => {
@@ -491,13 +629,20 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     }
   }, [experimentId, getCurrentUser]);
 
-  // Load form data when a form is auto-selected
+  // Load form data when a form is auto-selected and experiment is selected
   useEffect(() => {
     if (selectedFormUuid && experimentId && customForms.length > 0) {
-      // Trigger form data loading when a form is selected
+      // Trigger form data loading when a form is selected and experiment is available
       loadFormData();
     }
   }, [selectedFormUuid, experimentId, customForms.length, loadFormData]);
+
+  // Reload form data when selected experiment changes
+  useEffect(() => {
+    if (selectedExperimentId && customForms.length > 0) {
+      loadFormData();
+    }
+  }, [selectedExperimentId, customForms.length, loadFormData]);
 
   // Render form field based on field definition and value
   const renderFormField = (fieldName: string, value: any, fieldDef?: CustomFormField) => {
@@ -644,7 +789,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     );
   }
 
-  if (!experimentId) {
+  if (!experimentId && availableExperiments.length <= 1) {
     return (
       <div className="h-full overflow-y-auto overflow-x-hidden p-4 space-y-4">
         <PanelSection>
@@ -742,6 +887,48 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         </PanelSection.Content>
       </PanelSection>
 
+      {/* Experiment Selection for Comparison Mode */}
+      {availableExperiments.length > 1 && (
+        <PanelSection>
+          <PanelSection.Header>
+            <div className="flex items-center space-x-2 text-aqua-pale">
+              <Icons.Clipboard className="w-4 h-4" />
+              <span>Select Experiment</span>
+            </div>
+          </PanelSection.Header>
+          <PanelSection.Content>
+            <div className="text-sm space-y-3 text-aqua-pale">
+              <p>Multiple experiments are loaded. Select which experiment's custom forms you want to view:</p>
+              <div className="space-y-2">
+                <select
+                  value={selectedExperimentId}
+                  onChange={(e) => {
+                    const newExperimentId = e.target.value;
+                    setSelectedExperimentId(newExperimentId);
+                    // Clear form data when switching experiments (but keep form selection)
+                    setFormData({});
+                    setEditingData({});
+                  }}
+                  className="w-full p-2 border border-input rounded text-sm bg-background text-foreground"
+                >
+                  <option value="">Select an experiment...</option>
+                  {availableExperiments.map(experiment => (
+                    <option key={experiment.experimentId} value={experiment.experimentId}>
+                      {experiment.experimentLabel || experiment.experimentId}
+                    </option>
+                  ))}
+                </select>
+                {selectedExperimentId && (
+                  <p className="text-xs text-green-600 dark:text-green-400">
+                    ✓ Selected: {availableExperiments.find(exp => exp.experimentId === selectedExperimentId)?.experimentLabel || selectedExperimentId}
+                  </p>
+                )}
+              </div>
+            </div>
+          </PanelSection.Content>
+        </PanelSection>
+      )}
+
       {error && (
         <PanelSection>
           <PanelSection.Header className="text-destructive">Error</PanelSection.Header>
@@ -809,7 +996,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                 )}
                 {Object.keys(editingData).length === 0 ? (
                   <div className="text-muted-foreground text-sm p-3 bg-muted rounded">
-                    No form data to edit. Use "Create New" to add data.
+                    Loading form data...
                   </div>
                 ) : (
                   // Render form using field definitions from the selected form

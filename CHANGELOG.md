@@ -3,6 +3,151 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [3.12.0-beta.95](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.94...v3.12.0-beta.95) (2025-12-02)
+
+
+### Bug Fixes
+
+* sculptor tool fixes ([#5595](https://github.com/OHIF/Viewers/issues/5595)) ([4471416](https://github.com/OHIF/Viewers/commit/4471416c30bf80d9f6766660d103f28c83ba7bb3))
+
+
+
+
+
+# [3.12.0-beta.94](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.93...v3.12.0-beta.94) (2025-12-02)
+
+**Note:** Version bump only for package ohif-monorepo-root
+
+
+
+
+
+# [3.12.0-beta.93](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.92...v3.12.0-beta.93) (2025-11-25)
+
+
+### Features
+
+* tooltips for tool settings ([#5586](https://github.com/OHIF/Viewers/issues/5586)) ([411553e](https://github.com/OHIF/Viewers/commit/411553ee916b8a63b2a934a7e1274bc449041016))
+
+
+
+
+
+# [3.12.0-beta.92](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.91...v3.12.0-beta.92) (2025-11-24)
+
+
+### Bug Fixes
+
+* **docs:** Empty commit as an attempt to fix the docs build. ([#5582](https://github.com/OHIF/Viewers/issues/5582)) ([94b0358](https://github.com/OHIF/Viewers/commit/94b0358f18f81fa2822a208d68decfce076ef577))
+
+
+
+
+
+# [3.12.0-beta.91](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.90...v3.12.0-beta.91) (2025-11-21)
+
+**Note:** Version bump only for package ohif-monorepo-root
+
+
+
+
+
+# [3.12.0-beta.90](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.89...v3.12.0-beta.90) (2025-11-21)
+
+
+### Bug Fixes
+
+* **DicomUpload:** Switch to use ui-next components and colors ([#5576](https://github.com/OHIF/Viewers/issues/5576)) ([62d6bf4](https://github.com/OHIF/Viewers/commit/62d6bf437b167ac3e60a0f134869c9f96d199d0f))
+
+
+
+
+
+# [3.12.0-beta.89](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.88...v3.12.0-beta.89) (2025-11-20)
+
+**Note:** Version bump only for package ohif-monorepo-root
+
+
+
+
+
+# [3.12.0-beta.88](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.87...v3.12.0-beta.88) (2025-11-20)
+
+
+### Bug Fixes
+
+* Remove dead code and fix rectangle roi rehydration ([#5490](https://github.com/OHIF/Viewers/issues/5490)) ([9ca02b4](https://github.com/OHIF/Viewers/commit/9ca02b4071f77600f7dcd87930fecdcf3d1c249f))
+
+
+
+
+
+# [3.12.0-beta.87](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.86...v3.12.0-beta.87) (2025-11-19)
+
+
+### Bug Fixes
+
+* **SegmentationStyle:** Fix inactive contour visibility and styling. ([#5563](https://github.com/OHIF/Viewers/issues/5563)) ([5c17c26](https://github.com/OHIF/Viewers/commit/5c17c262eaa5c1229033cfff4b3e7709e874611f))
+
+
+
+
+
+# [3.12.0-beta.86](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.85...v3.12.0-beta.86) (2025-11-13)
+
+
+### Bug Fixes
+
+* **segmentation:** Allow for manually added label map and contour segmentations to be used as viewport data overlays. ([#5562](https://github.com/OHIF/Viewers/issues/5562)) ([02f6744](https://github.com/OHIF/Viewers/commit/02f6744dab993f16cf2516fd5f657e0743e3fa42))
+
+
+
+
+
+# [3.12.0-beta.85](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.84...v3.12.0-beta.85) (2025-11-11)
+
+
+### Bug Fixes
+
+* **interpolation:** Auto accept interpolation when the interpolation process is completed. ([#5555](https://github.com/OHIF/Viewers/issues/5555)) ([834ae3c](https://github.com/OHIF/Viewers/commit/834ae3c762ca309187afebdf77bad1ad9a57f03f))
+
+
+
+
+
+# [3.12.0-beta.84](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.83...v3.12.0-beta.84) (2025-11-10)
+
+
+### Bug Fixes
+
+* **dev:** update webpack proxy config syntax for Orthanc dev mode ([#5531](https://github.com/OHIF/Viewers/issues/5531)) ([58aa0d1](https://github.com/OHIF/Viewers/commit/58aa0d1eaae2e1a8103e6096864a4e5d7baf090e))
+
+
+
+
+
+# [3.12.0-beta.83](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.82...v3.12.0-beta.83) (2025-11-06)
+
+
+### Features
+
+* **metadata:** metadata access improvement ([#5292](https://github.com/OHIF/Viewers/issues/5292)) ([16233d9](https://github.com/OHIF/Viewers/commit/16233d980f17abfc30461b46c6b1888be10c7840))
+
+
+
+
+
+# [3.12.0-beta.82](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.81...v3.12.0-beta.82) (2025-11-05)
+
+
+### Bug Fixes
+
+* **segmentation:** When synchronizing a segmentation representation, use the type of the source viewport segmentation to determine the type of the target viewport segmentation ([#5546](https://github.com/OHIF/Viewers/issues/5546)) ([a0556b0](https://github.com/OHIF/Viewers/commit/a0556b08be98e0bba950ad7b9b575d7b971104ba))
+
+
+
+
+
 # [3.12.0-beta.81](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.80...v3.12.0-beta.81) (2025-11-05)
 
 
