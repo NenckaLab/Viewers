@@ -360,6 +360,10 @@ const modeInstance = {
     const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
     const hasStudyInstanceUIDs = studyUIDsFromURL.length > 0;
 
+    // Check if we have multiple experiments (comparison mode)
+    const experimentIdsFromURL = query.getAll('experimentIds');
+    const hasMultipleExperiments = experimentIdsFromURL.length > 1;
+
     // Store overread mode flag in services manager for use in layout
     if (overreadMode === 'true') {
       servicesManager.services.isOverreadMode = true;
@@ -393,8 +397,8 @@ const modeInstance = {
       safeSetSessionValue('xnat_experimentId', experimentId);
     }
 
-    // Initialize session router if we have experiment parameters, or skip if we have StudyInstanceUIDs
-    if (experimentId && projectId) {
+    // Initialize session router if we have single experiment parameters, or skip for comparison/multi-experiment modes
+    if (experimentId && projectId && !hasMultipleExperiments) {
       try {
         const sessionRouter = new SessionRouter(
           projectId,
@@ -417,9 +421,9 @@ const modeInstance = {
       } catch (error) {
         console.error('XNAT Mode Init - Error creating session router:', error);
       }
-    } else if (hasStudyInstanceUIDs) {
-      // We have StudyInstanceUIDs in the URL, let the route init handle study loading
-      console.log('XNAT Mode Init - StudyInstanceUIDs found in URL, skipping session router initialization');
+    } else if (hasStudyInstanceUIDs || hasMultipleExperiments) {
+      // We have StudyInstanceUIDs or multiple experiments, let the route init handle loading
+      console.log('XNAT Mode Init - StudyInstanceUIDs or multiple experiments found, skipping session router initialization');
     } else {
       console.warn('XNAT Mode Init - Missing required params for session router');
     }

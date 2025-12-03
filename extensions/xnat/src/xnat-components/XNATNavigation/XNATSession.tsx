@@ -258,7 +258,7 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
 
       // Add essential XNAT parameters for data access - pass projectIds for each experiment
       if (currentProjectId) {
-        viewerUrl += `&projectIds=${encodeURIComponent(currentProjectId)}&projectIds=${encodeURIComponent(currentProjectId)}&projectId=${encodeURIComponent(currentProjectId)}`;
+        viewerUrl += `&projectIds=${encodeURIComponent(currentProjectId)}&projectIds=${encodeURIComponent(currentProjectId)}&projectId=${encodeURIComponent(currentProjectId)}&subjectId=${encodeURIComponent(currentSubjectId)}`;
       }
       // Keep the current experiment ID for context
       viewerUrl += `&experimentId=${encodeURIComponent(currentExperimentId)}`;

@@ -27,6 +27,7 @@
         "build": "lerna run build:viewer --stream",
         "build:dev": "lerna run build:dev --stream",
         "build:ci": "lerna run build:viewer:ci --stream",
+        "build:xnat": "lerna run build:viewer:xnat --stream",
         "build:qa": "lerna run build:viewer:qa --stream",
         "clean": "npx lerna run clean --stream",
         "clean:deep": "npx lerna run clean:deep --stream",
