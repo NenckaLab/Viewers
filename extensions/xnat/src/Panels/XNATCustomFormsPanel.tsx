@@ -252,12 +252,23 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
       setError('');
       console.log('Loading form data for experiment:', experimentId, subjectId, projectId, 'overread mode:', isOverreadMode);
 
-      // In overread mode:
-      // - Single experiment: use overread API (for user's existing data)
-      // - Multiple experiments: use regular API (to show existing data) + overread API for saving
-      const data = isOverreadMode && availableExperiments.length <= 1
-        ? await getOverreadFormData(experimentId, selectedFormUuid)
-        : await getExperimentCustomFormData(experimentId, selectedFormUuid);
+      // In overread mode, try overread API first, fall back to regular API
+      let data;
+      if (isOverreadMode) {
+        try {
+          data = await getOverreadFormData(experimentId, selectedFormUuid);
+          // If overread API returns no data (empty object), fall back to regular API
+          if (!data || Object.keys(data).length === 0) {
+            console.log('No overread data found, falling back to regular API');
+            data = await getExperimentCustomFormData(experimentId, selectedFormUuid);
+          }
+        } catch (error) {
+          console.log('Overread API failed, falling back to regular API:', error);
+          data = await getExperimentCustomFormData(experimentId, selectedFormUuid);
+        }
+      } else {
+        data = await getExperimentCustomFormData(experimentId, selectedFormUuid);
+      }
 
       console.log('Loaded form data:', data);
       console.log('Selected form UUID:', selectedFormUuid);
@@ -270,9 +281,10 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
       // If we have a selected form, load its data for editing
       if (selectedFormUuid) {
         console.log('Processing form data for selected form:', selectedFormUuid);
+        console.log('Raw data structure:', data);
         let formData = null;
 
-        // Check for nested data structure (data[formUuid]["1"] or data[formUuid])
+        // Check for different data structures
         if (data[selectedFormUuid]) {
           const formDataObj = data[selectedFormUuid];
           // Check if it's nested under "1" key
@@ -283,6 +295,22 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
             formData = formDataObj;
           }
         }
+
+        // Check for user-specific data structure (current API response)
+        // Look for data under a key that matches the current user's ID
+        if (!formData) {
+          const currentUserId = currentUser?.userId?.toString();
+          if (currentUserId && data[currentUserId]) {
+            console.log(`Found data under user ID key "${currentUserId}":`, data[currentUserId]);
+            formData = data[currentUserId];
+          } else if (data["1"]) {
+            // Fallback to "1" for backward compatibility
+            console.log('Found data under fallback "1" key:', data["1"]);
+            formData = data["1"];
+          }
+        }
+
+        console.log('Final formData result:', formData);
 
         // Also check for flattened fields (formUuid_fieldName format)
         if (!formData) {
