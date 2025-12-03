@@ -260,6 +260,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         : await getExperimentCustomFormData(experimentId, selectedFormUuid);
 
       console.log('Loaded form data:', data);
+      console.log('Selected form UUID:', selectedFormUuid);
       setFormData(data);
 
       // Detect form structures from existing data
@@ -268,9 +269,46 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
 
       // If we have a selected form, load its data for editing
       if (selectedFormUuid) {
+        console.log('Processing form data for selected form:', selectedFormUuid);
+        let formData = null;
+
+        // Check for nested data structure (data[formUuid]["1"] or data[formUuid])
         if (data[selectedFormUuid]) {
+          const formDataObj = data[selectedFormUuid];
+          // Check if it's nested under "1" key
+          if (formDataObj["1"]) {
+            formData = formDataObj["1"];
+          } else if (typeof formDataObj === 'object' && !Array.isArray(formDataObj)) {
+            // Check if it's direct field data
+            formData = formDataObj;
+          }
+        }
+
+        // Also check for flattened fields (formUuid_fieldName format)
+        if (!formData) {
+          const selectedForm = customForms.find(f => f.uuid === selectedFormUuid);
+          if (selectedForm) {
+            const flattenedData: { [fieldName: string]: any } = {};
+            let hasFlattenedData = false;
+
+            selectedForm.fields.forEach(field => {
+              const flattenedKey = `${selectedFormUuid}_${field.key}`;
+              if (data[flattenedKey] !== undefined) {
+                flattenedData[field.key] = data[flattenedKey];
+                hasFlattenedData = true;
+              }
+            });
+
+            if (hasFlattenedData) {
+              formData = flattenedData;
+            }
+          }
+        }
+
+        if (formData) {
           // Use existing data
-          setEditingData(data[selectedFormUuid]);
+          console.log('Setting editing data from existing data:', formData);
+          setEditingData(formData);
         } else {
           // Initialize form with field definitions from the selected form
           const selectedForm = customForms.find(f => f.uuid === selectedFormUuid);
@@ -279,6 +317,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
             selectedForm.fields.forEach(field => {
               initialData[field.key] = '';
             });
+            console.log('Initializing empty form data:', initialData);
             setEditingData(initialData);
           }
         }
@@ -545,10 +584,10 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
   }, [loadCustomForms]);
 
   useEffect(() => {
-    if (experimentId) {
+    if (experimentId && selectedFormUuid) {
       loadFormData();
     }
-  }, [experimentId, selectedExperimentId, loadFormData]);
+  }, [experimentId, selectedExperimentId, selectedFormUuid, loadFormData]);
 
   // Load current user information
   useEffect(() => {
@@ -838,10 +877,9 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                   onChange={(e) => {
                     const newExperimentId = e.target.value;
                     setSelectedExperimentId(newExperimentId);
-                    // Clear form data when switching experiments
+                    // Clear form data when switching experiments (but keep form selection)
                     setFormData({});
                     setEditingData({});
-                    setSelectedFormUuid('');
                   }}
                   className="w-full p-2 border border-input rounded text-sm bg-background text-foreground"
                 >
