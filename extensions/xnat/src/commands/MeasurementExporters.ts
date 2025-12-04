@@ -155,17 +155,8 @@ export async function XNATStoreMeasurements({
             coordinateList: points.map(pt => [Number(pt[0]), Number(pt[1]), Number(pt[2] || 0)]),
         };
 
-        console.log(`🔍 DEBUG: Exporting measurement ${m.uid}:`);
-        console.log(`🔍 DEBUG: - FrameOfReferenceUID from measurement: ${m.FrameOfReferenceUID || 'undefined'}`);
-        console.log(`🔍 DEBUG: - FrameOfReferenceUID from metadata: ${m.metadata?.FrameOfReferenceUID || 'undefined'}`);
-        console.log(`🔍 DEBUG: - Final frameOfReferenceUID: ${base.frameOfReferenceUID || 'undefined (optional)'}`);
-        console.log(`🔍 DEBUG: - Tool type: ${m.toolName}`);
-        console.log(`🔍 DEBUG: - Measurement type: ${m.type}`);
-        console.log(`🔍 DEBUG: - Cached stats:`, m.data?.cachedStats);
-        console.log(`🔍 DEBUG: - Display text:`, m.displayText);
 
         // Populate tool-specific "data" minimally
-        console.log(`🔍 DEBUG: Switch statement using base.toolType: ${base.toolType}`);
         switch (base.toolType) {
             case 'Length':
                 if (points.length >= 2) {
@@ -183,8 +174,6 @@ export async function XNATStoreMeasurements({
                             lengthVal = parseFloat(match[1]);
                         }
                     }
-
-                    console.log('Export: extracted length value:', lengthVal, 'from measurement:', m);
 
                     base.data = {
                         length: Number(lengthVal),
@@ -354,7 +343,6 @@ export async function XNATStoreMeasurements({
                 }
                 break;
             default:
-                console.log(`🔍 DEBUG: Unhandled tool type: ${base.toolType}, using generic data structure`);
                 // Generic fallback for unsupported tools
                 if (points.length > 0) {
                     const handles: any = {};
@@ -396,8 +384,6 @@ export async function XNATStoreMeasurements({
         },
         imageMeasurements, // array built above
     } as any;
-
-    console.log('🔍 DEBUG: Final measurement collection:', measurementCollection);
 
     // Convert to JSON blob for export
     const jsonBlob = new Blob([JSON.stringify(measurementCollection)], {

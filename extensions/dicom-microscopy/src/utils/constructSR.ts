@@ -60,11 +60,6 @@ export default function constructSR(metadata, { SeriesDescription, SeriesNumber 
     const { roiGraphic: roi, label } = annotations[i];
     let { measurements, evaluations, marker, presentationState } = roi.properties;
 
-    console.log('[SR] storing marker...', marker);
-    console.log('[SR] storing measurements...', measurements);
-    console.log('[SR] storing evaluations...', evaluations);
-    console.log('[SR] storing presentation state...', presentationState);
-
     if (presentationState) {
       presentationState.marker = marker;
     }

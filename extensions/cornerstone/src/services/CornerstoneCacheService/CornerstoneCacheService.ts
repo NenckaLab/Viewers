@@ -161,7 +161,6 @@ class CornerstoneCacheService {
     const overlayDisplaySets = displaySets.filter(ds => ds.isOverlayDisplaySet);
     for (const overlayDisplaySet of overlayDisplaySets) {
       if (overlayDisplaySet.load && overlayDisplaySet.load instanceof Function) {
-        console.log('overlayDisplaySet.load');
         const { userAuthenticationService } = this.servicesManager.services;
         const headers = userAuthenticationService.getAuthorizationHeader();
         try {
@@ -183,7 +182,6 @@ class CornerstoneCacheService {
       const { displaySetInstanceUID, StudyInstanceUID, isCompositeStack } = displaySet;
 
       if (displaySet.load && displaySet.load instanceof Function) {
-        console.log('displaySet.load');
         const { userAuthenticationService } = this.servicesManager.services;
         const headers = userAuthenticationService.getAuthorizationHeader();
         try {
@@ -243,7 +241,6 @@ class CornerstoneCacheService {
       // getSOPClassHandler method
 
       if (displaySet.load && displaySet.load instanceof Function) {
-        console.log('displaySet.load');
         const { userAuthenticationService } = this.servicesManager.services;
         const headers = userAuthenticationService.getAuthorizationHeader();
 

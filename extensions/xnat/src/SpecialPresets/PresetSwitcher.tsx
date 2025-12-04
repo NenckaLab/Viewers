@@ -36,7 +36,6 @@ function PresetSwitcher({ servicesManager }) {
   const applyPreset = (protocolId) => {
     try {
       hangingProtocolService.setProtocol(protocolId);
-      console.log(`Applied preset: ${protocolId}`);
     } catch (error) {
       console.error(`Error applying preset ${protocolId}:`, error);
     }

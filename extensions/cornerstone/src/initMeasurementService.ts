@@ -432,15 +432,7 @@ const connectMeasurementServiceToTools = ({
   measurementService.subscribe(
     RAW_MEASUREMENT_ADDED,
     ({ source, measurement, data, dataSource }) => {
-      console.log('🔍 DEBUG: RAW_MEASUREMENT_ADDED event received in cornerstone extension');
-      console.log('🔍 DEBUG: Source:', source);
-      console.log('🔍 DEBUG: Source name:', source?.name);
-      console.log('🔍 DEBUG: Expected source name: Cornerstone3DTools');
-      console.log('🔍 DEBUG: Source name matches:', source?.name === CORNERSTONE_3D_TOOLS_SOURCE_NAME);
-      console.log('🔍 DEBUG: Measurement:', measurement);
-
       if (source.name !== CORNERSTONE_3D_TOOLS_SOURCE_NAME) {
-        console.log('🔍 DEBUG: Source name does not match, skipping annotation creation');
         return;
       }
 
@@ -498,13 +490,8 @@ const connectMeasurementServiceToTools = ({
         },
       };
 
-      console.log('🔍 DEBUG: Creating annotation with UID:', newAnnotation.annotationUID);
-      console.log('🔍 DEBUG: Annotation data:', newAnnotation.data);
-      console.log('🔍 DEBUG: Annotation metadata:', newAnnotation.metadata);
-
       // Check what annotations exist before adding
       const allAnnotationsBefore = annotationManager.getAllAnnotations();
-      console.log('🔍 DEBUG: Annotations before adding:', Object.keys(allAnnotationsBefore));
 
       // Get the enabled element for the viewport that should display this annotation
       const { cornerstoneViewportService } = servicesManager.services;
@@ -522,7 +509,6 @@ const connectMeasurementServiceToTools = ({
           if (viewportFrameOfRef === newAnnotation.metadata.FrameOfReferenceUID) {
             targetViewport = viewport;
             targetElement = viewport.element;
-            console.log('🔍 DEBUG: Found matching viewport for annotation by frame of reference:', viewport.id);
             break;
           }
         }
@@ -536,7 +522,6 @@ const connectMeasurementServiceToTools = ({
             if (currentImageId === newAnnotation.metadata.referencedImageId) {
               targetViewport = viewport;
               targetElement = viewport.element;
-              console.log('🔍 DEBUG: Found matching viewport for annotation by image ID:', viewport.id);
               break;
             }
           } catch (err) {
@@ -549,11 +534,9 @@ const connectMeasurementServiceToTools = ({
       if (!targetViewport && viewports.length > 0) {
         targetViewport = viewports[0];
         targetElement = viewports[0].element;
-        console.log('🔍 DEBUG: Using fallback viewport for annotation:', targetViewport.id);
       }
 
       if (targetElement) {
-        console.log('🔍 DEBUG: Adding annotation to enabled element:', targetElement);
         // Add the annotation to the specific viewport's enabled element
         annotationManager.addAnnotation(newAnnotation, targetElement);
 
@@ -562,19 +545,16 @@ const connectMeasurementServiceToTools = ({
           const { toolGroupService } = servicesManager.services;
           const toolGroup = toolGroupService.getToolGroupForViewport(targetViewport.id);
           if (toolGroup) {
-            console.log('🔍 DEBUG: Ensuring annotation is registered with tool group for viewport:', targetViewport.id);
 
             // Force the tool to recognize the annotation by ensuring it's in passive mode
             const toolName = newAnnotation.metadata.toolName;
             const toolConfig = toolGroup.getToolConfiguration(toolName);
             if (toolConfig) {
-              console.log('🔍 DEBUG: Tool configuration found, annotation should be visible');
 
               // Ensure the tool is at least in passive mode so it can render annotations
               const currentMode = toolGroup.getToolOptions(toolName)?.mode;
               if (currentMode !== 'Active' && currentMode !== 'Passive') {
                 toolGroup.setToolPassive(toolName);
-                console.log(`🔍 DEBUG: Set ${toolName} to passive mode for viewport ${targetViewport.id}`);
               }
             }
 
@@ -583,7 +563,6 @@ const connectMeasurementServiceToTools = ({
               const isVisible = annotation.visibility.isAnnotationVisible(newAnnotation.annotationUID);
               if (!isVisible) {
                 annotation.visibility.setAnnotationVisibility(newAnnotation.annotationUID, true);
-                console.log(`🔍 DEBUG: Set annotation visibility to true for viewport ${targetViewport.id}`);
               }
             } catch (visErr) {
               console.warn('🔍 DEBUG: Could not set annotation visibility:', visErr);
@@ -593,19 +572,14 @@ const connectMeasurementServiceToTools = ({
           console.warn('🔍 DEBUG: Could not register annotation with tool group:', toolErr);
         }
       } else {
-        console.warn('🔍 DEBUG: No enabled element found, adding to global annotation manager');
         annotationManager.addAnnotation(newAnnotation);
       }
 
       // Check what annotations exist after adding
       const allAnnotationsAfter = annotationManager.getAllAnnotations();
-      console.log('🔍 DEBUG: Annotations after adding:', Object.keys(allAnnotationsAfter));
 
       // Verify the annotation was added with the correct UID
       const addedAnnotation = annotationManager.getAnnotation(measurement.uid);
-      console.log('🔍 DEBUG: Annotation added successfully:', !!addedAnnotation);
-      console.log('🔍 DEBUG: Added annotation UID:', addedAnnotation?.annotationUID);
-      console.log('🔍 DEBUG: Added annotation data:', addedAnnotation?.data);
 
       // Try to find the annotation by searching through all annotations
       let foundAnnotation = null;
@@ -613,7 +587,6 @@ const connectMeasurementServiceToTools = ({
         const annotation = allAnnotationsAfter[key];
         if (annotation.annotationUID === measurement.uid) {
           foundAnnotation = annotation;
-          console.log('🔍 DEBUG: Found annotation with correct UID in key:', key);
         }
       });
 
@@ -630,7 +603,6 @@ const connectMeasurementServiceToTools = ({
 
         // Force a render of the target viewport
         if (targetViewport && targetViewport.render) {
-          console.log('🔍 DEBUG: Forcing render of target viewport after annotation creation');
           targetViewport.render();
         }
 
@@ -640,7 +612,6 @@ const connectMeasurementServiceToTools = ({
           const toolGroup = toolGroupService.getToolGroupForViewport(targetViewport.id);
           if (toolGroup) {
             const toolName = newAnnotation.metadata.toolName;
-            console.log(`🔍 DEBUG: Forcing ${toolName} tool to render annotations for viewport ${targetViewport.id}`);
 
             // Trigger annotation rendering for this specific viewport
             const viewportIds = [targetViewport.id];

@@ -278,16 +278,15 @@ export default class StaticWadoClient extends api.DICOMwebClient {
    * @returns A Promise resolving to the result of the store operation
    */
   storeInstances(options: { datasets: any[] }): Promise<any> {
-    console.log('StaticWadoClient storeInstances called', options);
-    
+
     if (this.staticWado) {
       // For staticWado mode, we need to fall back to the actual DICOMweb client implementation
       // to store the instances, so ensure we're properly configured with the XNAT endpoint
       const { datasets } = options;
-      
+
       // Get the studyInstanceUID from the first dataset if available
       const studyInstanceUID = datasets[0]?.StudyInstanceUID || '';
-      
+
       // Ensure the URL is properly set for XNAT
       let storeUrl = this.baseURL;
       if (!storeUrl.endsWith('/studies')) {
@@ -296,11 +295,7 @@ export default class StaticWadoClient extends api.DICOMwebClient {
           storeUrl = `${storeUrl}/${studyInstanceUID}`;
         }
       }
-      
-      // Log the store attempt for debugging
-      console.log('StaticWadoClient attempting to store to:', storeUrl);
-      console.log('StaticWadoClient headers:', this.headers);
-      
+
       // Use fetch directly with proper content type for DICOM
       return fetch(storeUrl, {
         method: 'POST',
@@ -311,19 +306,19 @@ export default class StaticWadoClient extends api.DICOMwebClient {
         body: new Blob([JSON.stringify(datasets)], { type: 'application/dicom' }),
         credentials: 'include'
       })
-      .then(response => {
-        if (!response.ok) {
-          console.error('Failed to store instances:', response.status, response.statusText);
-          throw new Error(`Failed to store instances: ${response.status} ${response.statusText}`);
-        }
-        return response.json().catch(() => response.text());
-      })
-      .catch(error => {
-        console.error('Error in StaticWadoClient.storeInstances:', error);
-        throw error;
-      });
+        .then(response => {
+          if (!response.ok) {
+            console.error('Failed to store instances:', response.status, response.statusText);
+            throw new Error(`Failed to store instances: ${response.status} ${response.statusText}`);
+          }
+          return response.json().catch(() => response.text());
+        })
+        .catch(error => {
+          console.error('Error in StaticWadoClient.storeInstances:', error);
+          throw error;
+        });
     }
-    
+
     // If not staticWado, use the parent class implementation
     return super.storeInstances(options);
   }

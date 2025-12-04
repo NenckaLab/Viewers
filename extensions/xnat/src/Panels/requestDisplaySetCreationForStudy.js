@@ -10,7 +10,6 @@ function requestDisplaySetCreationForStudy(
         // Use xnat_studyInstanceUID instead of lastSelectedStudyInstanceUID
         const storedUID = sessionStorage.getItem('xnat_studyInstanceUID');
         if (storedUID) {
-            console.log(`XNAT: Using StudyInstanceUID from sessionStorage: ${storedUID}`);
             StudyInstanceUID = storedUID;
         } else {
             console.error('XNAT: No StudyInstanceUID provided for display set creation and none found in sessionStorage');
@@ -32,12 +31,10 @@ function requestDisplaySetCreationForStudy(
     );
 
     if (existingDisplaySets.length > 0) {
-        console.log(`XNAT: Study ${StudyInstanceUID} already has ${existingDisplaySets.length} display sets. Not fetching again.`);
         return;
     }
 
     // If we get here, we need to create display sets for this study
-    console.log(`XNAT: Creating display sets for study: ${StudyInstanceUID}`);
     return dataSource.retrieve.series.metadata({ StudyInstanceUID, madeInClient });
 }
 

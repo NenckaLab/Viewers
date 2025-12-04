@@ -106,7 +106,6 @@ export async function fetchCustomForms(projectId: string): Promise<ParsedCustomF
       }
     });
 
-    console.log('Parsed custom forms for project:', projectId, parsedForms);
     return parsedForms;
   } catch (error) {
     console.error('Error fetching custom forms:', error);
@@ -136,7 +135,6 @@ export async function getExperimentCustomFormData(
       return {};
     }
 
-    console.log('Experiment custom form data:', experimentId, response);
     return response;
   } catch (error) {
     console.error('Error fetching custom form data:', error);
@@ -306,7 +304,6 @@ export async function getOverreadFormData(
       return {};
     }
 
-    console.log('Overread form data:', experimentId, response);
     return response;
   } catch (error) {
     console.error('Error fetching overread form data:', error);
@@ -374,7 +371,6 @@ export async function hasUserOverreadData(experimentId: string): Promise<{ hasDa
       return { hasData: false, userId: 0, username: '' };
     }
 
-    console.log('Overread data check result:', experimentId, response);
     return response;
   } catch (error) {
     console.error('Error checking user overread data:', error);
@@ -400,7 +396,6 @@ export async function getAllUsersOverreadData(experimentId: string): Promise<{ [
       return {};
     }
 
-    console.log('All users overread data:', experimentId, response);
     return response;
   } catch (error) {
     console.error('Error fetching all users overread data:', error);

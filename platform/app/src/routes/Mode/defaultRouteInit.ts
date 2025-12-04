@@ -44,13 +44,6 @@ export async function defaultRouteInit(
   function applyHangingProtocol() {
     const allDisplaySets = displaySetService.getActiveDisplaySets();
 
-    console.log('applyHangingProtocol: All display sets:', allDisplaySets.map(ds => ({
-      StudyInstanceUID: ds.StudyInstanceUID,
-      displaySetInstanceUID: ds.displaySetInstanceUID,
-      Modality: ds.Modality,
-      SeriesDescription: ds.SeriesDescription
-    })));
-
     if (!allDisplaySets || !allDisplaySets.length) {
       return;
     }
@@ -59,12 +52,6 @@ export async function defaultRouteInit(
     const displaySets = allDisplaySets.filter(displaySet => {
       return displaySet && displaySet.StudyInstanceUID;
     });
-
-    console.log('applyHangingProtocol: Filtered display sets:', displaySets.map(ds => ({
-      StudyInstanceUID: ds.StudyInstanceUID,
-      displaySetInstanceUID: ds.displaySetInstanceUID,
-      Modality: ds.Modality
-    })));
 
     if (!displaySets.length) {
       console.warn('No valid display sets found after filtering');
@@ -79,35 +66,16 @@ export async function defaultRouteInit(
     if (isComparisonView) {
       // Get unique study UIDs from display sets
       const studyUIDsFromDisplaySets = [...new Set(displaySets.map(ds => ds.StudyInstanceUID).filter(Boolean))] as string[];
-      console.log('applyHangingProtocol: Comparison view - study UIDs from display sets:', studyUIDsFromDisplaySets);
 
       // Get studies for these UIDs
       studiesForProtocol = getStudies(studyUIDsFromDisplaySets, []);
-      console.log('applyHangingProtocol: Comparison view - studies from display set UIDs:', studiesForProtocol.map(s => ({
-        StudyInstanceUID: s.StudyInstanceUID,
-        studyInstanceUIDsIndex: s.studyInstanceUIDsIndex
-      })));
     } else {
       // For regular views, use the normal approach
       studiesForProtocol = getStudies(studyInstanceUIDs, displaySets);
     }
 
-    console.log('applyHangingProtocol: Studies for protocol:', studiesForProtocol.map(s => ({
-      StudyInstanceUID: s.StudyInstanceUID,
-      studyInstanceUIDsIndex: s.studyInstanceUIDsIndex,
-      ModalitiesInStudy: s.ModalitiesInStudy
-    })));
-
     // study being displayed, and is thus the "active" study.
     const activeStudy = studiesForProtocol[0];
-
-    console.log('applyHangingProtocol: About to run hanging protocol with:', {
-      hangingProtocolId,
-      studyInstanceUIDs: isComparisonView ? studiesForProtocol.map(s => s.StudyInstanceUID) : studyInstanceUIDs,
-      activeStudy: activeStudy?.StudyInstanceUID,
-      displaySetsCount: displaySets.length,
-      studiesCount: studiesForProtocol.length
-    });
 
     // run the hanging protocol matching on the displaySets with the predefined
     // hanging protocol in the mode configuration
@@ -142,7 +110,6 @@ export async function defaultRouteInit(
       }
 
       // Before calling makeDisplaySets, log what we're passing in
-      console.log(`Making display sets with ${seriesMetadata.instances.length} instances`);
       displaySetService.makeDisplaySets(seriesMetadata.instances, { madeInClient });
     }
   );

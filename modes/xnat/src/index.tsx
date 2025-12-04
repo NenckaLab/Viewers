@@ -116,7 +116,6 @@ const xnatRoute = {
     };
   },
   init: async ({ servicesManager, extensionManager, studyInstanceUIDs }) => {
-    console.log('XNAT Route Init: Called with studyInstanceUIDs:', studyInstanceUIDs);
 
     // Parse identifiers from URL query parameters for comparison views
     const query = new URLSearchParams(window.location.search);
@@ -130,11 +129,9 @@ const xnatRoute = {
       // XNAT native approach: use experiment IDs for comparison
       // Create synthetic study UIDs based on experiment IDs with index for OHIF framework compatibility
       studyInstanceUIDs = experimentIdsFromURL.map((expId, index) => `xnat_experiment_${index}_${expId}`);
-      console.log('XNAT Route Init: Created synthetic study UIDs for experiment-based comparison:', studyInstanceUIDs);
     } else if (studyUIDsFromURL.length > 0) {
       // Traditional approach: use parsed study UIDs
       studyInstanceUIDs = studyUIDsFromURL;
-      console.log('XNAT Route Init: Parsed studyInstanceUIDs from URL:', studyInstanceUIDs);
     } else if (!isComparisonView) {
       // For single study views, keep the original studyInstanceUIDs from SessionRouter
       console.log('XNAT Route Init: Using original studyInstanceUIDs from SessionRouter:', studyInstanceUIDs);
@@ -181,7 +178,6 @@ const xnatRoute = {
 
           if (isExperimentBasedComparison) {
             // Handle experiment ID based comparison (XNAT native)
-            console.log('XNAT Route Init: Using experiment IDs for comparison:', experimentIdsParam);
             experimentIdsParam.forEach((experimentId, index) => {
               if (experimentId) {
                 // Create mapping key using the synthetic UID format that matches what we created above
@@ -190,7 +186,6 @@ const xnatRoute = {
                   projectId: params.projectId || sessionStorage.getItem('xnat_projectId'),
                   experimentId: experimentId,
                 };
-                console.log(`XNAT Route Init: Created mapping for ${mappingKey} -> experimentId: ${experimentId}`);
               }
             });
           } else {
@@ -209,7 +204,6 @@ const xnatRoute = {
               if (isComparisonView && !projectIdForUID && !experimentIdForUID) {
                 // For comparison views, we'll let the data source try to resolve
                 // each study individually rather than restricting to one experiment
-                console.log(`XNAT Route Init: Allowing dynamic resolution for study ${uid} in comparison view`);
                 return; // Skip adding a mapping, let data source resolve dynamically
               }
 
@@ -251,7 +245,6 @@ const xnatRoute = {
           params.studyMappings = studyMappings;
         }
 
-        console.log('XNAT Mode Route Init: Initializing data source with params:', params);
         await dataSource.initialize({ params, query });
       } else {
         console.error('XNAT Mode Route Init: Could not find active data source or initialize function.');
@@ -275,7 +268,6 @@ const xnatRoute = {
       // For multi-study scenarios or explicit comparison requests, use the built-in hpCompare protocol
       hangingProtocolId = '@ohif/hpCompare';
       hangingProtocolService.setActiveProtocolIds(['@ohif/hpCompare', 'default']);
-      console.log('XNAT Route Init: Set hanging protocol for multi-study comparison using hpCompare');
     } else {
       // For single study, use the default hanging protocols
       // In overread mode, prioritize MPR if the scan supports it
@@ -314,17 +306,14 @@ const xnatRoute = {
             name: 'Overread Default (MPR)',
           };
           hangingProtocolService.addProtocol('default', overreadDefaultProtocol);
-          console.log('XNAT Route Init: Replaced default protocol with MPR for overread mode');
         }
       }
 
-      console.log(`XNAT Route Init: Set hanging protocols for single study${isOverreadMode ? ' (Overread Mode - MPR prioritized)' : ''}`);
     }
 
     // Now call defaultRouteInit
     const [dataSourceForDefaultRoute] = extensionManager.getActiveDataSource();
 
-    console.log('XNAT Route Init: About to call defaultRouteInit with studyInstanceUIDs:', studyInstanceUIDs);
 
     // @ts-ignore
     const result = await defaultRouteInit({
@@ -334,9 +323,6 @@ const xnatRoute = {
       dataSource: dataSourceForDefaultRoute,
     }, hangingProtocolId);
 
-    console.log('XNAT Route Init: defaultRouteInit returned:', result);
-
-    console.log('XNAT Route Init: Returning studyInstanceUIDs:', studyInstanceUIDs);
     // For comparison views, return null to prevent core routing from processing original UIDs
     return isComparisonView ? null : studyInstanceUIDs;
   },
@@ -367,7 +353,6 @@ const modeInstance = {
     // Store overread mode flag in services manager for use in layout
     if (overreadMode === 'true') {
       servicesManager.services.isOverreadMode = true;
-      console.log('XNAT Mode: Overread mode detected');
     }
 
     // Set session map parameters if available
@@ -423,7 +408,6 @@ const modeInstance = {
       }
     } else if (hasStudyInstanceUIDs || hasMultipleExperiments) {
       // We have StudyInstanceUIDs or multiple experiments, let the route init handle loading
-      console.log('XNAT Mode Init - StudyInstanceUIDs or multiple experiments found, skipping session router initialization');
     } else {
       console.warn('XNAT Mode Init - Missing required params for session router');
     }
@@ -467,15 +451,7 @@ const modeInstance = {
     toolGroupService.destroyToolGroup('default');
     toolGroupService.createToolGroupAndAddTools('default', allTools);
 
-    // Log the current mode state
     const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
-    console.log('XNAT Mode Enter:', isOverreadMode ? 'Overread Mode' : 'Regular Mode');
-
-    // Add visual indicator for overread mode
-    if (isOverreadMode) {
-      console.log('🎯 OVERREAD MODE ACTIVE - Custom forms panel should be visible');
-      console.log('📋 Available panels:', servicesManager.services.panelService?.getPanels()?.map(p => p.name) || 'Not available');
-    }
 
     const {
       customizationService,

@@ -38,7 +38,7 @@ export const retrieveMeasurementCollections = async (
   try {
     // Get session information from servicesManager or fallback to sessionMap
     let projectId, subjectId, experimentId;
-    
+
     try {
       // Try to get from servicesManager first (modern approach)
       const { sessionService } = servicesManager.services;
@@ -190,12 +190,12 @@ const retrieveMeasurementCollection = async (
 
     const collection = result[0];
     const fileType = collection.collection;
-    
+
     if (fileType === collectionInfo.collectionType) {
       // The URIs fetched have an additional /, so remove it.
       const uri = collection.URI.slice(1);
       const collectionObject = await fetchJSON(uri).promise;
-      
+
       if (!collectionObject) {
         throw new Error('Error importing the measurement file.');
       }
@@ -206,7 +206,6 @@ const retrieveMeasurementCollection = async (
         servicesManager,
       });
 
-      console.log(`✅ Successfully imported collection: ${collectionInfo.name}`);
     } else {
       throw new Error(
         `Collection ${collectionInfo.name} has unsupported filetype: ${collectionInfo.collectionType}.`
@@ -228,7 +227,7 @@ const importMeasurementCollections = async (
 
   for (let i = 0; i < numCollectionsToParse; i++) {
     const collectionInfo = collectionsToParse[i];
-    
+
     if (callbacks.updateImportingText) {
       const importingText = [
         `Collection: ${numCollectionsParsed + 1}/${numCollectionsToParse}`,
@@ -236,17 +235,17 @@ const importMeasurementCollections = async (
       ];
       callbacks.updateImportingText(importingText);
     }
-    
+
     if (callbacks.updateProgress) {
       callbacks.updateProgress('');
     }
-    
+
     try {
       await retrieveMeasurementCollection(collectionInfo, servicesManager, callbacks);
       numCollectionsParsed++;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
+
       // Use servicesManager for notifications if available
       if (servicesManager?.services?.uiNotificationService) {
         servicesManager.services.uiNotificationService.show({
@@ -255,11 +254,11 @@ const importMeasurementCollections = async (
           type: 'error',
         });
       }
-      
+
       console.error(
         `Error importing collection '${collectionInfo.name}': ${errorMessage}`
       );
-      
+
       // Continue with next collection instead of stopping
       numCollectionsParsed++;
     }

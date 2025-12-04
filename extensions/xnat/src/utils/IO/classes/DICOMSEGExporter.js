@@ -21,14 +21,14 @@ export default class DICOMSEGExporter {
     }
 
     get experimentID() {
-        return this._experimentID;
-    }
-    /**
-     * exportToXNAT - Exports the DICOMSEG to XNAT.
-     *
-     * @param {boolean} overwrite - Whether to overwrite existing collection
-     * @returns {Promise<void>}
-     */
+            return this._experimentID;
+        }
+        /**
+         * exportToXNAT - Exports the DICOMSEG to XNAT.
+         *
+         * @param {boolean} overwrite - Whether to overwrite existing collection
+         * @returns {Promise<void>}
+         */
     async exportToXNAT(overwrite = false) {
         const csrfToken = await fetchCSRFToken();
         const csrfTokenParameter = `XNAT_CSRF=${csrfToken}`;
@@ -61,8 +61,6 @@ export default class DICOMSEGExporter {
             throw Error(message);
         }
 
-        console.log('PUT successful');
-
         return;
     }
 
@@ -79,7 +77,6 @@ export default class DICOMSEGExporter {
             const xhr = new XMLHttpRequest();
 
             xhr.onload = () => {
-                console.log(`Request returned, status: ${xhr.status}`);
                 if (xhr.status === 200 || xhr.status === 201) {
                     resolve();
                 } else {
@@ -88,7 +85,6 @@ export default class DICOMSEGExporter {
             };
 
             xhr.onerror = () => {
-                console.log(`Request returned, status: ${xhr.status}`);
                 reject(xhr.responseText || xhr.statusText);
             };
 

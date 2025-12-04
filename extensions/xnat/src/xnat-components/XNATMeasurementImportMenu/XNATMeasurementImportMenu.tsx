@@ -77,7 +77,6 @@ const XNATMeasurementImportMenu: React.FC<XNATMeasurementImportMenuProps> = ({
       try {
         // Check if commandsManager is available
         if (commandsManager) {
-          console.log('ImportMenu: Attempting to use modern XNATMeasurementApi');
           await commandsManager.runCommand('XNATMeasurementApi', {
             action: 'importCollection',
             collectionData: {
@@ -86,25 +85,19 @@ const XNATMeasurementImportMenu: React.FC<XNATMeasurementImportMenuProps> = ({
               collectionObject: measurementData,
             },
           });
-          console.log('ImportMenu: Modern API import completed successfully');
         } else {
           // Fallback to direct import if commandsManager is not available
-          console.warn('CommandsManager not available, using direct import');
           await importMeasurementCollection({
             collectionJSON: measurementData,
             servicesManager,
           });
         }
       } catch (apiError) {
-        console.warn('Modern API failed, falling back to direct import:', apiError);
-        
         // Fallback to direct import
-        console.log('ImportMenu: Using fallback direct import');
         const fallbackResult = await importMeasurementCollection({
           collectionJSON: measurementData,
           servicesManager,
         });
-        console.log('ImportMenu: Fallback import result:', fallbackResult);
       }
 
       uiNotificationService.show({
@@ -158,9 +151,8 @@ const XNATMeasurementImportMenu: React.FC<XNATMeasurementImportMenuProps> = ({
                 {collections.map(collection => (
                   <div
                     key={collection.id}
-                    className={`xnat-measurement-card ${
-                      importing === collection.id ? 'importing' : ''
-                    } ${!collection.isForCurrentSeries ? 'other-series' : ''}`}
+                    className={`xnat-measurement-card ${importing === collection.id ? 'importing' : ''
+                      } ${!collection.isForCurrentSeries ? 'other-series' : ''}`}
                     title={
                       !collection.isForCurrentSeries
                         ? 'This collection belongs to another series in this study. It will be imported but will not be visible until you switch to the correct series.'

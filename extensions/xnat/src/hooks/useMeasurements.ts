@@ -26,8 +26,6 @@ function mapMeasurementToDisplay(measurement, displaySetService) {
   // Add baseDisplayText to primary if it exists
   if (baseDisplayText && baseDisplayText.primary) {
     displayText.primary.push(...baseDisplayText.primary);
-  } else {
-    console.log(`🔍 DEBUG: baseDisplayText.primary not found or empty:`, baseDisplayText);
   }
 
   // Add finding sites to primary
@@ -50,7 +48,6 @@ function mapMeasurementToDisplay(measurement, displaySetService) {
     label,
   };
 
-  console.log(`🔍 DEBUG: mapMeasurementToDisplay returning for ${measurement.uid}:`, result);
   return result;
 }
 

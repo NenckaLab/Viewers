@@ -29,9 +29,6 @@ export const createXNATCommands = (
         },
 
         XNATStoreReport: ({ label, dataSourceName }) => {
-            console.log(`Storing report to XNAT with label: ${label} and data source: ${dataSourceName}...`);
-            // In a real implementation, you would use servicesManager to get
-            // the necessary services to store the report to XNAT.
             const { uiNotificationService } = servicesManager.services;
             uiNotificationService.show({
                 title: 'Store SR Report',
@@ -86,9 +83,6 @@ export const createXNATCommands = (
         },
 
         downloadRTSS: ({ segmentationId }) => {
-            console.log(`Downloading RTSS for segmentation ${segmentationId}...`);
-            // In a real implementation, you would use servicesManager to get
-            // the segmentation service and download the RTSS.
             const { uiNotificationService } = servicesManager.services;
             uiNotificationService.show({
                 title: 'Download RTSS',

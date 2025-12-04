@@ -294,7 +294,6 @@ describe('updateSegmentationStats', () => {
   });
 
   it('should add volume stat when volume exists in segmentStats and readableText', async () => {
-    console.log('mockSegmentation', mockSegmentation);
 
     const mockStatsWithVolume = {
       '1': {

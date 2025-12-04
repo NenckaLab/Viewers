@@ -72,13 +72,11 @@ const getStudiesfromDisplaySets = (displaysets): StudyMetadata[] => {
  * in the original order, as specified.
  */
 const getStudiesFromUIDs = (studyUids: string[]): StudyMetadata[] => {
-  console.log('getStudiesFromUIDs: Called with studyUids:', studyUids);
   if (!studyUids?.length) {
     return;
   }
   const result = studyUids.map((uid, index) => {
     const study = DicomMetadataStore.getStudy(uid);
-    console.log(`getStudiesFromUIDs: Study ${uid} - found in store:`, !!study);
     // If study not found in store, create a minimal placeholder
     if (!study) {
       console.warn(`Study ${uid} not found in DicomMetadataStore, creating placeholder`);
@@ -102,31 +100,22 @@ const getStudiesFromUIDs = (studyUids: string[]): StudyMetadata[] => {
     // Add index to existing study if not present
     if (study && typeof study.studyInstanceUIDsIndex === 'undefined') {
       study.studyInstanceUIDsIndex = index;
-      console.log(`getStudiesFromUIDs: Added studyInstanceUIDsIndex ${index} to existing study ${uid}`);
     }
     return study;
   });
-  console.log('getStudiesFromUIDs: Returning studies:', result.map(s => ({
-    StudyInstanceUID: s.StudyInstanceUID,
-    studyInstanceUIDsIndex: s.studyInstanceUIDsIndex
-  })));
+
   return result;
 };
 
 /** Gets the array of studies */
 const getStudies = (studyUids?: string[], displaySets): StudyMetadata[] => {
-  console.log('getStudies: Called with studyUids:', studyUids, 'displaySets count:', displaySets?.length);
-
   const fromUIDs = getStudiesFromUIDs(studyUids);
-  console.log('getStudies: getStudiesFromUIDs returned:', fromUIDs?.length || 0, 'studies');
 
   if (fromUIDs) {
-    console.log('getStudies: Returning studies from UIDs');
     return fromUIDs;
   }
 
   const fromDisplaySets = getStudiesfromDisplaySets(displaySets);
-  console.log('getStudies: Returning studies from display sets:', fromDisplaySets?.length || 0, 'studies');
   return fromDisplaySets;
 };
 
