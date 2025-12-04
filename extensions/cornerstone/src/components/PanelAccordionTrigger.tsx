@@ -8,7 +8,6 @@ function onClickDefault(e) {
     console.log('No onClick function', group);
     return;
   }
-  console.log('onClickDefault');
   e.preventDefault();
   e.stopPropagation();
 

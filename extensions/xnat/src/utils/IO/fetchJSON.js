@@ -19,7 +19,6 @@ if (
                 const baseUrl = xnatRootUrl.endsWith('/') ? xnatRootUrl : xnatRootUrl + '/';
                 const url = `${baseUrl}${cleanRoute}`;
                 xhr.onload = () => {
-                    console.log(`Request returned, status: ${xhr.status}`);
                     if (xhr.status === 200) {
                         resolve(xhr.response);
                     } else {

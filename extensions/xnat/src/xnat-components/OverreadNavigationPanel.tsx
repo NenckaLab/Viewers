@@ -32,7 +32,7 @@ interface OverreadNavigationPanelProps {
  * @returns component
  */
 const OverreadNavigationPanel: React.FC<OverreadNavigationPanelProps> = ({ servicesManager }) => {
-  
+
   const [activeSubjects, setActiveSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,21 +45,17 @@ const OverreadNavigationPanel: React.FC<OverreadNavigationPanelProps> = ({ servi
    */
   useEffect(() => {
     setLoading(true);
-    
+
     const activeSubjectId = sessionMap.getSubject();
-    console.log('OverreadNavigationPanel: Active subject ID:', activeSubjectId);
-    console.log(`/data/archive/subjects/${activeSubjectId}?format=json`);
     fetchJSON(`/data/archive/subjects/${activeSubjectId}?format=json`)
       .promise.then(result => {
-        
+
         if (!result) {
           console.error('OverreadNavigationPanel: No subject data returned from API');
           setError('No subject data returned');
           setLoading(false);
           return;
         }
-
-        console.log('OverreadNavigationPanel: Raw API response:', result);
 
         // Extract subject data from the nested structure
         const subjectData = result.items && result.items[0];
@@ -81,8 +77,6 @@ const OverreadNavigationPanel: React.FC<OverreadNavigationPanelProps> = ({ servi
           }
         }
 
-        console.log('OverreadNavigationPanel: Extracted scans:', scans);
-
         // Create a subject object with the extracted data
         const subject: Subject = {
           ID: subjectData.data_fields?.ID || activeSubjectId,
@@ -98,7 +92,7 @@ const OverreadNavigationPanel: React.FC<OverreadNavigationPanelProps> = ({ servi
         console.error('OverreadNavigationPanel: Error fetching XNAT subjects:', err);
         setError('Failed to load subjects');
         setLoading(false);
-        
+
         // Use notification service if available
         if (uiNotificationService) {
           uiNotificationService.show({

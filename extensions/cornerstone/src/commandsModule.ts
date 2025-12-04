@@ -543,12 +543,12 @@ function commandsModule({
       const presentationData =
         referencedImageId || options?.FrameOfReferenceUID
           ? {
-              ...presentations.positionPresentation,
-              viewReference: {
-                referencedImageId,
-                ...options,
-              },
-            }
+            ...presentations.positionPresentation,
+            viewReference: {
+              referencedImageId,
+              ...options,
+            },
+          }
           : presentations.positionPresentation;
 
       if (previousReferencedDisplaySetStoreKey) {
@@ -2263,20 +2263,20 @@ function commandsModule({
           rotationMode === 'apply'
             ? (currentRotation + rotation + 360) % 360
             : (() => {
-                // In 'set' mode, account for the effect horizontal/vertical flips
-                // have on the perceived rotation direction. A single flip mirrors
-                // the image and inverses rotation direction, while two flips
-                // restore the original parity. We therefore invert the rotation
-                // angle when an odd number of flips are applied so that the
-                // requested absolute rotation matches the user expectation.
-                const { flipHorizontal = false, flipVertical = false } =
-                  viewport.getViewPresentation();
+              // In 'set' mode, account for the effect horizontal/vertical flips
+              // have on the perceived rotation direction. A single flip mirrors
+              // the image and inverses rotation direction, while two flips
+              // restore the original parity. We therefore invert the rotation
+              // angle when an odd number of flips are applied so that the
+              // requested absolute rotation matches the user expectation.
+              const { flipHorizontal = false, flipVertical = false } =
+                viewport.getViewPresentation();
 
-                const flipsParity = (flipHorizontal ? 1 : 0) + (flipVertical ? 1 : 0);
-                const effectiveRotation = flipsParity % 2 === 1 ? -rotation : rotation;
+              const flipsParity = (flipHorizontal ? 1 : 0) + (flipVertical ? 1 : 0);
+              const effectiveRotation = flipsParity % 2 === 1 ? -rotation : rotation;
 
-                return (effectiveRotation + 360) % 360;
-              })();
+              return (effectiveRotation + 360) % 360;
+            })();
         viewport.setViewPresentation({ rotation: newRotation });
         viewport.render();
       }
@@ -2299,16 +2299,16 @@ function commandsModule({
       const { newAnnotation, deleting } = options;
       const renderingEngines = getRenderingEngines();
       const viewports = renderingEngines.flatMap(re => re.getViewports());
-      
+
       let validViewport = null;
-      
+
       // First, try to find a viewport that matches the frame of reference UID
       if (FrameOfReferenceUID) {
         validViewport = viewports.find(
           vp => vp.getFrameOfReferenceUID() === FrameOfReferenceUID
         );
       }
-      
+
       // If no frame of reference match, try to find a viewport that displays the referenced image
       if (!validViewport && annotation.metadata?.referencedImageId) {
         validViewport = viewports.find(vp => {
@@ -2320,7 +2320,7 @@ function commandsModule({
           }
         });
       }
-      
+
       // If still no match, use the first available viewport (fallback)
       if (!validViewport && viewports.length > 0) {
         validViewport = viewports[0];
@@ -2331,7 +2331,6 @@ function commandsModule({
         return;
       }
 
-      console.log(`🔍 DEBUG: Creating annotation memo for viewport ${validViewport.id}`);
       cornerstoneTools.AnnotationTool.createAnnotationMemo(validViewport.element, annotation, {
         newAnnotation,
         deleting,

@@ -28,7 +28,6 @@ class XNATMeasurementApi {
 
   init() {
     // Initialize the measurement API with services manager
-    console.log('XNATMeasurementApi initialized for OHIF v3');
   }
 
   /**
@@ -56,8 +55,6 @@ class XNATMeasurementApi {
 
     if (!measurementData || measurementData.cancelled) return;
 
-    console.log('XNATMeasurementApi: Measurement completed', { toolType, measurementData });
-
     // The measurement service will handle the actual measurement creation
     // This is just for XNAT-specific logic if needed
   }
@@ -71,8 +68,6 @@ class XNATMeasurementApi {
     const { measurementReference } = measurementData;
 
     if (!measurementReference) return;
-
-    console.log('XNATMeasurementApi: Measurement modified', { toolType, measurementReference });
 
     // Trigger viewport refresh
     this.refreshViewports(element);
@@ -88,8 +83,6 @@ class XNATMeasurementApi {
 
     if (!measurementReference) return;
 
-    console.log('XNATMeasurementApi: Measurement removed', { toolType, measurementReference });
-
     if (this.removeMeasurement(measurementReference)) {
       this.refreshViewports(element);
     }
@@ -100,8 +93,6 @@ class XNATMeasurementApi {
    */
   removeMeasurement(measurementReference: any, removeToolState = false): boolean {
     const { uuid, toolType, imageId, displaySetInstanceUID } = measurementReference;
-
-    console.log('XNATMeasurementApi: Removing measurement', { uuid, toolType, imageId });
 
     // Use the measurement service to remove the measurement
     if (this._servicesManager?.services?.measurementService) {
@@ -128,21 +119,12 @@ class XNATMeasurementApi {
       return;
     }
 
-    console.log('XNATMeasurementApi: Adding imported collection', {
-      collectionLabel,
-      displaySetInstanceUID,
-    });
-
     // Use the modern importMeasurementCollection function
     try {
-      console.log('XNATMeasurementApi: Starting import with collectionObject:', collectionObject);
-      
       const importResult = await importMeasurementCollection({
         collectionJSON: collectionObject,
         servicesManager: this._servicesManager,
       });
-
-      console.log('XNATMeasurementApi: Import result:', importResult);
 
       // Store the collection info for reference
       const seriesCollection = this.getMeasurementCollections(displaySetInstanceUID);
@@ -158,18 +140,9 @@ class XNATMeasurementApi {
       if (this._servicesManager?.services?.measurementService) {
         const { measurementService } = this._servicesManager.services;
         const measurements = measurementService.getMeasurements();
-        console.log('XNATMeasurementApi: Total measurements in service after import:', measurements.length);
-        
-        // Log the last few measurements to verify they were added
-        const recentMeasurements = measurements.slice(-5);
-        console.log('XNATMeasurementApi: Recent measurements:', recentMeasurements.map(m => ({
-          uid: m.uid,
-          toolName: m.toolName,
-          label: m.label
-        })));
+
       }
 
-      console.log('XNATMeasurementApi: Successfully imported collection', collectionLabel);
     } catch (error) {
       console.error('XNATMeasurementApi: Error importing collection', error);
       throw error;
@@ -180,8 +153,6 @@ class XNATMeasurementApi {
    * Remove an imported collection
    */
   removeImportedCollection(collectionUuid: string, displaySetInstanceUID: string): void {
-    console.log('XNATMeasurementApi: Removing imported collection', { collectionUuid, displaySetInstanceUID });
-
     const seriesCollection = this.getMeasurementCollections(displaySetInstanceUID);
     if (!seriesCollection) return;
 
@@ -192,7 +163,6 @@ class XNATMeasurementApi {
 
     if (index >= 0) {
       seriesCollection.importedCollections.splice(index, 1);
-      console.log('XNATMeasurementApi: Removed imported collection', collectionUuid);
     }
   }
 
@@ -232,10 +202,10 @@ class XNATMeasurementApi {
   getDisplaySetInstanceUID(SeriesInstanceUID: string): string | undefined {
     try {
       const { displaySetService } = this._servicesManager.services;
-      
+
       // Try different methods to get display sets (OHIF v3 compatibility)
       let displaySets = [];
-      
+
       // Method 1: Try getActiveDisplaySets (most common in OHIF v3)
       if (displaySetService.getActiveDisplaySets) {
         displaySets = displaySetService.getActiveDisplaySets();
@@ -252,7 +222,7 @@ class XNATMeasurementApi {
       else if (this._servicesManager.services.viewportGridService) {
         const { viewportGridService } = this._servicesManager.services;
         const { viewports } = viewportGridService.getState();
-        
+
         // Get display sets from active viewports
         for (const [viewportId, viewport] of viewports) {
           if (viewport.displaySetInstanceUIDs) {
@@ -266,15 +236,12 @@ class XNATMeasurementApi {
         }
       }
 
-      console.log('XNATMeasurementApi: Found display sets:', displaySets.length);
-
       for (const displaySet of displaySets) {
         if (displaySet.SeriesInstanceUID === SeriesInstanceUID) {
-          console.log('XNATMeasurementApi: Found matching display set:', displaySet.displaySetInstanceUID);
           return displaySet.displaySetInstanceUID;
         }
       }
-      
+
       console.warn('XNATMeasurementApi: No matching display set found for series:', SeriesInstanceUID);
     } catch (error) {
       console.warn('XNATMeasurementApi: Error getting display set UID', error);
@@ -291,11 +258,11 @@ class XNATMeasurementApi {
       if (this._servicesManager?.services?.cornerstoneViewportService) {
         const { cornerstoneViewportService } = this._servicesManager.services;
         const renderingEngine = cornerstoneViewportService.getRenderingEngine();
-        
+
         if (renderingEngine) {
-          const viewportIds = renderingEngine.getViewports().map(viewport => viewport.id);
-          viewportIds.forEach(viewportId => {
-            const viewport = renderingEngine.getViewport(viewportId);
+          // Always get fresh viewport references
+          const viewports = renderingEngine.getViewports();
+          viewports.forEach(viewport => {
             if (viewport && viewport.render) {
               viewport.render();
             }

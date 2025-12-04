@@ -167,7 +167,6 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
           }
 
           const retrieveSeriesMetadataAsync = async () => {
-            console.log(`XNATDataSource: retrieveSeriesMetadataAsync called for StudyInstanceUID: ${StudyInstanceUID}`);
 
             // Check if this is a comparison view (declare early for scope)
             const isComparisonView = ['@ohif/mrSubjectComparison', '@ohif/hpCompare'].includes((configManager.getConfig() as any)?.xnat?.hangingProtocolId);
@@ -194,11 +193,8 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                 const parts = StudyInstanceUID.split('_');
                 if (parts.length >= 4) {
                   resolvedExperimentId = parts.slice(3).join('_'); // Join back in case experimentId contains underscores
-                  console.log(`XNATDataSource: Extracted experimentId ${resolvedExperimentId} from synthetic UID ${StudyInstanceUID}`);
                 }
               }
-
-              console.log(`XNATDataSource: For ${StudyInstanceUID} - resolvedProjectId: ${resolvedProjectId}, resolvedExperimentId: ${resolvedExperimentId}, isSynthetic: ${isSyntheticExperimentUID}, isComparisonView: ${isComparisonView}`);
 
               if (!resolvedProjectId || !resolvedExperimentId) {
                 const parsed = getXNATStatusFromStudyInstanceUID(

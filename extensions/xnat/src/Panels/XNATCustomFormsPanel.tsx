@@ -111,13 +111,11 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
   // Get current user information
   const getCurrentUser = useCallback(async () => {
     if (!experimentId) {
-      console.log('No experiment ID available to get user info');
       return null;
     }
 
     try {
       const userData = await hasUserOverreadData(experimentId);
-      console.log('Current user data:', userData);
       return {
         userId: userData.userId,
         username: userData.username
@@ -178,14 +176,12 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         console.log('SubjectId from URL:', subjectIdFromUrl);
       }
       setAvailableExperiments(experiments);
-      console.log('Detected multiple experiments from URL:', experiments);
     } else {
       // Check session map for multiple sessions
       // @ts-ignore - getSession() without parameters returns all sessions
       const sessions = sessionMap.getSession();
       if (Array.isArray(sessions) && sessions.length > 1) {
         setAvailableExperiments(sessions);
-        console.log('Detected multiple experiments from session map:', sessions);
       }
     }
   }, []); // Only run once on mount
@@ -195,15 +191,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     const overreadMode = detectOverreadMode();
     setIsOverreadMode(overreadMode);
 
-    console.log('XNAT Custom Forms Panel - Debug Info:', {
-      experimentId,
-      projectId,
-      subjectId,
-      isOverreadMode: overreadMode,
-      availableExperiments: availableExperiments,
-      selectedExperimentId,
-      urlParams: Object.fromEntries(new URLSearchParams(window.location.search)),
-    });
   }, [experimentId, projectId, subjectId, detectOverreadMode, selectedExperimentId, availableExperiments]);
 
   // Load custom forms for the project (form definitions)
@@ -216,16 +203,13 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     try {
       setLoading(true);
       setError('');
-      console.log('Loading custom forms for project:', projectId, subjectId);
       const forms = await fetchCustomForms(projectId);
-      console.log('Loaded custom forms:', forms);
       setCustomForms(forms);
 
       // Automatically select the first form if available
       if (forms.length > 0) {
         const firstFormUuid = forms[0].uuid;
         setSelectedFormUuid(firstFormUuid);
-        console.log('Auto-selected first form:', firstFormUuid);
       }
     } catch (err) {
       console.error('Failed to load custom forms:', err);
@@ -250,7 +234,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     try {
       setLoading(true);
       setError('');
-      console.log('Loading form data for experiment:', experimentId, subjectId, projectId, 'overread mode:', isOverreadMode);
 
       // In overread mode, try overread API first, fall back to regular API
       let data;
@@ -259,20 +242,14 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
           data = await getOverreadFormData(experimentId, selectedFormUuid);
           // If overread API returns no data (empty object), fall back to regular API
           if (!data || Object.keys(data).length === 0) {
-            console.log('No overread data found, falling back to regular API');
             data = await getExperimentCustomFormData(experimentId, selectedFormUuid);
           }
         } catch (error) {
-          console.log('Overread API failed, falling back to regular API:', error);
           data = await getExperimentCustomFormData(experimentId, selectedFormUuid);
         }
       } else {
         data = await getExperimentCustomFormData(experimentId, selectedFormUuid);
       }
-
-      console.log('Loaded form data:', data);
-      console.log('Selected form UUID:', selectedFormUuid);
-      setFormData(data);
 
       // Detect form structures from existing data
       const templates = detectFormStructure(data);
@@ -280,8 +257,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
 
       // If we have a selected form, load its data for editing
       if (selectedFormUuid) {
-        console.log('Processing form data for selected form:', selectedFormUuid);
-        console.log('Raw data structure:', data);
         let formData = null;
 
         // Check for different data structures
@@ -301,16 +276,12 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         if (!formData) {
           const currentUserId = currentUser?.userId?.toString();
           if (currentUserId && data[currentUserId]) {
-            console.log(`Found data under user ID key "${currentUserId}":`, data[currentUserId]);
             formData = data[currentUserId];
           } else if (data["1"]) {
             // Fallback to "1" for backward compatibility
-            console.log('Found data under fallback "1" key:', data["1"]);
             formData = data["1"];
           }
         }
-
-        console.log('Final formData result:', formData);
 
         // Also check for flattened fields (formUuid_fieldName format)
         if (!formData) {
@@ -335,7 +306,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
 
         if (formData) {
           // Use existing data
-          console.log('Setting editing data from existing data:', formData);
           setEditingData(formData);
         } else {
           // Initialize form with field definitions from the selected form
@@ -345,7 +315,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
             selectedForm.fields.forEach(field => {
               initialData[field.key] = '';
             });
-            console.log('Initializing empty form data:', initialData);
             setEditingData(initialData);
           }
         }
@@ -356,7 +325,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         try {
           const overreadDataCheck = await hasUserOverreadData(experimentId);
           setUserHasOverreadData(overreadDataCheck.hasData);
-          console.log('User has overread data:', overreadDataCheck);
         } catch (overreadCheckError) {
           console.warn('Failed to check user overread data:', overreadCheckError);
           setUserHasOverreadData(false);
@@ -463,9 +431,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         overreadDetails: formData
       };
 
-      console.log('Sending notification to URL:', url);
-      console.log('Request body:', requestBody);
-
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -475,9 +440,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         credentials: 'include', // Include cookies for authentication
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Error response body:', errorText);
@@ -485,7 +447,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
       }
 
       const result = await response.json();
-      console.log('Overread completion notification sent:', result);
       return result;
     } catch (error) {
       console.error('Failed to send overread completion notification:', error);
@@ -524,8 +485,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         })
       };
 
-      console.log('Saving form data with user info:', formDataWithUser);
-
       // Use overread API if in overread mode, otherwise use regular API
       const updatedData = isOverreadMode
         ? await updateOverreadFormData(experimentId, selectedFormUuid, formDataWithUser)
@@ -533,11 +492,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
 
       setFormData(updatedData);
       setSuccess('Form data saved successfully');
-      console.log('Editing data:', editingData);
-      console.log('Project ID:', projectId);
-      console.log('Experiment ID:', experimentId);
-      console.log('Selected form UUID:', selectedFormUuid);
-      console.log('Overread mode:', isOverreadMode);
 
       // Always send overread completion notification since this is always an overread form
       if (projectId) {
@@ -547,8 +501,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
             projectId,
             formDataWithUser
           );
-
-          console.log('Overread completion notification sent:', notificationResult);
 
           // Update success message to include notification info
           if (notificationResult.success) {
@@ -623,7 +575,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
       getCurrentUser().then(userInfo => {
         if (userInfo) {
           setCurrentUser(userInfo);
-          console.log('Current user loaded:', userInfo);
         }
       });
     }

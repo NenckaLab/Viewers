@@ -9,15 +9,12 @@ import { getEnabledElement } from '@cornerstonejs/core';
 import { DicomMetadataStore } from '@ohif/core';
 import { triggerAnnotationRenderForViewportIds } from '@cornerstonejs/tools/utilities';
 
-// Import utility functions
 import { getMeasurementSource } from './utils/measurementSourceUtils';
 import { getImageIdAndDisplaySetInfo } from './utils/imageIdUtils';
 import { catmullRomSpline } from './utils/splineUtils';
 import { identityMapping } from './utils/identityMapping';
 
-// Import protection system
 import { setupRemovalProtection, recentlyImportedMeasurements } from './protection/removalProtection';
-// Import tool handlers
 import { processLengthTool } from './handlers/lengthToolHandler';
 import { processRectangleROI, processEllipticalROI } from './handlers/roiToolHandler';
 
@@ -204,7 +201,6 @@ export async function importMeasurementCollection({
           });
 
           if (!hasAnyFrameOfRef) {
-            console.log(`🔍 DEBUG: No viewport has frame of reference, will create annotation without one`);
             measurementFrameOfReferenceUID = null; // Use null instead of undefined to be explicit
           }
         }
@@ -231,7 +227,6 @@ export async function importMeasurementCollection({
           });
 
           if (!hasMatchingFrameOfRef) {
-            console.log(`🔍 DEBUG: No viewport has matching frame of reference ${measurementFrameOfReferenceUID}, removing it`);
             measurementFrameOfReferenceUID = null;
           }
         }
@@ -274,8 +269,6 @@ export async function importMeasurementCollection({
       if (toolName === 'EllipticalRoi' || toolName === 'EllipticalROI') {
         toolName = 'EllipticalROI';
       }
-
-      console.log(`🔍 DEBUG: Resolved toolName: ${toolName} from im.type=${im.type}, im.toolType=${im.toolType}, im.toolName=${im.toolName}`);
 
       const {
         uuid,
@@ -321,12 +314,9 @@ export async function importMeasurementCollection({
 
     // Extract points from handles
     const handles = im.data?.handles;
-    console.log(`DEBUG: Initial handles for ${im.uuid}:`, handles);
-    console.log(`DEBUG: Initial im.data for ${im.uuid}:`, im.data);
 
     if (handles) {
       if (handles.points && Array.isArray(handles.points)) {
-        console.log(`DEBUG: Found points array in handles with ${handles.points.length} points`);
         measurement.points = handles.points.map((p: any) => {
           if (Array.isArray(p)) {
             return [p[0], p[1], p[2] || zCoord];
@@ -344,8 +334,6 @@ export async function importMeasurementCollection({
         measurement.points = pointHandles.map((p: any) => [p.x, p.y, p.z || zCoord]);
       }
     }
-
-    console.log(`DEBUG: After points extraction, measurement.points for ${im.uuid}:`, measurement.points);
 
     // Extract displayText from the measurements array (skip for Length tools as we'll set it later)
     const stats = im.measurements;
@@ -914,6 +902,7 @@ export async function importMeasurementCollection({
                     const { cornerstoneViewportService } = servicesManager.services;
                     const renderingEngine = cornerstoneViewportService?.getRenderingEngine();
                     if (renderingEngine) {
+                      // Always get fresh viewport references
                       const viewports = renderingEngine.getViewports();
                       let hasMatchingFrameOfRef = false;
 
@@ -947,6 +936,7 @@ export async function importMeasurementCollection({
               const { cornerstoneViewportService } = servicesManager.services;
               const renderingEngine = cornerstoneViewportService?.getRenderingEngine();
               if (renderingEngine) {
+                // Always get fresh viewport references
                 const viewports = renderingEngine.getViewports();
 
                 viewports.forEach(viewport => {
@@ -1023,7 +1013,9 @@ export async function importMeasurementCollection({
               });
 
               const { toolGroupService } = servicesManager.services;
-              const viewportIds = cornerstoneViewportService.getRenderingEngine().getViewports().map(viewport => viewport.id);
+              // Always get fresh viewport references from the rendering engine
+              const renderingEngine = cornerstoneViewportService.getRenderingEngine();
+              const viewportIds = renderingEngine.getViewports().map(viewport => viewport.id);
 
               viewportIds.forEach(viewportId => {
                 try {
@@ -1044,7 +1036,8 @@ export async function importMeasurementCollection({
                     }
 
                     try {
-                      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+                      // Always get fresh viewport reference
+                      const viewport = renderingEngine.getViewport(viewportId);
                       if (viewport && viewport.render) {
                         viewport.render();
                       }
@@ -1061,7 +1054,8 @@ export async function importMeasurementCollection({
                         const toolInstance = toolGroup.getToolInstance('SplineROI');
                       }
 
-                      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+                      // Always get fresh viewport reference
+                      const viewport = renderingEngine.getViewport(viewportId);
                       if (viewport && viewport.element) {
                         try {
                           const toolAnnotations = cornerstoneTools.annotation.state.getAnnotations(measurement.uid, viewport.element);
@@ -1257,17 +1251,23 @@ export async function importMeasurementCollection({
           console.error('Failed to force render:', error);
         }
 
-        // Additional: try to refresh individual viewports
-        viewportIds.forEach(viewportId => {
-          try {
-            const viewport = renderingEngine.getViewport(viewportId);
-            if (viewport && typeof viewport.render === 'function') {
-              viewport.render();
+        // Additional: try to refresh individual viewports (with fresh references)
+        try {
+          const currentViewportIds = renderingEngine.getViewports().map(vp => vp.id);
+          currentViewportIds.forEach(viewportId => {
+            try {
+              // Always get fresh viewport reference
+              const viewport = renderingEngine.getViewport(viewportId);
+              if (viewport && typeof viewport.render === 'function') {
+                viewport.render();
+              }
+            } catch (vpErr) {
+              console.warn(`Failed to render viewport ${viewportId}:`, vpErr);
             }
-          } catch (vpErr) {
-            console.warn(`Failed to render viewport ${viewportId}:`, vpErr);
-          }
-        });
+          });
+        } catch (refreshErr) {
+          console.warn('Failed to refresh viewports with fresh references:', refreshErr);
+        }
       }
     } catch (error) {
       console.error('Error during viewport refresh:', error);

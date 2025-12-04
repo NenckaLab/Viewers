@@ -15,7 +15,6 @@ export default function fetchArrayBuffer(route, updateProgress) {
 
 
             xhr.onload = () => {
-                console.log(`Request returned, status: ${xhr.status}`);
                 if (xhr.status === 200) {
                     resolve(xhr.response);
                 } else {
@@ -24,7 +23,6 @@ export default function fetchArrayBuffer(route, updateProgress) {
             };
 
             xhr.onerror = () => {
-                console.log(`Request returned, status: ${xhr.status}`);
                 reject(xhr.responseText);
             };
 
