@@ -28,7 +28,7 @@ const compare = (a, b, defaultCompare = 0): number => {
 const getStudiesfromDisplaySets = (displaysets): StudyMetadata[] => {
   const studyMap = {};
 
-  const ret = displaySets.reduce((prev, curr, index) => {
+  const ret = displaysets.reduce((prev, curr, index) => {
     const { StudyInstanceUID } = curr;
     if (StudyInstanceUID && !studyMap[StudyInstanceUID]) {
       let study = DicomMetadataStore.getStudy(StudyInstanceUID);

@@ -138,7 +138,45 @@ function initDefaultToolGroup(extensionManager, toolGroupService, commandsManage
   const utilityModule = extensionManager.getModuleEntry(
     '@ohif/extension-cornerstone.utilityModule.tools'
   );
+  const servicesManager = extensionManager._servicesManager;
+  const { cornerstoneViewportService } = servicesManager.services;
   const tools = createTools(utilityModule, commandsManager);
+
+  // Add crosshairs and reference lines to the default tool group
+  tools.disabled.push(
+    {
+      toolName: utilityModule.exports.toolNames.Crosshairs,
+      configuration: {
+        viewportIndicators: true,
+        viewportIndicatorsConfig: {
+          circleRadius: 5,
+          xOffset: 0.95,
+          yOffset: 0.05,
+        },
+        disableOnPassive: true,
+        autoPan: {
+          enabled: false,
+          panSize: 10,
+        },
+        getReferenceLineColor: viewportId => {
+          const viewportInfo = cornerstoneViewportService.getViewportInfo(viewportId);
+          const viewportOptions = viewportInfo?.viewportOptions;
+          if (viewportOptions) {
+            return (
+              colours[viewportOptions.id] ||
+              colorsByOrientation[viewportOptions.orientation] ||
+              '#0c0'
+            );
+          } else {
+            console.warn('missing viewport?', viewportId);
+            return '#0c0';
+          }
+        },
+      },
+    },
+    { toolName: utilityModule.exports.toolNames.ReferenceLines }
+  );
+
   toolGroupService.createToolGroupAndAddTools(toolGroupId, tools);
 }
 
@@ -213,9 +251,21 @@ function initVolume3DToolGroup(extensionManager, toolGroupService) {
 }
 
 function initToolGroups(extensionManager, toolGroupService, commandsManager) {
-  initDefaultToolGroup(extensionManager, toolGroupService, commandsManager, 'default');
-  initMPRToolGroup(extensionManager, toolGroupService, commandsManager);
-  initVolume3DToolGroup(extensionManager, toolGroupService);
+  // Only create tool groups that don't exist yet
+  // Don't modify existing tool groups to avoid viewport issues
+
+  if (!toolGroupService.getToolGroup('mpr')) {
+    // Create MPR tool group if it doesn't exist
+    initMPRToolGroup(extensionManager, toolGroupService, commandsManager);
+  }
+
+  if (!toolGroupService.getToolGroup('volume3d')) {
+    // Create volume3d tool group if it doesn't exist
+    initVolume3DToolGroup(extensionManager, toolGroupService);
+  }
+
+  // Don't modify the 'default' tool group - let the basic mode handle it
+  // The tools will be available through the mode's toolbar configuration
 }
 
 export default initToolGroups;

@@ -53,7 +53,7 @@ export async function defaultRouteInit(
     // series got started in load order, so re-sort them before hanging
     const sortCriteria = seriesSortCriteria.default;
 
-    if (!allDisplaySets || !allDisplaySets.length) {
+    if (!displaySets || !displaySets.length) {
       return;
     }
     const sortedDisplaySets = [...displaySets].sort(sortCriteria);
@@ -62,11 +62,11 @@ export async function defaultRouteInit(
     const studies = getStudies(studyInstanceUIDs, sortedDisplaySets);
 
     // study being displayed, and is thus the "active" study.
-    const activeStudy = studiesForProtocol[0];
+    const activeStudy = studies[0];
 
     // run the hanging protocol matching on the displaySets with the predefined
     // hanging protocol in the mode configuration
-    hangingProtocolService.run({ studies: studiesForProtocol, activeStudy, displaySets }, hangingProtocolId, {
+    hangingProtocolService.run({ studies, activeStudy, displaySets }, hangingProtocolId, {
       stageIndex,
     });
   }

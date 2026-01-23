@@ -137,7 +137,8 @@ const makeDisplaySet = (instances, index) => {
     }
 
     imageSet.setAttributes({
-        getThumbnailSrc: dataSource.retrieve.getGetThumbnailSrc?.(thumbnailInstance, imageId),
+        getThumbnailSrc: dataSource.retrieve.getGetThumbnailSrc ?
+            dataSource.retrieve.getGetThumbnailSrc(thumbnailInstance, imageId) : undefined,
     });
 
     const { servicesManager } = appContext;
