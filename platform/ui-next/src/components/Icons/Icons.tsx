@@ -231,6 +231,7 @@ import ChevronLeft from './Sources/ChevronLeft';
 import StatusAlert from './Sources/StatusAlert';
 import Undo from './Sources/Undo';
 import TabContours from './Sources/TabContours';
+import IllustrationNotFound from './Sources/IllustrationNotFound';
 //
 //
 type IconProps = React.HTMLAttributes<SVGElement>;
@@ -799,6 +800,7 @@ export const Icons = {
   Undo,
   Redo,
   JumpToSlice,
+  IllustrationNotFound,
 
   /** Adds an icon to the set of icons */
   addIcon: (name: string, icon) => {

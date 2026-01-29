@@ -3,6 +3,251 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [3.12.0-beta.123](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.122...v3.12.0-beta.123) (2026-01-14)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.122](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.121...v3.12.0-beta.122) (2026-01-13)
+
+
+### Bug Fixes
+
+* **segmentation:** List surface representations in the segmentation table for 3D views. ([#5700](https://github.com/OHIF/Viewers/issues/5700)) ([82e6a18](https://github.com/OHIF/Viewers/commit/82e6a18735b2e2278d6b95037d82bd3cb529104d))
+
+
+
+
+
+# [3.12.0-beta.121](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.120...v3.12.0-beta.121) (2026-01-12)
+
+
+### Bug Fixes
+
+* **segmentation:** Update cornerstone dependencies to fix a segmentation exception after capture. ([#5701](https://github.com/OHIF/Viewers/issues/5701)) ([aba4855](https://github.com/OHIF/Viewers/commit/aba48552765d03cf82e6a92cdd443b246560c4fd))
+
+
+
+
+
+# [3.12.0-beta.120](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.119...v3.12.0-beta.120) (2026-01-09)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.119](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.118...v3.12.0-beta.119) (2026-01-08)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.118](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.117...v3.12.0-beta.118) (2026-01-07)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.117](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.116...v3.12.0-beta.117) (2026-01-06)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.116](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.115...v3.12.0-beta.116) (2026-01-06)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.115](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.114...v3.12.0-beta.115) (2026-01-05)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.114](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.113...v3.12.0-beta.114) (2026-01-05)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.113](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.112...v3.12.0-beta.113) (2025-12-19)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.112](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.111...v3.12.0-beta.112) (2025-12-19)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.111](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.110...v3.12.0-beta.111) (2025-12-18)
+
+
+### Bug Fixes
+
+* **segmentation:** Update cornerstone dependencies to fix segment visibility issue. ([#5664](https://github.com/OHIF/Viewers/issues/5664)) ([3440f66](https://github.com/OHIF/Viewers/commit/3440f66ebd0900c0f5b1a5edbdf6f3b5fc72bbcf))
+
+
+
+
+
+# [3.12.0-beta.110](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.109...v3.12.0-beta.110) (2025-12-18)
+
+
+### Bug Fixes
+
+* prevent annotation from appearing in active viewport when switching series with different Frame of Reference UID ([#5630](https://github.com/OHIF/Viewers/issues/5630)) ([658994c](https://github.com/OHIF/Viewers/commit/658994c854a03203054168dcfd383c0a6e320df0))
+
+
+
+
+
+# [3.12.0-beta.109](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.108...v3.12.0-beta.109) (2025-12-18)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.108](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.107...v3.12.0-beta.108) (2025-12-17)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.107](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.106...v3.12.0-beta.107) (2025-12-16)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.106](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.105...v3.12.0-beta.106) (2025-12-16)
+
+
+### Bug Fixes
+
+* preclinical mode not working ([#5631](https://github.com/OHIF/Viewers/issues/5631)) ([2de81ef](https://github.com/OHIF/Viewers/commit/2de81efa7e6be534972cd763271c038b293d86f0))
+
+
+
+
+
+# [3.12.0-beta.105](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.104...v3.12.0-beta.105) (2025-12-15)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.104](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.103...v3.12.0-beta.104) (2025-12-12)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.103](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.102...v3.12.0-beta.103) (2025-12-12)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.102](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.101...v3.12.0-beta.102) (2025-12-10)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.101](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.100...v3.12.0-beta.101) (2025-12-09)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.100](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.99...v3.12.0-beta.100) (2025-12-05)
+
+
+### Features
+
+* **notification:** add custom notification component support ([#5605](https://github.com/OHIF/Viewers/issues/5605)) ([c4e5a46](https://github.com/OHIF/Viewers/commit/c4e5a4616db87b39df5e16b75f1ba3c18407468f))
+
+
+
+
+
+# [3.12.0-beta.99](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.98...v3.12.0-beta.99) (2025-12-04)
+
+
+### Bug Fixes
+
+* Initial sort not consistent ([#5224](https://github.com/OHIF/Viewers/issues/5224)) ([77f9f8e](https://github.com/OHIF/Viewers/commit/77f9f8e1c4af6b5d22ecf9332b5edf503cd5b848))
+
+
+
+
+
+# [3.12.0-beta.98](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.97...v3.12.0-beta.98) (2025-12-03)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.97](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.96...v3.12.0-beta.97) (2025-12-03)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+# [3.12.0-beta.96](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.95...v3.12.0-beta.96) (2025-12-02)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
 # [3.12.0-beta.95](https://github.com/OHIF/Viewers/compare/v3.12.0-beta.94...v3.12.0-beta.95) (2025-12-02)
 
 

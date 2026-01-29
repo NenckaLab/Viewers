@@ -1,8 +1,8 @@
-import getStudies from './studiesList';
 import { DicomMetadataStore, log, utils, Enums } from '@ohif/core';
+import getStudies from './studiesList';
 import isSeriesFilterUsed from '../../utils/isSeriesFilterUsed';
 
-const { getSplitParam } = utils;
+const { seriesSortCriteria, getSplitParam } = utils;
 
 /**
  * Initialize the route.
@@ -14,7 +14,13 @@ const { getSplitParam } = utils;
  * @returns array of subscriptions to cancel
  */
 export async function defaultRouteInit(
-  { servicesManager, studyInstanceUIDs, dataSource, filters, appConfig }: {
+  {
+    servicesManager,
+    studyInstanceUIDs,
+    dataSource,
+    filters,
+    appConfig,
+  }: {
     servicesManager: any;
     studyInstanceUIDs: string[];
     dataSource: any;
@@ -42,44 +48,25 @@ export async function defaultRouteInit(
    * @returns
    */
   function applyHangingProtocol() {
-    const allDisplaySets = displaySetService.getActiveDisplaySets();
+    const displaySets = displaySetService.getActiveDisplaySets();
+    // The display sets are not necessarily in load order, even though the
+    // series got started in load order, so re-sort them before hanging
+    const sortCriteria = seriesSortCriteria.default;
 
-    if (!allDisplaySets || !allDisplaySets.length) {
+    if (!displaySets || !displaySets.length) {
       return;
     }
+    const sortedDisplaySets = [...displaySets].sort(sortCriteria);
 
-    // Filter out invalid display sets (those with null/undefined StudyInstanceUID)
-    const displaySets = allDisplaySets.filter(displaySet => {
-      return displaySet && displaySet.StudyInstanceUID;
-    });
-
-    if (!displaySets.length) {
-      console.warn('No valid display sets found after filtering');
-      return;
-    }
-
-    // Check if this is a comparison view (hpCompare protocol or mrSubjectComparison)
-    const isComparisonView = hangingProtocolId === '@ohif/hpCompare' || hangingProtocolId === '@ohif/mrSubjectComparison';
-
-    // For comparison views, extract study UIDs from display sets since they may be synthetic
-    let studiesForProtocol;
-    if (isComparisonView) {
-      // Get unique study UIDs from display sets
-      const studyUIDsFromDisplaySets = [...new Set(displaySets.map(ds => ds.StudyInstanceUID).filter(Boolean))] as string[];
-
-      // Get studies for these UIDs
-      studiesForProtocol = getStudies(studyUIDsFromDisplaySets, []);
-    } else {
-      // For regular views, use the normal approach
-      studiesForProtocol = getStudies(studyInstanceUIDs, displaySets);
-    }
+    // Gets the studies list to use
+    const studies = getStudies(studyInstanceUIDs, sortedDisplaySets);
 
     // study being displayed, and is thus the "active" study.
-    const activeStudy = studiesForProtocol[0];
+    const activeStudy = studies[0];
 
     // run the hanging protocol matching on the displaySets with the predefined
     // hanging protocol in the mode configuration
-    hangingProtocolService.run({ studies: studiesForProtocol, activeStudy, displaySets }, hangingProtocolId, {
+    hangingProtocolService.run({ studies, activeStudy, displaySets }, hangingProtocolId, {
       stageIndex,
     });
   }

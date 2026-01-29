@@ -1,7 +1,10 @@
 import React, { ReactNode, useState, Children, isValidElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PanelSection } from '../PanelSection';
-import { SegmentationTableProvider, SegmentationTableContextType } from './contexts';
+import {
+  SegmentationTableProvider,
+  SegmentationTableContextType,
+} from './contexts/SegmentationTableContext';
 import { SegmentationSegments } from './SegmentationSegments';
 import { SegmentStatistics } from './SegmentStatistics';
 import { SegmentationTableConfig } from './SegmentationTableConfig';
@@ -31,7 +34,7 @@ interface SegmentationTableComponent extends React.FC<SegmentationTableProps> {
 }
 
 export const SegmentationTableRoot = (props: SegmentationTableProps) => {
-  const { t } = useTranslation('SegmentationTable');
+  const { t } = useTranslation('SegmentationPanel');
   const {
     data = [],
     mode,
