@@ -318,15 +318,14 @@ const xnatRoute = {
 
 
     // @ts-ignore
-    const result = await defaultRouteInit({
+    const unsubscriptions = await defaultRouteInit({
       servicesManager,
       extensionManager,
       studyInstanceUIDs,
       dataSource: dataSourceForDefaultRoute,
     }, hangingProtocolId);
 
-    // For comparison views, return null to prevent core routing from processing original UIDs
-    return isComparisonView ? null : studyInstanceUIDs;
+    return unsubscriptions;
   },
 };
 
@@ -452,6 +451,26 @@ const modeInstance = {
     // Destroy the basic tool group and recreate with combined tools
     toolGroupService.destroyToolGroup('default');
     toolGroupService.createToolGroupAndAddTools('default', allTools);
+
+    // Also recreate the 'mpr' tool group using the same segmentation tools so that
+    // MPR and other hanging protocols that use the 'mpr' tool group have full
+    // access to the segmentation tool set (Brush, Threshold, MarkerLabelmap, etc.).
+    try {
+      toolGroupService.destroyToolGroup('mpr');
+    } catch (e) {
+      // Ignore if it doesn't exist yet
+    }
+    toolGroupService.createToolGroupAndAddTools('mpr', segmentationTools);
+
+    // Keep crosshairs visible when switching to another tool (don't disable when passive)
+    const mprGroup = toolGroupService.getToolGroup('mpr');
+    if (mprGroup && mprGroup.hasTool('Crosshairs')) {
+      const crosshairsConfig = mprGroup.getToolConfiguration('Crosshairs') || {};
+      mprGroup.setToolConfiguration('Crosshairs', {
+        ...crosshairsConfig,
+        disableOnPassive: false,
+      });
+    }
 
     const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
 

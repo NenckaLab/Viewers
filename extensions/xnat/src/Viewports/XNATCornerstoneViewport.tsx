@@ -9,21 +9,21 @@ import React, { useLayoutEffect, useEffect, useRef } from 'react';
 import { OHIFCornerstoneViewport } from '@ohif/extension-cornerstone';
 import { useViewportRefs, useSystem } from '@ohif/core';
 
-const XNAT_STACK_FALLBACK_PROTOCOL_ID = 'xnatStackFallback';
+// const XNAT_STACK_FALLBACK_PROTOCOL_ID = 'xnatStackFallback';
 
 /** Reload the viewer with stack protocol in the URL so the error boundary is cleared. */
-function reloadWithStackProtocol(): void {
-  try {
-    const url = new URL(window.location.href);
-    url.searchParams.set('hangingProtocolId', XNAT_STACK_FALLBACK_PROTOCOL_ID);
-    console.warn(
-      'XNAT: Volume rendering error detected, reloading with single stack viewport (hangingProtocolId=xnatStackFallback).'
-    );
-    window.location.replace(url.toString());
-  } catch (e) {
-    console.warn('XNAT: Failed to reload with stack protocol:', e);
-  }
-}
+// function reloadWithStackProtocol(): void {
+//   try {
+//     const url = new URL(window.location.href);
+//     url.searchParams.set('hangingProtocolId', XNAT_STACK_FALLBACK_PROTOCOL_ID);
+//     console.warn(
+//       'XNAT: Volume rendering error detected, reloading with single stack viewport (hangingProtocolId=xnatStackFallback).'
+//     );
+//     window.location.replace(url.toString());
+//   } catch (e) {
+//     console.warn('XNAT: Failed to reload with stack protocol:', e);
+//   }
+// }
 
 function isVolumeRenderingError(message: string, stack?: string): boolean {
   const msg = String(message || '');
@@ -41,8 +41,8 @@ function isVolumeRenderingError(message: string, stack?: string): boolean {
 function runFallbackToStack(hangingProtocolService: any): void {
   try {
     const hpState = hangingProtocolService.getState();
-    if (hpState.protocolId === XNAT_STACK_FALLBACK_PROTOCOL_ID) return;
-    reloadWithStackProtocol();
+    // if (hpState.protocolId === XNAT_STACK_FALLBACK_PROTOCOL_ID) return;
+    // reloadWithStackProtocol();
   } catch (e) {
     console.warn('XNAT: MPR fallback to single-stack failed:', e);
   }
@@ -86,9 +86,10 @@ class VolumeErrorBoundary extends React.Component<
 function XNATCornerstoneViewport(props: React.ComponentProps<typeof OHIFCornerstoneViewport>) {
   const { viewportOptions } = props;
   const viewportId = viewportOptions?.viewportId;
+  const syncGroups = viewportOptions?.syncGroups;
   const { servicesManager } = useSystem();
   const { getViewportElement } = useViewportRefs();
-  const { cornerstoneViewportService, hangingProtocolService } = servicesManager.services;
+  const { cornerstoneViewportService, hangingProtocolService, syncGroupService } = servicesManager.services;
   const fallbackRef = useRef<(() => void) | null>(null);
 
   fallbackRef.current = () => {
@@ -118,6 +119,33 @@ function XNATCornerstoneViewport(props: React.ComponentProps<typeof OHIFCornerst
       window.removeEventListener('unhandledrejection', onUnhandledRejection, true);
     };
   }, [hangingProtocolService]);
+
+  // Apply MPR sync groups (camera/pan/zoom) when this viewport's data is set.
+  // Sync groups from the HP are in viewportOptions; we add this viewport to them
+  // so movement and zoom stay in sync across axial/sagittal/coronal. Done only in XNAT extension.
+  useEffect(() => {
+    if (!viewportId || !syncGroups?.length || !syncGroupService) return;
+    const applySync = () => {
+      const viewportInfo = cornerstoneViewportService.getViewportInfo(viewportId);
+      if (!viewportInfo) return;
+      const renderingEngineId = viewportInfo.getRenderingEngineId?.();
+      if (!renderingEngineId) return;
+      syncGroupService.addViewportToSyncGroup(viewportId, renderingEngineId, syncGroups);
+    };
+    const unsub = cornerstoneViewportService.subscribe(
+      cornerstoneViewportService.EVENTS.VIEWPORT_DATA_CHANGED,
+      (evt: { viewportId: string }) => {
+        if (evt.viewportId !== viewportId) return;
+        applySync();
+      }
+    );
+    // Apply once in case viewport was already ready before we subscribed
+    const t = setTimeout(applySync, 100);
+    return () => {
+      clearTimeout(t);
+      if (typeof unsub === 'function') unsub();
+    };
+  }, [viewportId, syncGroups, cornerstoneViewportService, syncGroupService]);
 
   // useLayoutEffect runs synchronously after refs are set, before child's useEffect.
   // This ensures enableViewport runs before loadViewportData->setViewportData.
