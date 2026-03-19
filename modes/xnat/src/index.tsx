@@ -455,22 +455,40 @@ const modeInstance = {
     // Also recreate the 'mpr' tool group using the same segmentation tools so that
     // MPR and other hanging protocols that use the 'mpr' tool group have full
     // access to the segmentation tool set (Brush, Threshold, MarkerLabelmap, etc.).
+    //
+    // IMPORTANT: The basic mode registers the Crosshairs tool in the 'mpr' tool group.
+    // Since segmentationTools doesn't include Crosshairs, capture and re-add it here.
+    const existingMprGroup = toolGroupService.getToolGroup('mpr');
+    const crosshairsConfig = existingMprGroup?.hasTool('Crosshairs')
+      ? existingMprGroup.getToolConfiguration('Crosshairs') || {}
+      : null;
+
     try {
       toolGroupService.destroyToolGroup('mpr');
     } catch (e) {
       // Ignore if it doesn't exist yet
     }
-    toolGroupService.createToolGroupAndAddTools('mpr', segmentationTools);
 
-    // Keep crosshairs visible when switching to another tool (don't disable when passive)
-    const mprGroup = toolGroupService.getToolGroup('mpr');
-    if (mprGroup && mprGroup.hasTool('Crosshairs')) {
-      const crosshairsConfig = mprGroup.getToolConfiguration('Crosshairs') || {};
-      mprGroup.setToolConfiguration('Crosshairs', {
-        ...crosshairsConfig,
-        disableOnPassive: false,
-      });
-    }
+    const mprTools = {
+      ...segmentationTools,
+      disabled: [
+        ...(segmentationTools.disabled || []),
+        ...(crosshairsConfig
+          ? [
+              {
+                toolName: 'Crosshairs',
+                configuration: {
+                  ...crosshairsConfig,
+                  // Keep crosshairs visible when switching to another tool.
+                  disableOnPassive: false,
+                },
+              },
+            ]
+          : []),
+      ],
+    };
+
+    toolGroupService.createToolGroupAndAddTools('mpr', mprTools);
 
     const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
 
