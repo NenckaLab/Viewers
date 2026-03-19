@@ -13,7 +13,7 @@ import {
 } from './Utils/DataSourceUtils';
 import { getSOPClassUIDForModality } from './Utils/SOPUtils';
 import { ensureInstanceRequiredFields } from './Utils/instanceUtils';
-import { generateRandomUID } from './Utils/UIDUtils';
+import { generateRandomUID, generateUIDFromString } from './Utils/UIDUtils';
 
 // Extracted modules
 import type { XNATDataSourceConfig, BulkDataURIConfig, InstanceMetadataForStore } from './types';
@@ -297,13 +297,49 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                 continue;
               }
 
+              const normalizeOrientationPatient = raw => {
+                if (!raw) return undefined;
+
+                let arr: any = raw;
+                if (typeof raw === 'string') {
+                  arr = raw.split('\\').map(v => Number(v.trim()));
+                } else if (Array.isArray(raw)) {
+                  arr = raw.map(v => Number(v));
+                } else {
+                  return undefined;
+                }
+
+                if (!Array.isArray(arr) || arr.length !== 6) {
+                  return undefined;
+                }
+
+                return arr.map(v => {
+                  const n = Number(v);
+                  if (Math.abs(n) < 1e-12) {
+                    return 0;
+                  }
+                  return Math.round(n * 1e5) / 1e5; // 5 decimals to remove float jitter
+                });
+              };
+
+              // Snap orientation across the whole series so per-instance float drift
+              // doesn't break drawing/import checks.
+              const canonicalOrientation =
+                normalizeOrientationPatient(xnatInstances[0]?.metadata?.ImageOrientationPatient) ??
+                normalizeOrientationPatient(series?.ImageOrientationPatient);
+
               const naturalizedInstancesForThisSeries = [];
               const instancesToStoreForThisSeries = [];
 
               xnatInstances.forEach((xnatInstance, index) => {
                 const xnatMeta = xnatInstance.metadata || {};
                 const determinedModality = series.Modality || xnatMeta.Modality || 'Unknown';
-                const sopInstanceUID = xnatMeta.SOPInstanceUID || generateRandomUID();
+                // SOPInstanceUID is critical for SEG import (frames reference SOPInstanceUIDs).
+                // If XNAT metadata is missing SOPInstanceUID, we must generate it deterministically
+                // so that exported SEG files can be re-imported after reload.
+                const sopInstanceUID =
+                  xnatMeta.SOPInstanceUID ||
+                  generateUIDFromString(`${series.SeriesInstanceUID}|${xnatInstance.url}|${index}`, index);
                 const imageId = getAppropriateImageId(configManager.getConfig().wadoRoot + xnatInstance.url, configManager.getConfig().imageRendering);
 
 
@@ -333,7 +369,10 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   PixelSpacing: xnatMeta.PixelSpacing || [1, 1],
                   SliceThickness: xnatMeta.SliceThickness || 1,
                   ImagePositionPatient: xnatMeta.ImagePositionPatient || [0, 0, index],
-                  ImageOrientationPatient: xnatMeta.ImageOrientationPatient || [1, 0, 0, 0, 1, 0],
+                  ImageOrientationPatient:
+                    canonicalOrientation ||
+                    xnatMeta.ImageOrientationPatient ||
+                    [1, 0, 0, 0, 1, 0],
                   ImageType: xnatMeta.ImageType || 'ORIGINAL',
                   PhotometricInterpretation: xnatMeta.PhotometricInterpretation || (determinedModality === 'CT' || determinedModality === 'MR' || determinedModality === 'PT' ? 'MONOCHROME2' : 'RGB'),
                   SamplesPerPixel: xnatMeta.SamplesPerPixel || ((determinedModality === 'CT' || determinedModality === 'MR' || determinedModality === 'PT') ? 1 : 3),
