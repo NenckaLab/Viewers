@@ -6,7 +6,12 @@
 import { utils } from '@ohif/ui-next';
 import { Enums } from '@cornerstonejs/tools';
 
-import { getDisabledState, _evaluateToggle } from './ToolbarUtils';
+import {
+  getDisabledState,
+  _evaluateToggle,
+  TOOL_BUTTON_ACTIVE_CLASSNAME,
+  TOOL_BUTTON_DEFAULT_CLASSNAME,
+} from './ToolbarUtils';
 import type { ToolbarModuleItem, withAppTypes, EvaluateFunctionParams, EvaluateFunctionResult } from './ToolbarTypes';
 
 /**
@@ -170,7 +175,7 @@ export function getToolbarEvaluators(servicesManager: any): ToolbarModuleItem[] 
         const toolGroup = toolGroupService.getToolGroupForViewport(viewportId);
 
         if (!toolGroup) {
-          return;
+          return getDisabledState(disabledText);
         }
 
         const toolName = toolbarService.getToolNameForButton(button);
@@ -185,6 +190,7 @@ export function getToolbarEvaluators(servicesManager: any): ToolbarModuleItem[] 
         return {
           disabled: false,
           isActive: isPrimaryActive,
+          className: isPrimaryActive ? TOOL_BUTTON_ACTIVE_CLASSNAME : TOOL_BUTTON_DEFAULT_CLASSNAME,
         };
       },
     },
