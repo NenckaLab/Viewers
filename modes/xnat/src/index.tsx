@@ -422,23 +422,28 @@ const modeInstance = {
     toolbarService.register(toolbarButtons);
 
     // Replace the basic 'default' tool group with segmentation tools plus basic measurement tools
-    const segmentationTools = createTools({ commandsManager, utilityModule: extensionManager.getModuleEntry('@ohif/extension-cornerstone.utilityModule.tools') });
+    const utilityModule = extensionManager.getModuleEntry(
+      '@ohif/extension-cornerstone.utilityModule.tools'
+    );
+    const { toolNames } = utilityModule.exports;
+    const segmentationTools = createTools({ commandsManager, utilityModule });
 
-    // Add missing basic measurement tools that are not in segmentation tools
+    // Add missing basic measurement tools that are not in segmentation tools.
+    // Use utility toolNames (not string literals) so hasTool() matches Cornerstone registration.
     const basicMeasurementTools = {
       passive: [
-        { toolName: 'Length' },
-        { toolName: 'Bidirectional' },
-        { toolName: 'ArrowAnnotate' },
-        { toolName: 'Angle' },
-        { toolName: 'CobbAngle' },
-        { toolName: 'Probe' },
-        { toolName: 'RectangleROI' },
-        { toolName: 'CircleROI' },
-        { toolName: 'EllipticalROI' },
-        { toolName: 'SplineROI' },
-        { toolName: 'LivewireContour' },
-      ]
+        { toolName: toolNames.Length },
+        { toolName: toolNames.Bidirectional },
+        { toolName: toolNames.ArrowAnnotate },
+        { toolName: toolNames.Angle },
+        { toolName: toolNames.CobbAngle },
+        { toolName: toolNames.Probe },
+        { toolName: toolNames.RectangleROI },
+        { toolName: toolNames.CircleROI },
+        { toolName: toolNames.EllipticalROI },
+        { toolName: toolNames.SplineROI },
+        { toolName: toolNames.LivewireContour },
+      ],
     };
 
     // Merge segmentation tools with basic measurement tools
