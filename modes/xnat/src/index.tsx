@@ -457,12 +457,8 @@ const modeInstance = {
     toolGroupService.destroyToolGroup('default');
     toolGroupService.createToolGroupAndAddTools('default', allTools);
 
-    // Also recreate the 'mpr' tool group using the same segmentation tools so that
     // MPR and other hanging protocols that use the 'mpr' tool group have full
     // access to the segmentation tool set (Brush, Threshold, MarkerLabelmap, etc.).
-    //
-    // IMPORTANT: The basic mode registers the Crosshairs tool in the 'mpr' tool group.
-    // Since segmentationTools doesn't include Crosshairs, capture and re-add it here.
     const existingMprGroup = toolGroupService.getToolGroup('mpr');
     const crosshairsConfig = existingMprGroup?.hasTool('Crosshairs')
       ? existingMprGroup.getToolConfiguration('Crosshairs') || {}
@@ -475,20 +471,20 @@ const modeInstance = {
     }
 
     const mprTools = {
-      ...segmentationTools,
+      ...allTools,
       disabled: [
-        ...(segmentationTools.disabled || []),
+        ...(allTools.disabled || []),
         ...(crosshairsConfig
           ? [
-              {
-                toolName: 'Crosshairs',
-                configuration: {
-                  ...crosshairsConfig,
-                  // Keep crosshairs visible when switching to another tool.
-                  disableOnPassive: false,
-                },
+            {
+              toolName: 'Crosshairs',
+              configuration: {
+                ...crosshairsConfig,
+                // Keep crosshairs visible when switching to another tool.
+                disableOnPassive: false,
               },
-            ]
+            },
+          ]
           : []),
       ],
     };
