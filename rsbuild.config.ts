@@ -44,6 +44,9 @@ export default defineConfig({
       'process.env.LOCIZE_PROJECTID': JSON.stringify(process.env.LOCIZE_PROJECTID || ''),
       'process.env.LOCIZE_API_KEY': JSON.stringify(process.env.LOCIZE_API_KEY || ''),
       'process.env.REACT_APP_I18N_DEBUG': JSON.stringify(process.env.REACT_APP_I18N_DEBUG || ''),
+      // Some lazy-loaded deps still reference Node globals; browser has neither.
+      __filename: JSON.stringify(''),
+      __dirname: JSON.stringify('/'),
     },
   },
   plugins: [pluginReact(), pluginNodePolyfill()],

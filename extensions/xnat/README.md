@@ -60,6 +60,58 @@ The extension supports various configuration options through the customization s
 - Hanging protocol preferences
 - Segmentation settings
 
+### External Hanging Protocols (No Rebuild)
+
+You can now load hanging protocols from an external JSON URL at runtime, so protocol changes do not require rebuilding the plugin.
+
+Supported config keys in `window.config` (for example in `platform/app/public/config/xnat.js`):
+
+- `xnat.externalHangingProtocolsUrl` (single URL)
+- `xnat.externalHangingProtocolsUrls` (array of URLs)
+- `xnat.externalHangingProtocolsManifestUrl` (single manifest URL)
+- `xnat.externalHangingProtocolsManifestUrls` (array of manifest URLs)
+
+You can also pass URLs through query params:
+
+- `xnatHangingProtocolsUrl`
+- `hangingProtocolsUrl`
+- `hangingProtocolUrl`
+- `xnatHangingProtocolManifestUrl`
+- `hangingProtocolManifestUrl`
+- `hangingProtocolsManifestUrl`
+
+To select an externally loaded protocol in an XNAT-contained way (without core route changes), use:
+
+- `xnatHangingProtocolId=<protocolId>`
+
+Do **not** use `hangingProtocolId=<externalId>` for protocols that exist only in external JSON: core route init resolves that **before** external files load and will fail. If you see `No protocol mrDualStack found`, confirm: manifest URL in `window.config` is correct for that host, the JSON was uploaded, and the `"id"` field matches the query (e.g. `mrDualStack`).
+
+Accepted JSON payload formats:
+
+- A protocol object: `{ "id": "...", ... }`
+- An array of protocol objects: `[{ "id": "...", ... }]`
+- A module-style array/object: `[{ "name": "...", "protocol": { ... } }]`
+- Wrapped arrays: `{ "protocols": [...] }`, `{ "hangingProtocols": [...] }`, or `{ "items": [...] }`
+
+When loaded, each protocol is registered with `hangingProtocolService.addProtocol(id, protocol)`. If an external protocol uses an existing id, it replaces the existing one.
+
+Manifest payload format (for selector UIs in other plugins):
+
+- `{ "files": [ "https://.../mr.json", { "id": "ct", "label": "CT Protocols", "url": "https://.../ct.json" } ] }`
+- Also supports `items`, `sources`, or `protocolFiles` arrays with the same entry format.
+
+Example external protocols (not bundled in the extension; upload via `/xapi/viewer/hanging-protocols/...`):
+
+- `xnatmpr.json` — MPR 1×3 (volume)
+- `xnat-example-mr-dual-stack.json` — MR-only side-by-side **stack** viewports with VOI sync (`id`: `xnatExampleMrDualStack`)
+
+Runtime registry for other plugins:
+
+- `window.__xnatExternalHangingProtocols` contains:
+  - `updatedAt`
+  - `files[]` with `sourceUrl`, `sourceName`, `sourceLabel`, `fromManifest`, `protocolIds`, `loaded`, and optional `error`
+- Viewer dispatches `xnat:external-hanging-protocols-updated` on `window` whenever this registry changes.
+
 ## API
 
 ### Exported Components
