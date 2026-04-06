@@ -227,7 +227,12 @@
     <div id="react-portal"></div>
     <div id="root"></div>
     <script>
-      window.config = window.config || {};
+      // Do not assign to window.config if it already exists (e.g. XNAT app-config.js
+      // uses a non-writable property; `window.config = window.config || {}` runs the
+      // setter and logs "Attempt to override XNAT config blocked!").
+      if (!('config' in window)) {
+        window.config = {};
+      }
       window.PUBLIC_URL = '<%= PUBLIC_URL %>';
     </script>
   </body>

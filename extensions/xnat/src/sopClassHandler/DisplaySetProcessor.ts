@@ -3,13 +3,90 @@
  * Extracted from getSopClassHandlerModule.tsx
  */
 
+import React from 'react';
 import { utils } from '@ohif/core';
+import { ButtonEnums } from '@ohif/ui';
+import * as OHIFUI from '@ohif/ui';
 import { makeDisplaySet } from './DisplaySetFactory';
 import { getSopClassUids } from './SopClassUtils';
 import { isMultiFrame, isSingleImageModality } from './VolumeUtils';
 import type { AppContextType } from './Types';
 
-const { isImage } = utils;
+const { isImage, sopClassDictionary } = utils;
+
+const MAX_ENHANCED_MR_FRAMES = 1000;
+const ENHANCED_MR_SOP_CLASSES = [
+  sopClassDictionary.EnhancedMRImageStorage,
+  sopClassDictionary.EnhancedMRColorImageStorage,
+  sopClassDictionary.LegacyConvertedEnhancedMRImageStorage,
+];
+
+function showEnhancedMrFrameLimitDialog(appContext: AppContextType, numberOfFrames: number) {
+  const uiDialogService = appContext?.servicesManager?.services?.uiDialogService;
+  const uiNotificationService = appContext?.servicesManager?.services?.uiNotificationService;
+  const DialogContent = (OHIFUI as any).Dialog;
+
+  if (!uiDialogService?.create || typeof uiDialogService.hide !== 'function') {
+    // Fallback: show a notification (no popup) if dialog service isn't available.
+    uiNotificationService?.show?.({
+      title: 'The Viewer has failed to load',
+      message: `This scan has ${numberOfFrames} frames (max supported: ${MAX_ENHANCED_MR_FRAMES}). Please download and view the images locally.`,
+      type: 'error',
+      duration: 8000,
+    });
+    return;
+  }
+
+  if (!DialogContent) {
+    uiNotificationService?.show?.({
+      title: 'The Viewer has failed to load',
+      message: `This scan has ${numberOfFrames} frames (max supported: ${MAX_ENHANCED_MR_FRAMES}). Please download and view the images locally.`,
+      type: 'error',
+      duration: 8000,
+    });
+    return;
+  }
+
+  const dialogId = 'enhanced-mr-frame-limit';
+
+  // Avoid stacking identical dialogs.
+  uiDialogService.hide(dialogId);
+
+  uiDialogService.create({
+    id: dialogId,
+    centralize: true,
+    isDraggable: false,
+    showOverlay: true,
+    content: DialogContent,
+    contentProps: {
+      title: 'The Viewer has failed to load',
+      value: {},
+      noCloseButton: true,
+      onClose: () => uiDialogService.hide(dialogId),
+      actions: [{ id: 'ok', text: 'OK', type: ButtonEnums.type.primary }],
+      onSubmit: ({ action }) => {
+        if (action?.id === 'ok') {
+          uiDialogService.hide(dialogId);
+        }
+      },
+      body: () =>
+        React.createElement(
+          'div',
+          { className: 'max-w-[520px] text-white' },
+          React.createElement(
+            'p',
+            { className: 'text-[14px] leading-[1.35]' },
+            `The scan has more than ${MAX_ENHANCED_MR_FRAMES} frames.`
+          ),
+          React.createElement(
+            'p',
+            { className: 'text-[14px] leading-[1.35] mt-2' },
+            'Please download and view the images locally.'
+          )
+        ),
+    },
+  });
+}
 
 /**
  * Process instances from a series to create display sets
@@ -42,6 +119,14 @@ export function getDisplaySetsFromSeries(instances: any[], appContext: AppContex
 
     let displaySet;
     if (isMultiFrame(instance)) {
+      const numberOfFrames = Number(instance.NumberOfFrames) || 1;
+      if (numberOfFrames > MAX_ENHANCED_MR_FRAMES && ENHANCED_MR_SOP_CLASSES.includes(instance.SOPClassUID)) {
+        showEnhancedMrFrameLimitDialog(appContext, numberOfFrames);
+        // Skip display set creation for this instance to prevent the whole series
+        // from failing and to rely on the popup/notification above.
+        return;
+      }
+
       displaySet = makeDisplaySet([instance], appContext);
       displaySet.setAttributes({
         sopClassUids,

@@ -24,6 +24,22 @@ window.config = window.config || {};
 const xnatConfig = {
     name: 'config/xnat.js',
     routerBasename: '/VIEWER/',
+    xnat: {
+        // Default XNAT-backed endpoint for runtime hanging protocols.
+        externalHangingProtocolsManifestUrl: `${SERVER_URL}/xapi/viewer/hanging-protocols/manifest.json`,
+        // Optional external hanging protocol endpoint(s). These files are fetched at runtime:
+        // no plugin rebuild needed when you update protocol JSON.
+        // externalHangingProtocolsUrl: `${SERVER_URL}/xapi/viewer/hanging-protocols`,
+        // externalHangingProtocolsUrls: [
+        //   `${SERVER_URL}/xapi/viewer/hanging-protocols/mr.json`,
+        //   `${SERVER_URL}/xapi/viewer/hanging-protocols/ct.json`,
+        // ],
+        // Optional manifest endpoint(s) so UI plugins can build a selector:
+        // externalHangingProtocolsManifestUrl: `${SERVER_URL}/xapi/viewer/hanging-protocols/manifest.json`,
+        // externalHangingProtocolsManifestUrls: [
+        //   `${SERVER_URL}/xapi/viewer/hanging-protocols/manifest.json`,
+        // ],
+    },
     // whiteLabeling: {},
     defaultDataSourceName: 'xnat',
     extensions: [

@@ -170,7 +170,7 @@ export function getToolbarEvaluators(servicesManager: any): ToolbarModuleItem[] 
         const toolGroup = toolGroupService.getToolGroupForViewport(viewportId);
 
         if (!toolGroup) {
-          return;
+          return getDisabledState(disabledText);
         }
 
         const toolName = toolbarService.getToolNameForButton(button);

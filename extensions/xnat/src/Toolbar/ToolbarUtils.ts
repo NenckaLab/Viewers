@@ -7,10 +7,10 @@ import { utils } from '@ohif/ui-next';
 import { Enums } from '@cornerstonejs/tools';
 import type { ToggleEvaluateParams, EvaluateFunctionResult } from './ToolbarTypes';
 
-// Helper function for disabled state
+// Rely on `disabled: true` for ToolButton styling; avoid extra className so it cannot stick
+// across refreshes when the platform merge uses `||`.
 export const getDisabledState = (disabledText?: string) => ({
   disabled: true,
-  className: '!text-common-bright ohif-disabled',
   disabledText: disabledText || 'Not available',
 });
 
@@ -30,7 +30,11 @@ export function _evaluateToggle({
   const toolGroup = toolGroupService.getToolGroupForViewport(viewportId);
 
   if (!toolGroup) {
-    return;
+    // Layout / HP switches can run toolbar refresh before the viewport is attached to a tool
+    // group; avoid leaving a stale toggled-on appearance from the previous viewport.
+    return {
+      className: utils.getToggledClassName(false),
+    };
   }
   const toolName = toolbarService.getToolNameForButton(button);
 

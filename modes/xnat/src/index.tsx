@@ -22,6 +22,30 @@ import {
 
 // Import segmentation tools initialization
 import { createTools } from '../../segmentation/src/initToolGroups';
+import {
+  getExternalHangingProtocolRegistry,
+  loadExternalHangingProtocols,
+} from './loadExternalHangingProtocols';
+
+/** Match `hangingProtocolId` regardless of query key casing (Mode uses lower-case keys). */
+function getHangingProtocolIdFromQuery(searchParams: URLSearchParams): string | null {
+  for (const [key, value] of searchParams) {
+    if (key.toLowerCase() === 'hangingprotocolid') {
+      return value;
+    }
+  }
+  return null;
+}
+
+/** XNAT-contained override for external protocols (avoids core pre-resolution). */
+function getXnatHangingProtocolIdFromQuery(searchParams: URLSearchParams): string | null {
+  for (const [key, value] of searchParams) {
+    if (key.toLowerCase() === 'xnathangingprotocolid') {
+      return value;
+    }
+  }
+  return null;
+}
 
 const xnat = {
   xnatNavList: '@ohif/extension-xnat.panelModule.xnatNavigation',
@@ -117,10 +141,15 @@ const xnatRoute = {
       },
     };
   },
-  init: async ({ servicesManager, extensionManager, studyInstanceUIDs }) => {
+  init: async (
+    { servicesManager, extensionManager, studyInstanceUIDs },
+    hangingProtocolIdFromMode,
+    stageIndexFromMode
+  ) => {
 
     // Parse identifiers from URL query parameters for comparison views
     const query = new URLSearchParams(window.location.search);
+    const xnatProtocolIdFromQuery = getXnatHangingProtocolIdFromQuery(query);
     const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
     const experimentIdsFromURL = query.getAll('experimentIds');
 
@@ -141,6 +170,14 @@ const xnatRoute = {
 
     const hangingProtocolService = servicesManager.services.hangingProtocolService;
 
+    // Load external hanging protocols before selecting active protocol IDs.
+    // This lets admins update protocol JSON in XNAT (or another URL) without rebuilding the plugin.
+    const externalProtocolIds = await loadExternalHangingProtocols({
+      query,
+      hangingProtocolService,
+    });
+    servicesManager.services.xnatExternalHangingProtocols = getExternalHangingProtocolRegistry();
+
     // Initialize data source
     try {
       const [dataSource] = extensionManager.getActiveDataSource();
@@ -155,7 +192,10 @@ const xnatRoute = {
           subjectId: query.get('subjectId'),
           parentProjectId: query.get('parentProjectId'),
           experimentLabel: query.get('experimentLabel'),
-          hangingProtocolId: query.get('hangingprotocolId'), // Pass to data source for special handling
+          hangingProtocolId:
+            xnatProtocolIdFromQuery ||
+            (typeof hangingProtocolIdFromMode === 'string' && hangingProtocolIdFromMode) ||
+            getHangingProtocolIdFromQuery(query), // Pass to data source for special handling
         };
 
         const projectIdsFromURL = query.getAll('projectIds');
@@ -175,8 +215,9 @@ const xnatRoute = {
             }
           > = {};
 
-          // For comparison views with hangingprotocolId, allow cross-experiment studies
-          const isComparisonView = ['@ohif/mrSubjectComparison', '@ohif/hpCompare'].includes(query.get('hangingprotocolId'));
+          // For comparison views with hangingProtocolId, allow cross-experiment studies
+          const hpFromQuery = getHangingProtocolIdFromQuery(query);
+          const isComparisonView = ['@ohif/mrSubjectComparison', '@ohif/hpCompare'].includes(hpFromQuery);
 
           if (isExperimentBasedComparison) {
             // Handle experiment ID based comparison (XNAT native)
@@ -259,20 +300,31 @@ const xnatRoute = {
     // Check if we're in overread mode
     const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
 
-    // Set appropriate hanging protocol based on number of studies or explicit request
-    let hangingProtocolId;
+    // Hanging protocol: Mode.tsx already resolved URL `hangingProtocolId` / mode default into
+    // `hangingProtocolIdFromMode` (string = explicit choice, array = match among actives).
+    // Multi-study / comparison still forces hpCompare unless we only rely on URL elsewhere.
+    let hangingProtocolId: string | undefined;
 
-    // Check if comparison protocol is explicitly requested
-    const params = new URLSearchParams(window.location.search);
-    const explicitProtocolId = params.get('hangingprotocolId');
+    const isMultiStudy = studyInstanceUIDs && studyInstanceUIDs.length > 1;
+    const urlHp = xnatProtocolIdFromQuery || (
+      typeof hangingProtocolIdFromMode === 'string' ? hangingProtocolIdFromMode : null
+    );
+    const comparisonProtocolIds = ['@ohif/mrSubjectComparison', '@ohif/hpCompare'];
+    const explicitFromQuery = getHangingProtocolIdFromQuery(query);
+    const wantsComparison =
+      (urlHp && comparisonProtocolIds.includes(urlHp)) ||
+      (explicitFromQuery && comparisonProtocolIds.includes(explicitFromQuery));
 
-    if (explicitProtocolId === '@ohif/mrSubjectComparison' || explicitProtocolId === '@ohif/hpCompare' || (studyInstanceUIDs && studyInstanceUIDs.length > 1)) {
-      // For multi-study scenarios or explicit comparison requests, use the built-in hpCompare protocol
+    if (isMultiStudy || wantsComparison) {
+      // Multi-study or explicit comparison protocol request → hpCompare
       hangingProtocolId = '@ohif/hpCompare';
       hangingProtocolService.setActiveProtocolIds(['@ohif/hpCompare', 'default']);
+    } else if (urlHp) {
+      // Query string (or Mode) requested a specific protocol — do not overwrite with XNAT defaults
+      hangingProtocolId = urlHp;
+      hangingProtocolService.setActiveProtocolIds(urlHp);
     } else {
-      // For single study, use the default hanging protocols
-      // In overread mode, prioritize MPR if the scan supports it
+      // No URL override: single-study defaults + optional overread MPR fallback
       const protocolIds = isOverreadMode
         ? [
           'mpr', // Prioritize MPR in overread mode
@@ -282,7 +334,7 @@ const xnatRoute = {
           'only3D',
           'primary3D',
           'primaryAxial',
-          'fourUp'
+          'fourUp',
         ]
         : [
           'default',
@@ -292,16 +344,15 @@ const xnatRoute = {
           'only3D',
           'primary3D',
           'primaryAxial',
-          'fourUp'
+          'fourUp',
         ];
 
-      hangingProtocolService.setActiveProtocolIds(protocolIds);
+      const activeIds = Array.from(new Set([...protocolIds, ...externalProtocolIds]));
+      hangingProtocolService.setActiveProtocolIds(activeIds);
 
-      // In overread mode, replace the default protocol with MPR to make it the true fallback
       if (isOverreadMode) {
         const mprProtocol = hangingProtocolService.getProtocolById('mpr');
         if (mprProtocol) {
-          // Create a copy of MPR protocol but with id 'default' so it becomes the fallback
           const overreadDefaultProtocol = {
             ...mprProtocol,
             id: 'default',
@@ -311,19 +362,23 @@ const xnatRoute = {
         }
       }
 
+      // Let HangingProtocolService.run() match among active protocols (same as stock route)
+      hangingProtocolId = undefined;
     }
 
     // Now call defaultRouteInit
     const [dataSourceForDefaultRoute] = extensionManager.getActiveDataSource();
 
 
-    // @ts-ignore
-    const unsubscriptions = await defaultRouteInit({
-      servicesManager,
-      extensionManager,
-      studyInstanceUIDs,
-      dataSource: dataSourceForDefaultRoute,
-    }, hangingProtocolId);
+    const unsubscriptions = await defaultRouteInit(
+      {
+        servicesManager,
+        studyInstanceUIDs,
+        dataSource: dataSourceForDefaultRoute,
+      },
+      hangingProtocolId,
+      stageIndexFromMode
+    );
 
     return unsubscriptions;
   },
@@ -422,23 +477,28 @@ const modeInstance = {
     toolbarService.register(toolbarButtons);
 
     // Replace the basic 'default' tool group with segmentation tools plus basic measurement tools
-    const segmentationTools = createTools({ commandsManager, utilityModule: extensionManager.getModuleEntry('@ohif/extension-cornerstone.utilityModule.tools') });
+    const utilityModule = extensionManager.getModuleEntry(
+      '@ohif/extension-cornerstone.utilityModule.tools'
+    );
+    const { toolNames } = utilityModule.exports;
+    const segmentationTools = createTools({ commandsManager, utilityModule });
 
-    // Add missing basic measurement tools that are not in segmentation tools
+    // Add missing basic measurement tools that are not in segmentation tools.
+    // Use utility toolNames (not string literals) so hasTool() matches Cornerstone registration.
     const basicMeasurementTools = {
       passive: [
-        { toolName: 'Length' },
-        { toolName: 'Bidirectional' },
-        { toolName: 'ArrowAnnotate' },
-        { toolName: 'Angle' },
-        { toolName: 'CobbAngle' },
-        { toolName: 'Probe' },
-        { toolName: 'RectangleROI' },
-        { toolName: 'CircleROI' },
-        { toolName: 'EllipticalROI' },
-        { toolName: 'SplineROI' },
-        { toolName: 'LivewireContour' },
-      ]
+        { toolName: toolNames.Length },
+        { toolName: toolNames.Bidirectional },
+        { toolName: toolNames.ArrowAnnotate },
+        { toolName: toolNames.Angle },
+        { toolName: toolNames.CobbAngle },
+        { toolName: toolNames.Probe },
+        { toolName: toolNames.RectangleROI },
+        { toolName: toolNames.CircleROI },
+        { toolName: toolNames.EllipticalROI },
+        { toolName: toolNames.SplineROI },
+        { toolName: toolNames.LivewireContour },
+      ],
     };
 
     // Merge segmentation tools with basic measurement tools
@@ -452,25 +512,39 @@ const modeInstance = {
     toolGroupService.destroyToolGroup('default');
     toolGroupService.createToolGroupAndAddTools('default', allTools);
 
-    // Also recreate the 'mpr' tool group using the same segmentation tools so that
     // MPR and other hanging protocols that use the 'mpr' tool group have full
     // access to the segmentation tool set (Brush, Threshold, MarkerLabelmap, etc.).
+    const existingMprGroup = toolGroupService.getToolGroup('mpr');
+    const crosshairsConfig = existingMprGroup?.hasTool('Crosshairs')
+      ? existingMprGroup.getToolConfiguration('Crosshairs') || {}
+      : null;
+
     try {
       toolGroupService.destroyToolGroup('mpr');
     } catch (e) {
       // Ignore if it doesn't exist yet
     }
-    toolGroupService.createToolGroupAndAddTools('mpr', segmentationTools);
 
-    // Keep crosshairs visible when switching to another tool (don't disable when passive)
-    const mprGroup = toolGroupService.getToolGroup('mpr');
-    if (mprGroup && mprGroup.hasTool('Crosshairs')) {
-      const crosshairsConfig = mprGroup.getToolConfiguration('Crosshairs') || {};
-      mprGroup.setToolConfiguration('Crosshairs', {
-        ...crosshairsConfig,
-        disableOnPassive: false,
-      });
-    }
+    const mprTools = {
+      ...allTools,
+      disabled: [
+        ...(allTools.disabled || []),
+        ...(crosshairsConfig
+          ? [
+            {
+              toolName: 'Crosshairs',
+              configuration: {
+                ...crosshairsConfig,
+                // Keep crosshairs visible when switching to another tool.
+                disableOnPassive: false,
+              },
+            },
+          ]
+          : []),
+      ],
+    };
+
+    toolGroupService.createToolGroupAndAddTools('mpr', mprTools);
 
     const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
 

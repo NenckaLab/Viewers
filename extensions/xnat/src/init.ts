@@ -35,7 +35,13 @@ export default function init({
   commandsManager: any;
   configuration?: any;
 }): void {
-  const { toolbarService, cineService, viewportGridService, cornerstoneViewportService } = servicesManager.services;
+  const {
+    toolbarService,
+    cineService,
+    viewportGridService,
+    cornerstoneViewportService,
+    toolGroupService,
+  } = servicesManager.services;
 
   registerXnatMetadataFallback();
 
@@ -74,6 +80,12 @@ export default function init({
   toolbarService.registerEventForToolbarUpdate(cineService, [
     cineService.EVENTS.CINE_STATE_CHANGED,
   ]);
+
+  if (toolGroupService?.EVENTS?.VIEWPORT_ADDED) {
+    toolbarService.registerEventForToolbarUpdate(toolGroupService, [
+      toolGroupService.EVENTS.VIEWPORT_ADDED,
+    ]);
+  }
 
   // Add
   DicomMetadataStore.subscribe(DicomMetadataStore.EVENTS.INSTANCES_ADDED, handlePETImageMetadata);

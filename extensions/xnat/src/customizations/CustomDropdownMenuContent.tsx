@@ -56,17 +56,27 @@ export const CustomDropdownMenuContent = () => {
   }
 
   if (showImportMenu) {
-    const { viewportGridService, cornerstoneViewportService } = servicesManager.services;
+    const { viewportGridService, displaySetService } = servicesManager.services;
     const activeViewportId = viewportGridService.getActiveViewportId();
-    const activeViewport = activeViewportId
-      ? cornerstoneViewportService.getCornerstoneViewport(activeViewportId)
-      : null;
-    const viewportData = activeViewport ? activeViewport.getImageData() : null;
+    const { viewports } = viewportGridService.getState();
+    let studyInstanceUID = '';
+    let seriesInstanceUID = '';
+    if (activeViewportId && viewports.has(activeViewportId)) {
+      const viewport = viewports.get(activeViewportId);
+      const displaySetInstanceUID = viewport.displaySetInstanceUIDs?.[0];
+      if (displaySetInstanceUID) {
+        const displaySet = displaySetService.getDisplaySetByUID(displaySetInstanceUID);
+        if (displaySet) {
+          studyInstanceUID = displaySet.StudyInstanceUID;
+          seriesInstanceUID = displaySet.SeriesInstanceUID;
+        }
+      }
+    }
 
     return (
       <XNATSegmentationImportMenu
-        studyInstanceUID={viewportData?.StudyInstanceUID || ''}
-        seriesInstanceUID={viewportData?.SeriesInstanceUID || ''}
+        studyInstanceUID={studyInstanceUID}
+        seriesInstanceUID={seriesInstanceUID}
         onClose={() => setShowImportMenu(false)}
         servicesManager={servicesManager}
       />
