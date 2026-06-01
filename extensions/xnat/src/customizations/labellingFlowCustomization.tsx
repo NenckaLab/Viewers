@@ -1,5 +1,5 @@
-import { LabellingFlow } from '@ohif/ui';
+import { LabellingFlow } from '@ohif/ui-next';
 
 export default {
-  'ui.labellingComponent': LabellingFlow,
+  'ui.labellingComponent': LabellingFlow as any,
 };

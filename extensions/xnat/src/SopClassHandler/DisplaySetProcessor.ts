@@ -5,8 +5,7 @@
 
 import React from 'react';
 import { utils } from '@ohif/core';
-import { ButtonEnums } from '@ohif/ui';
-import * as OHIFUI from '@ohif/ui';
+import { Button } from '@ohif/ui-next';
 import { makeDisplaySet } from './DisplaySetFactory';
 import { getSopClassUids } from './SopClassUtils';
 import { isMultiFrame, isSingleImageModality } from './VolumeUtils';
@@ -24,20 +23,9 @@ const ENHANCED_MR_SOP_CLASSES = [
 function showEnhancedMrFrameLimitDialog(appContext: AppContextType, numberOfFrames: number) {
   const uiDialogService = appContext?.servicesManager?.services?.uiDialogService;
   const uiNotificationService = appContext?.servicesManager?.services?.uiNotificationService;
-  const DialogContent = (OHIFUI as any).Dialog;
 
   if (!uiDialogService?.create || typeof uiDialogService.hide !== 'function') {
     // Fallback: show a notification (no popup) if dialog service isn't available.
-    uiNotificationService?.show?.({
-      title: 'The Viewer has failed to load',
-      message: `This scan has ${numberOfFrames} frames (max supported: ${MAX_ENHANCED_MR_FRAMES}). Please download and view the images locally.`,
-      type: 'error',
-      duration: 8000,
-    });
-    return;
-  }
-
-  if (!DialogContent) {
     uiNotificationService?.show?.({
       title: 'The Viewer has failed to load',
       message: `This scan has ${numberOfFrames} frames (max supported: ${MAX_ENHANCED_MR_FRAMES}). Please download and view the images locally.`,
@@ -52,38 +40,36 @@ function showEnhancedMrFrameLimitDialog(appContext: AppContextType, numberOfFram
   // Avoid stacking identical dialogs.
   uiDialogService.hide(dialogId);
 
+  const EnhancedMrDialog = ({ onClose }: any) =>
+    React.createElement(
+      'div',
+      { className: 'max-w-[520px] p-4 text-white' },
+      React.createElement('div', { className: 'text-[16px] font-medium' }, 'The Viewer has failed to load'),
+      React.createElement(
+        'p',
+        { className: 'mt-3 text-[14px] leading-[1.35]' },
+        `This scan has ${numberOfFrames} frames (max supported: ${MAX_ENHANCED_MR_FRAMES}).`
+      ),
+      React.createElement(
+        'p',
+        { className: 'mt-2 text-[14px] leading-[1.35]' },
+        'Please download and view the images locally.'
+      ),
+      React.createElement(
+        'div',
+        { className: 'mt-6 flex justify-end' },
+        React.createElement(Button as any, { onClick: onClose }, 'OK')
+      )
+    );
+
   uiDialogService.create({
     id: dialogId,
     centralize: true,
     isDraggable: false,
     showOverlay: true,
-    content: DialogContent,
+    content: EnhancedMrDialog,
     contentProps: {
-      title: 'The Viewer has failed to load',
-      value: {},
-      noCloseButton: true,
       onClose: () => uiDialogService.hide(dialogId),
-      actions: [{ id: 'ok', text: 'OK', type: ButtonEnums.type.primary }],
-      onSubmit: ({ action }) => {
-        if (action?.id === 'ok') {
-          uiDialogService.hide(dialogId);
-        }
-      },
-      body: () =>
-        React.createElement(
-          'div',
-          { className: 'max-w-[520px] text-white' },
-          React.createElement(
-            'p',
-            { className: 'text-[14px] leading-[1.35]' },
-            `The scan has more than ${MAX_ENHANCED_MR_FRAMES} frames.`
-          ),
-          React.createElement(
-            'p',
-            { className: 'text-[14px] leading-[1.35] mt-2' },
-            'Please download and view the images locally.'
-          )
-        ),
     },
   });
 }

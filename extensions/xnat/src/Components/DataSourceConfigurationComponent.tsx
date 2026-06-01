@@ -1,6 +1,6 @@
 import React, { ReactElement, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useModal } from '@ohif/ui';
+import { useModal } from '@ohif/ui-next';
 import { Icons } from '@ohif/ui-next';
 import { Types } from '@ohif/core';
 import DataSourceConfigurationModalComponent from './DataSourceConfigurationModalComponent';

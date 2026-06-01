@@ -1,7 +1,9 @@
-import { DicomDict } from 'dcmjs';
-import { denaturalizeDataset } from 'dcmjs';
+import dcmjs from 'dcmjs';
 import { EXPLICIT_VR_LITTLE_ENDIAN, ImplementationClassUID, ImplementationVersionName } from './constants';
 import type { XNATDataSourceConfigManager } from './config';
+
+const { DicomDict } = (dcmjs as any).data;
+const { denaturalizeDataset } = (dcmjs as any).data.DicomMetaDictionary;
 
 /**
  * Store methods for XNATDataSource

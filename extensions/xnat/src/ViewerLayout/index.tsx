@@ -1,7 +1,8 @@
+// @ts-nocheck
 import React, { useEffect, useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
 
-import { InvestigationalUseDialog } from '@ohif/ui';
+import { InvestigationalUseDialog } from '@ohif/ui-next';
 import { HangingProtocolService, CommandsManager } from '@ohif/core';
 import { useAppConfig } from '@state';
 import ViewerHeader from './ViewerHeader';
@@ -136,9 +137,6 @@ function ViewerLayout({
   return (
     <div>
       <ViewerHeader
-        hotkeysManager={hotkeysManager}
-        extensionManager={extensionManager}
-        servicesManager={servicesManager}
         appConfig={appConfig}
       />
       <div

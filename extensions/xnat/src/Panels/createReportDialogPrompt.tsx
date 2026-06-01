@@ -1,7 +1,70 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 
-import { ButtonEnums, Dialog, Input, Select } from '@ohif/ui';
+import { Button, Input } from '@ohif/ui-next';
+import { Select } from '@ohif/ui';
 import PROMPT_RESPONSES from '../utils/_shared/PROMPT_RESPONSES';
+
+function CreateReportDialogContent({
+  title,
+  initialValue,
+  onCancel,
+  onSave,
+  dataSourcesOpts,
+}: any) {
+  const [value, setValue] = useState(initialValue);
+
+  const selectedDataSource = useMemo(
+    () => dataSourcesOpts.find((o: any) => o.value === value.dataSourceName) ?? null,
+    [dataSourcesOpts, value.dataSourceName]
+  );
+
+  return (
+    <div className="max-w-[520px] p-4 text-white">
+      <div className="text-[16px] font-medium">{title}</div>
+
+      {dataSourcesOpts.length > 1 && (window as any).config?.allowMultiSelectExport && (
+        <div className="mt-4">
+          <label className="text-[14px] leading-[1.2] text-white">Data Source</label>
+          <div className="mt-2">
+            <Select
+              id="xnat-create-report-data-source"
+              options={dataSourcesOpts}
+              value={selectedDataSource}
+              onChange={opt =>
+                setValue(v => ({ ...v, dataSourceName: (opt as any)?.value ?? v.dataSourceName }))
+              }
+              isClearable={false}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4">
+        <label className="text-[14px] leading-[1.2] text-white">Enter the report name</label>
+        <div className="mt-2">
+          <Input
+            autoFocus
+            type="text"
+            value={value.label}
+            onChange={(e: any) => setValue((v: any) => ({ ...v, label: e.target.value }))}
+            onKeyDown={(e: any) => {
+              if (e.key === 'Enter') {
+                onSave(value);
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button onClick={() => onSave(value)}>Save</Button>
+      </div>
+    </div>
+  );
+}
 
 export default function CreateReportDialogPrompt(uiDialogService, { extensionManager }) {
   return new Promise(function (resolve, reject) {
@@ -60,74 +123,18 @@ export default function CreateReportDialogPrompt(uiDialogService, { extensionMan
     dialogId = uiDialogService.create({
       centralize: true,
       isDraggable: false,
-      content: Dialog,
+      content: CreateReportDialogContent,
       useLastPosition: false,
       showOverlay: true,
       contentProps: {
         title: 'Create Report',
-        value: {
+        initialValue: {
           label: '',
           dataSourceName: extensionManager.activeDataSource,
         },
-        noCloseButton: true,
-        onClose: _handleClose,
-        actions: [
-          { id: 'cancel', text: 'Cancel', type: ButtonEnums.type.secondary },
-          { id: 'save', text: 'Save', type: ButtonEnums.type.primary },
-        ],
-        // TODO: Should be on button press...
-        onSubmit: _handleFormSubmit,
-        body: ({ value, setValue }) => {
-          const onChangeHandler = event => {
-            event.persist();
-            setValue(value => ({ ...value, label: event.target.value }));
-          };
-          const onKeyPressHandler = event => {
-            if (event.key === 'Enter') {
-              uiDialogService.hide(dialogId);
-              resolve({
-                action: PROMPT_RESPONSES.CREATE_REPORT,
-                value: value.label,
-              });
-            }
-          };
-          return (
-            <>
-              {dataSourcesOpts.length > 1 && window.config?.allowMultiSelectExport && (
-                <div>
-                  <label className="text-[14px] leading-[1.2] text-white">Data Source</label>
-                  <Select
-                    closeMenuOnSelect={true}
-                    className="border-primary-main mt-2 bg-black"
-                    options={dataSourcesOpts}
-                    placeholder={
-                      dataSourcesOpts.find(option => option.value === value.dataSourceName)
-                        .placeHolder
-                    }
-                    value={value.dataSourceName}
-                    onChange={evt => {
-                      setValue(v => ({ ...v, dataSourceName: evt.value }));
-                    }}
-                    isClearable={false}
-                  />
-                </div>
-              )}
-              <div className="mt-3">
-                <Input
-                  autoFocus
-                  label="Enter the report name"
-                  labelClassName="text-white text-[14px] leading-[1.2]"
-                  className="border-primary-main bg-black"
-                  type="text"
-                  value={value.label}
-                  onChange={onChangeHandler}
-                  onKeyPress={onKeyPressHandler}
-                  required
-                />
-              </div>
-            </>
-          );
-        },
+        dataSourcesOpts,
+        onCancel: _handleClose,
+        onSave: (value: any) => _handleFormSubmit({ action: { id: 'save' }, value }),
       },
     });
   });

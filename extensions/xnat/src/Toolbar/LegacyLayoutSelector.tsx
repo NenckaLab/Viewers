@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
-import { LayoutSelector as OHIFLayoutSelector, ToolbarButton } from '@ohif/ui';
+import { LayoutSelector as OHIFLayoutSelector } from '@ohif/ui-next';
 
 function LegacyLayoutSelectorWithServices({
   servicesManager,
@@ -28,51 +28,11 @@ function LegacyLayoutSelectorWithServices({
   );
 
   return (
-    <LayoutSelector
+    <OHIFLayoutSelector
       {...props}
+      rows={rows}
+      columns={columns}
       onSelection={onSelection}
-    />
-  );
-}
-
-function LayoutSelector({ rows, columns, className, onSelection, ...rest }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const closeOnOutsideClick = () => {
-    if (isOpen) {
-      setIsOpen(false);
-    }
-  };
-
-  useEffect(() => {
-    window.addEventListener('click', closeOnOutsideClick);
-    return () => {
-      window.removeEventListener('click', closeOnOutsideClick);
-    };
-  }, [isOpen]);
-
-  const onInteractionHandler = () => setIsOpen(!isOpen);
-  const DropdownContent = isOpen ? OHIFLayoutSelector : null;
-
-  return (
-    <ToolbarButton
-      id="Layout"
-      label="Grid Layout"
-      icon="tool-layout"
-      onInteraction={onInteractionHandler}
-      className={className}
-      rounded={rest.rounded}
-      dropdownContent={
-        DropdownContent !== null && (
-          <DropdownContent
-            rows={rows}
-            columns={columns}
-            onSelection={onSelection}
-          />
-        )
-      }
-      isActive={isOpen}
-      type="toggle"
     />
   );
 }

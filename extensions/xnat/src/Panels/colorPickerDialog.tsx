@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dialog } from '@ohif/ui';
+import { Button } from '@ohif/ui-next';
 import { ChromePicker } from 'react-color';
 
 import './colorPickerDialog.css';
@@ -7,16 +7,41 @@ import './colorPickerDialog.css';
 function callColorPickerDialog(uiDialogService, rgbaColor, callback) {
   const dialogId = 'pick-color';
 
-  const onSubmitHandler = ({ action, value }) => {
-    switch (action.id) {
-      case 'save':
-        callback(value.rgbaColor, action.id);
-        break;
-      case 'cancel':
-        callback('', action.id);
-        break;
-    }
-    uiDialogService.hide(dialogId);
+  const ColorPickerContent = ({ onClose }: any) => {
+    const [color, setColor] = React.useState(rgbaColor);
+
+    return (
+      <div className="p-4 text-white">
+        <div className="text-[16px] font-medium">Segment Color</div>
+        <div className="mt-4">
+          <ChromePicker
+            color={color}
+            onChange={(c: any) => setColor(c.rgb)}
+            presetColors={[]}
+            width={300}
+          />
+        </div>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              callback('', 'cancel');
+              onClose();
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              callback(color, 'save');
+              onClose();
+            }}
+          >
+            Save
+          </Button>
+        </div>
+      </div>
+    );
   };
 
   if (uiDialogService) {
@@ -25,31 +50,9 @@ function callColorPickerDialog(uiDialogService, rgbaColor, callback) {
       centralize: true,
       isDraggable: false,
       showOverlay: true,
-      content: Dialog,
+      content: ColorPickerContent,
       contentProps: {
-        title: 'Segment Color',
-        value: { rgbaColor },
-        noCloseButton: true,
         onClose: () => uiDialogService.hide(dialogId),
-        actions: [
-          { id: 'cancel', text: 'Cancel', type: 'primary' },
-          { id: 'save', text: 'Save', type: 'secondary' },
-        ],
-        onSubmit: onSubmitHandler,
-        body: ({ value, setValue }) => {
-          const handleChange = color => {
-            setValue({ rgbaColor: color.rgb });
-          };
-
-          return (
-            <ChromePicker
-              color={value.rgbaColor}
-              onChange={handleChange}
-              presetColors={[]}
-              width={300}
-            />
-          );
-        },
       },
     });
   }
