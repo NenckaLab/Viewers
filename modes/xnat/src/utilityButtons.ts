@@ -89,8 +89,19 @@ export const utilityButtons: Button[] = [
       type: 'tool',
       icon: 'tool-crosshair',
       label: 'Crosshairs',
-      commands: 'toggleEnabledDisabledToolbar',
-      evaluate: 'evaluate.cornerstoneTool.toggle',
+      tooltip: 'Click to toggle on or off',
+      commands: {
+        commandName: 'toggleActiveDisabledToolbar',
+        commandOptions: {
+          toolGroupIds: ['mpr'],
+        },
+      },
+      evaluate: {
+        name: 'evaluate.cornerstoneTool.toggleWithModifier',
+        disabledText: 'Select an MPR viewport to enable this tool',
+        toggledOnIcon: 'tool-crosshair-checked',
+        defaultIcon: 'tool-crosshair',
+      },
     },
   },
 ];

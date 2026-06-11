@@ -480,7 +480,7 @@ const modeInstance = {
     const utilityModule = extensionManager.getModuleEntry(
       '@ohif/extension-cornerstone.utilityModule.tools'
     );
-    const { toolNames } = utilityModule.exports;
+    const { toolNames, Enums } = utilityModule.exports;
     const segmentationTools = createTools({ commandsManager, utilityModule });
 
     // Add missing basic measurement tools that are not in segmentation tools.
@@ -532,7 +532,8 @@ const modeInstance = {
         ...(crosshairsConfig
           ? [
             {
-              toolName: 'Crosshairs',
+              toolName: toolNames.Crosshairs,
+              bindings: [{ mouseButton: Enums.MouseBindings.Primary }],
               configuration: {
                 ...crosshairsConfig,
                 // Keep crosshairs visible when switching to another tool.
