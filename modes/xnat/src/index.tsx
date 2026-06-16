@@ -613,12 +613,16 @@ const modeInstance = {
       }),
     });
 
-    // Set up toolbar sections specific to XNAT
+    // Set up toolbar sections specific to XNAT.
+    // clearButtonSection is required: updateSection appends when the section already
+    // exists (basic mode registers it first), which would leave new buttons at the end.
+    toolbarService.clearButtonSection(toolbarService.sections.primary);
     toolbarService.updateSection(toolbarService.sections.primary, [
       'returnToXNAT',
       'MeasurementTools',
       'Zoom',
       'Pan',
+      'PanZoomSync',
       'TrackballRotate',
       'WindowLevel',
       'Layout',

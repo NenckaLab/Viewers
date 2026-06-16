@@ -42,6 +42,32 @@ export const utilityButtons: Button[] = [
     },
   },
   {
+    id: 'PanZoomSync',
+    uiType: 'ohif.toolButton',
+    props: {
+      icon: 'link',
+      label: 'Pan/Zoom Sync',
+      tooltip: 'Synchronize pan and zoom across viewports',
+      commands: {
+        commandName: 'toggleSynchronizer',
+        commandOptions: {
+          type: 'zoompan',
+          syncId: 'mpr-zoompan',
+        },
+      },
+      evaluate: [
+        {
+          name: 'evaluate.cornerstone.synchronizerById',
+          syncId: 'mpr-zoompan',
+        },
+        {
+          name: 'evaluate.viewport.supported',
+          unsupportedViewportTypes: ['video', 'volume3d'],
+        },
+      ],
+    },
+  },
+  {
     id: 'TrackballRotate',
     uiType: 'ohif.toolButton',
     props: {

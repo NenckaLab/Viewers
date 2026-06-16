@@ -38,6 +38,7 @@ import { getFirstAnnotationSelected } from './utils/measurementServiceMappings/u
 import { getViewportEnabledElement } from './utils/getViewportEnabledElement';
 import getActiveViewportEnabledElement from './utils/getActiveViewportEnabledElement';
 import toggleVOISliceSync from './utils/toggleVOISliceSync';
+import toggleZoomPanSync from './utils/toggleZoomPanSync';
 import {
   usePositionPresentationStore,
   useSegmentationPresentationStore,
@@ -62,6 +63,7 @@ const { DefaultHistoryMemo } = csUtils.HistoryMemo;
 const toggleSyncFunctions = {
   imageSlice: toggleImageSliceSync,
   voi: toggleVOISliceSync,
+  zoompan: toggleZoomPanSync,
 };
 
 const { segmentation: segmentationUtils } = cstUtils;
