@@ -23,6 +23,9 @@ import { XNATDataSourceConfigManager } from './config';
 import { XNATQueryMethods } from './query';
 import { XNATStoreMethods } from './store';
 import { XNATApi } from './xnat-api';
+import {
+  shouldSkipAcquisitionInOverreadMode,
+} from '../utils/acquisitionImageLimit';
 
 const { DicomMetaDictionary, DicomDict } = dcmjs.data;
 
@@ -289,6 +292,7 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
 
 
             const allNaturalizedInstancesForStudy = [];
+            const loadedSeries = [];
 
             for (const series of study.series) {
               const xnatInstances = series.instances || [];
@@ -296,6 +300,15 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                 log.warn(`XNAT: No instances for series ${series.SeriesInstanceUID}`);
                 continue;
               }
+
+              if (shouldSkipAcquisitionInOverreadMode(xnatInstances, series.Modality, servicesManager)) {
+                log.warn(
+                  `XNAT Overread: Skipping acquisition ${series.SeriesInstanceUID} (${series.SeriesDescription || 'no description'}) — exceeds image limit`
+                );
+                continue;
+              }
+
+              loadedSeries.push(series);
 
               const normalizeOrientationPatient = raw => {
                 if (!raw) return undefined;
@@ -532,7 +545,7 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
             }
 
             // Add Series level metadata (summary) to DicomMetadataStore
-            const seriesSummaryMetadata = study.series.map(s => {
+            const seriesSummaryMetadata = loadedSeries.map(s => {
               return {
                 StudyInstanceUID, // This will be the synthetic UID for synthetic cases
                 SeriesInstanceUID: s.SeriesInstanceUID,
