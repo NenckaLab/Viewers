@@ -1,5 +1,6 @@
 // External dependencies
 import { DicomMetadataStore, IWebApiDataSource, utils, classes } from '@ohif/core';
+import { utilities as csUtilities } from '@cornerstonejs/core';
 import dcmjs from 'dcmjs';
 import getImageId from '../DicomWebDataSource/utils/getImageId.js';
 import { retrieveStudyMetadata, deleteStudyMetadataPromise } from '../DicomWebDataSource/retrieveStudyMetadata.js';
@@ -14,6 +15,19 @@ import {
 import { getSOPClassUIDForModality } from './Utils/SOPUtils';
 import { ensureInstanceRequiredFields } from './Utils/instanceUtils';
 import { generateRandomUID, generateUIDFromString } from './Utils/UIDUtils';
+import {
+  getPixelSpacingFromMetadata,
+  getSliceThicknessFromMetadata,
+  getSpacingBetweenSlicesFromMetadata,
+  buildSyntheticPerFrameFunctionalGroups,
+  computeMeanSliceSpacingFromPerFrameGroups,
+  isLikelySyntheticPerFrameGeometry,
+  needsMultiframeGeometryRepair,
+  normalizeImageOrientationPatient,
+  normalizeImagePositionPatient,
+  resolveThroughPlaneSpacing,
+} from './Utils/dicomMultiValue';
+import { fetchEnhancedMrHeaderGeometry } from './Utils/fetchEnhancedMrHeader';
 
 // Extracted modules
 import type { XNATDataSourceConfig, BulkDataURIConfig, InstanceMetadataForStore } from './types';
@@ -26,6 +40,10 @@ import { XNATApi } from './xnat-api';
 import {
   shouldSkipAcquisitionInOverreadMode,
 } from '../utils/acquisitionImageLimit';
+import {
+  buildImagePlaneModuleFromInstance,
+  getCombinedInstanceForFrame,
+} from '../xnatImagePlaneModule';
 
 const { DicomMetaDictionary, DicomDict } = dcmjs.data;
 
@@ -33,6 +51,69 @@ const { naturalizeDataset, denaturalizeDataset } = DicomMetaDictionary;
 
 
 const metadataProvider = classes.MetadataProvider;
+
+function applyEnhancedMrHeaderGeometry(
+  naturalized: Record<string, unknown>,
+  headerGeometry: Awaited<ReturnType<typeof fetchEnhancedMrHeaderGeometry>>
+): void {
+  if (!headerGeometry) {
+    return;
+  }
+
+  if (headerGeometry.PerFrameFunctionalGroupsSequence) {
+    naturalized.PerFrameFunctionalGroupsSequence = headerGeometry.PerFrameFunctionalGroupsSequence;
+    delete naturalized.ImagePositionPatient;
+  }
+  if (headerGeometry.SharedFunctionalGroupsSequence) {
+    naturalized.SharedFunctionalGroupsSequence = headerGeometry.SharedFunctionalGroupsSequence;
+  }
+  if (headerGeometry.PixelSpacing) {
+    naturalized.PixelSpacing = headerGeometry.PixelSpacing;
+  }
+  if (headerGeometry.SpacingBetweenSlices != null) {
+    naturalized.SpacingBetweenSlices = headerGeometry.SpacingBetweenSlices;
+  }
+  if (headerGeometry.SliceThickness != null) {
+    naturalized.SliceThickness = headerGeometry.SliceThickness;
+  }
+  if (headerGeometry.ImageOrientationPatient) {
+    naturalized.ImageOrientationPatient = headerGeometry.ImageOrientationPatient;
+  }
+  if (headerGeometry.Rows != null) {
+    naturalized.Rows = headerGeometry.Rows;
+  }
+  if (headerGeometry.Columns != null) {
+    naturalized.Columns = headerGeometry.Columns;
+  }
+
+  const spacing =
+    headerGeometry.SpacingBetweenSlices ??
+    computeMeanSliceSpacingFromPerFrameGroups(naturalized) ??
+    getSpacingBetweenSlicesFromMetadata(naturalized);
+  const pixelSpacing =
+    headerGeometry.PixelSpacing ?? getPixelSpacingFromMetadata(naturalized);
+  const orientation =
+    headerGeometry.ImageOrientationPatient ??
+    naturalized.ImageOrientationPatient;
+
+  if (spacing != null && spacing > 0) {
+    naturalized.SpacingBetweenSlices = spacing;
+    naturalized.SliceThickness = headerGeometry.SliceThickness ?? spacing;
+  }
+
+  naturalized.SharedFunctionalGroupsSequence = [
+    {
+      PixelMeasuresSequence: [
+        {
+          PixelSpacing: pixelSpacing,
+          SliceThickness: naturalized.SliceThickness ?? spacing,
+          SpacingBetweenSlices: spacing,
+        },
+      ],
+      PlaneOrientationSequence: [{ ImageOrientationPatient: orientation }],
+    },
+  ];
+}
 
 
 /**
@@ -310,41 +391,17 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
 
               loadedSeries.push(series);
 
-              const normalizeOrientationPatient = raw => {
-                if (!raw) return undefined;
-
-                let arr: any = raw;
-                if (typeof raw === 'string') {
-                  arr = raw.split('\\').map(v => Number(v.trim()));
-                } else if (Array.isArray(raw)) {
-                  arr = raw.map(v => Number(v));
-                } else {
-                  return undefined;
-                }
-
-                if (!Array.isArray(arr) || arr.length !== 6) {
-                  return undefined;
-                }
-
-                return arr.map(v => {
-                  const n = Number(v);
-                  if (Math.abs(n) < 1e-12) {
-                    return 0;
-                  }
-                  return Math.round(n * 1e5) / 1e5; // 5 decimals to remove float jitter
-                });
-              };
-
               // Snap orientation across the whole series so per-instance float drift
               // doesn't break drawing/import checks.
               const canonicalOrientation =
-                normalizeOrientationPatient(xnatInstances[0]?.metadata?.ImageOrientationPatient) ??
-                normalizeOrientationPatient(series?.ImageOrientationPatient);
+                normalizeImageOrientationPatient(xnatInstances[0]?.metadata?.ImageOrientationPatient) ??
+                normalizeImageOrientationPatient(series?.ImageOrientationPatient);
 
               const naturalizedInstancesForThisSeries = [];
               const instancesToStoreForThisSeries = [];
 
-              xnatInstances.forEach((xnatInstance, index) => {
+              for (let index = 0; index < xnatInstances.length; index++) {
+                const xnatInstance = xnatInstances[index];
                 const xnatMeta = xnatInstance.metadata || {};
                 const determinedModality = series.Modality || xnatMeta.Modality || 'Unknown';
                 // SOPInstanceUID is critical for SEG import (frames reference SOPInstanceUIDs).
@@ -361,6 +418,23 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   (xnatMeta as any).FrameOfReferenceUID ??
                   (series as any).FrameOfReferenceUID ??
                   series.SeriesInstanceUID;
+
+                const resolvedPixelSpacing = getPixelSpacingFromMetadata(xnatMeta);
+                const resolvedImagePositionPatient =
+                  normalizeImagePositionPatient(xnatMeta.ImagePositionPatient) || [0, 0, index];
+                const resolvedImageOrientationPatient =
+                  canonicalOrientation ||
+                  normalizeImageOrientationPatient(xnatMeta.ImageOrientationPatient) ||
+                  [1, 0, 0, 0, 1, 0];
+
+                const resolvedSliceThickness =
+                  getSliceThicknessFromMetadata(xnatMeta as Record<string, unknown>) ??
+                  (xnatMeta.SliceThickness != null ? Number(xnatMeta.SliceThickness) : undefined);
+                const resolvedSpacingBetweenSlices =
+                  getSpacingBetweenSlicesFromMetadata(xnatMeta as Record<string, unknown>) ??
+                  (xnatMeta.SpacingBetweenSlices != null
+                    ? Number(xnatMeta.SpacingBetweenSlices)
+                    : undefined);
 
                 let naturalized = {
                   StudyInstanceUID,
@@ -379,13 +453,13 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   // Add other fallbacks as needed for viewer display
                   Rows: xnatMeta.Rows || 512,
                   Columns: xnatMeta.Columns || 512,
-                  PixelSpacing: xnatMeta.PixelSpacing || [1, 1],
-                  SliceThickness: xnatMeta.SliceThickness || 1,
-                  ImagePositionPatient: xnatMeta.ImagePositionPatient || [0, 0, index],
-                  ImageOrientationPatient:
-                    canonicalOrientation ||
-                    xnatMeta.ImageOrientationPatient ||
-                    [1, 0, 0, 0, 1, 0],
+                  PixelSpacing: resolvedPixelSpacing,
+                  SliceThickness: resolvedSliceThickness ?? 1,
+                  ...(resolvedSpacingBetweenSlices != null && {
+                    SpacingBetweenSlices: resolvedSpacingBetweenSlices,
+                  }),
+                  ImagePositionPatient: resolvedImagePositionPatient,
+                  ImageOrientationPatient: resolvedImageOrientationPatient,
                   ImageType: xnatMeta.ImageType || 'ORIGINAL',
                   PhotometricInterpretation: xnatMeta.PhotometricInterpretation || (determinedModality === 'CT' || determinedModality === 'MR' || determinedModality === 'PT' ? 'MONOCHROME2' : 'RGB'),
                   SamplesPerPixel: xnatMeta.SamplesPerPixel || ((determinedModality === 'CT' || determinedModality === 'MR' || determinedModality === 'PT') ? 1 : 3),
@@ -395,46 +469,49 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   HighBit: xnatMeta.HighBit === undefined ? ((xnatMeta.BitsStored || (xnatMeta.BitsAllocated || 16)) - 1) : xnatMeta.HighBit,
                 };
 
-                // Multi-frame (Enhanced MR): synthetic per-frame geometry so MPR can reconstruct the volume and sagittal/coronal proportions are correct
+                // Multi-frame volumes (Enhanced MR/CT): always read real per-frame geometry
+                // from the DICOM header. Wrong slice spacing squashes sagittal/coronal MPR.
                 const numFrames = naturalized.NumberOfFrames || 1;
-                if (numFrames > 1 && !naturalized.PerFrameFunctionalGroupsSequence) {
-                  const origin = (naturalized.ImagePositionPatient || [0, 0, 0]).map(Number);
-                  const orientation = (naturalized.ImageOrientationPatient || [1, 0, 0, 0, 1, 0]).map(Number);
-                  const pixelSpacing = naturalized.PixelSpacing || [1, 1];
-                  const inPlaneSpacing = Math.max(Number(pixelSpacing[0]) || 1, Number(pixelSpacing[1]) || 1);
-                  const sliceThicknessNum = naturalized.SliceThickness != null ? Number(naturalized.SliceThickness) : 0;
-                  const spacing = naturalized.SpacingBetweenSlices != null
-                    ? Number(naturalized.SpacingBetweenSlices)
-                    : sliceThicknessNum >= inPlaneSpacing
-                      ? sliceThicknessNum
-                      : inPlaneSpacing * 2.5;
+                if (numFrames > 1) {
+                  const headerGeometry = await fetchEnhancedMrHeaderGeometry(
+                    xnatInstance.url,
+                    configManager.getConfig().wadoRoot,
+                    configManager.getWadoHeader()
+                  );
 
-                  const rowDir = orientation.slice(0, 3);
-                  const colDir = orientation.slice(3, 6);
-                  const normal = [
-                    rowDir[1] * colDir[2] - rowDir[2] * colDir[1],
-                    rowDir[2] * colDir[0] - rowDir[0] * colDir[2],
-                    rowDir[0] * colDir[1] - rowDir[1] * colDir[0],
-                  ];
-                  const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
-                  const perFrame = [];
-                  for (let f = 0; f < numFrames; f++) {
-                    perFrame.push({
-                      PlanePositionSequence: [{
-                        ImagePositionPatient: [
-                          round6(origin[0] + normal[0] * spacing * f),
-                          round6(origin[1] + normal[1] * spacing * f),
-                          round6(origin[2] + normal[2] * spacing * f),
-                        ],
-                      }],
-                    });
+                  if (
+                    headerGeometry &&
+                    (headerGeometry.PerFrameFunctionalGroupsSequence || headerGeometry.PixelSpacing)
+                  ) {
+                    applyEnhancedMrHeaderGeometry(
+                      naturalized as Record<string, unknown>,
+                      headerGeometry
+                    );
+                  } else {
+                    log.warn(
+                      `XNAT: could not read multiframe geometry from DICOM header for ${xnatInstance.url}; MPR may appear vertically compressed`
+                    );
                   }
-                  naturalized.PerFrameFunctionalGroupsSequence = perFrame;
-                  naturalized.SharedFunctionalGroupsSequence = [{
-                    PixelMeasuresSequence: [{ PixelSpacing: pixelSpacing, SliceThickness: spacing, SpacingBetweenSlices: spacing }],
-                    PlaneOrientationSequence: [{ ImageOrientationPatient: orientation }],
-                  }];
-                  delete naturalized.ImagePositionPatient;
+
+                  if (needsMultiframeGeometryRepair(naturalized as Record<string, unknown>)) {
+                    const { perFrame, shared } = buildSyntheticPerFrameFunctionalGroups(
+                      naturalized as Record<string, unknown>
+                    );
+                    naturalized.PerFrameFunctionalGroupsSequence = perFrame;
+                    naturalized.SharedFunctionalGroupsSequence = shared;
+                    const spacing = resolveThroughPlaneSpacing(
+                      naturalized as Record<string, unknown>
+                    );
+                    naturalized.SpacingBetweenSlices = spacing;
+                    naturalized.SliceThickness = spacing;
+                    delete naturalized.ImagePositionPatient;
+                  } else if (
+                    isLikelySyntheticPerFrameGeometry(naturalized as Record<string, unknown>)
+                  ) {
+                    log.warn(
+                      `XNAT: per-frame slice positions look synthetic for SOP ${naturalized.SOPInstanceUID}; sagittal/coronal MPR spacing may be wrong`
+                    );
+                  }
                 }
 
                 // Ensure required fields for DicomMetadataStore
@@ -532,12 +609,24 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                     'generalSeriesModule',
                     generalSeriesModule
                   );
+
+                  const combinedForFrame = getCombinedInstanceForFrame(
+                    naturalized as Record<string, unknown>,
+                    frameNumber
+                  );
+                  if (combinedForFrame) {
+                    const imagePlaneModule = buildImagePlaneModuleFromInstance(combinedForFrame);
+                    csUtilities.genericMetadataProvider.addRaw(frameImageId, {
+                      type: 'imagePlaneModule',
+                      metadata: imagePlaneModule,
+                    });
+                  }
                 }
                 // Register bare instance imageId (no ?_=0 or &frame=) for frame 1 so
                 // getClosestImageId / base imageId lookups work in volume viewports.
                 const bareBaseId = imageId.startsWith('dicomweb:') ? imageId : `dicomweb:${imageId}`;
                 metadataProvider.addImageIdToUIDs(bareBaseId, { ...uids, frameNumber: 1 });
-              });
+              }
 
               if (instancesToStoreForThisSeries.length > 0) {
                 DicomMetadataStore.addInstances(instancesToStoreForThisSeries, madeInClient);

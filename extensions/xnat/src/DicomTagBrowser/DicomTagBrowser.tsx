@@ -1,12 +1,17 @@
 import dcmjs from 'dcmjs';
 import moment from 'moment';
 import React, { useState, useMemo, useCallback } from 'react';
-import { classes, Types } from '@ohif/core';
+import { classes, Types, DicomMetadataStore } from '@ohif/core';
 import { InputFilter } from '@ohif/ui-next';
 import { Select, SelectTrigger, SelectContent, SelectItem, Slider } from '@ohif/ui-next';
 
 import DicomTagTable from './DicomTagTable';
 import './DicomTagBrowser.css';
+import {
+  getPixelSpacingFromMetadata,
+  normalizeImageOrientationPatient,
+  normalizeImagePositionPatient,
+} from '../XNATDataSource/Utils/dicomMultiValue';
 
 export type Row = {
   uid: string;
@@ -77,10 +82,22 @@ const DicomTagBrowser = ({
 
   const getMetadata = useCallback(
     isImageStack => {
-      if (isImageStack) {
-        return activeDisplaySet.images[instanceNumber - 1];
+      const fallback = isImageStack
+        ? activeDisplaySet.images[instanceNumber - 1]
+        : activeDisplaySet.instance || activeDisplaySet;
+
+      const studyUID = fallback?.StudyInstanceUID || activeDisplaySet?.StudyInstanceUID;
+      const seriesUID = fallback?.SeriesInstanceUID || activeDisplaySet?.SeriesInstanceUID;
+      const sopUID = fallback?.SOPInstanceUID;
+
+      if (studyUID && seriesUID && sopUID) {
+        const fromStore = DicomMetadataStore.getInstance(studyUID, seriesUID, sopUID);
+        if (fromStore) {
+          return fromStore;
+        }
       }
-      return activeDisplaySet.instance || activeDisplaySet;
+
+      return fallback;
     },
     [activeDisplaySet, instanceNumber]
   );
@@ -90,9 +107,10 @@ const DicomTagBrowser = ({
     const metadata = getMetadata(isImageStack);
 
     setShouldShowInstanceList(isImageStack && activeDisplaySet.images.length > 1);
+    const geometrySummaryRows = getGeometrySummaryRows(metadata);
     const tags = getSortedTags(metadata);
-    const rows = getFormattedRowsFromTags({ tags, metadata });
-    return rows;
+    const tagRows = getFormattedRowsFromTags({ tags, metadata });
+    return [...geometrySummaryRows, ...tagRows];
   }, [getMetadata, activeDisplaySet]);
 
   const filteredRows = useMemo(() => {
@@ -295,6 +313,70 @@ function getFormattedRowsFromTags({ tags, metadata }) {
   return rows;
 }
 
+function getGeometrySummaryRows(metadata): Row[] {
+  if (!metadata || typeof metadata !== 'object') {
+    return [];
+  }
+
+  const pixelSpacing = getPixelSpacingFromMetadata(metadata);
+  const imagePositionPatient = normalizeImagePositionPatient(metadata.ImagePositionPatient);
+  const imageOrientationPatient = normalizeImageOrientationPatient(metadata.ImageOrientationPatient);
+  const sharedGroups = metadata.SharedFunctionalGroupsSequence;
+  const perFrameGroups = metadata.PerFrameFunctionalGroupsSequence;
+  const hasFunctionalGroups =
+    (Array.isArray(sharedGroups) && sharedGroups.length > 0) ||
+    (Array.isArray(perFrameGroups) && perFrameGroups.length > 0);
+
+  const summary = [
+    {
+      keyword: 'Resolved PixelSpacing',
+      value: pixelSpacing.join('\\'),
+      tag: '(derived)',
+      valueRepresentation: 'DS',
+    },
+    {
+      keyword: 'Resolved Rows',
+      value: String(metadata.Rows ?? ''),
+      tag: '(derived)',
+      valueRepresentation: 'US',
+    },
+    {
+      keyword: 'Resolved Columns',
+      value: String(metadata.Columns ?? ''),
+      tag: '(derived)',
+      valueRepresentation: 'US',
+    },
+    {
+      keyword: 'Resolved ImagePositionPatient',
+      value: imagePositionPatient ? imagePositionPatient.join('\\') : '',
+      tag: '(derived)',
+      valueRepresentation: 'DS',
+    },
+    {
+      keyword: 'Resolved ImageOrientationPatient',
+      value: imageOrientationPatient ? imageOrientationPatient.join('\\') : '',
+      tag: '(derived)',
+      valueRepresentation: 'DS',
+    },
+    {
+      keyword: 'Functional Groups Present',
+      value: hasFunctionalGroups ? 'yes' : 'no',
+      tag: '(derived)',
+      valueRepresentation: 'CS',
+    },
+  ];
+
+  return summary.map((item, index) => ({
+    uid: `geometry_summary_${index}`,
+    tag: item.tag,
+    valueRepresentation: item.valueRepresentation,
+    keyword: item.keyword,
+    value: item.value,
+    depth: 0,
+    isVisible: true,
+  }));
+}
+
 function getSortedTags(metadata) {
   // Gracefully handle missing or invalid metadata
   if (!metadata || typeof metadata !== 'object') {
@@ -330,6 +412,15 @@ function getTagInfoFromKeyword(keyword) {
         '00280010': { tag: '(0028,0010)', vr: 'US', keyword: 'Rows' },
         '00280011': { tag: '(0028,0011)', vr: 'US', keyword: 'Columns' },
         '00280030': { tag: '(0028,0030)', vr: 'DS', keyword: 'PixelSpacing' },
+        '00180050': { tag: '(0018,0050)', vr: 'DS', keyword: 'SliceThickness' },
+        '00180088': { tag: '(0018,0088)', vr: 'DS', keyword: 'SpacingBetweenSlices' },
+        '00200032': { tag: '(0020,0032)', vr: 'DS', keyword: 'ImagePositionPatient' },
+        '00200037': { tag: '(0020,0037)', vr: 'DS', keyword: 'ImageOrientationPatient' },
+        '00289110': { tag: '(0028,9110)', vr: 'SQ', keyword: 'PixelMeasuresSequence' },
+        '00209113': { tag: '(0020,9113)', vr: 'SQ', keyword: 'PlanePositionSequence' },
+        '00209116': { tag: '(0020,9116)', vr: 'SQ', keyword: 'PlaneOrientationSequence' },
+        '52009229': { tag: '(5200,9229)', vr: 'SQ', keyword: 'SharedFunctionalGroupsSequence' },
+        '52009230': { tag: '(5200,9230)', vr: 'SQ', keyword: 'PerFrameFunctionalGroupsSequence' },
         '00280100': { tag: '(0028,0100)', vr: 'US', keyword: 'BitsAllocated' },
         '00280101': { tag: '(0028,0101)', vr: 'US', keyword: 'BitsStored' },
         '00280102': { tag: '(0028,0102)', vr: 'US', keyword: 'HighBit' },
@@ -426,14 +517,17 @@ function getRows(metadata, depth = 0) {
     const tagInfo = getTagInfoFromKeyword(keyword);
 
     let value = metadata[keyword];
+    let valueRepresentation = tagInfo?.vr;
 
-    // Handle XNAT's DICOM object format: {vr: 'UI', Value: ['value']}
-    if (value && typeof value === 'object' && value.Value && Array.isArray(value.Value)) {
-      // Extract the actual value from the DICOM object
-      if (value.Value.length === 1) {
+    // Handle denaturalized DICOM JSON: { vr: 'SQ' | 'UI' | ..., Value: [...] }
+    if (value && typeof value === 'object' && Array.isArray(value.Value)) {
+      valueRepresentation = value.vr || valueRepresentation;
+      if (valueRepresentation === 'SQ') {
+        value = value.Value;
+      } else if (value.Value.length === 1) {
         value = value.Value[0];
       } else if (value.Value.length > 1) {
-        value = value.Value.join('\\'); // Multi-value separator
+        value = value.Value.join('\\');
       } else {
         value = '';
       }
@@ -446,30 +540,48 @@ function getRows(metadata, depth = 0) {
     }
     processedTags.add(tagKey);
 
-    if (tagInfo && tagInfo.vr === 'SQ') {
-      const sequenceAsArray = toArray(value);
+    const isSequence =
+      valueRepresentation === 'SQ' ||
+      tagInfo?.vr === 'SQ' ||
+      (Array.isArray(value) &&
+        value.length > 0 &&
+        value.every(item => item && typeof item === 'object' && !Array.isArray(item)));
 
-      // Push line defining the sequence
+    if (isSequence) {
+      const sequenceAsArray = toArray(value);
+      const sequenceTagInfo =
+        tagInfo ||
+        (valueRepresentation === 'SQ'
+          ? {
+              tag: tagKey,
+              vr: 'SQ',
+              keyword,
+            }
+          : null);
+
+      if (!sequenceTagInfo) {
+        continue;
+      }
 
       const sequence = {
-        tag: tagInfo.tag,
-        vr: tagInfo.vr,
-        keyword: tagInfo.keyword,
+        tag: sequenceTagInfo.tag,
+        vr: 'SQ',
+        keyword: sequenceTagInfo.keyword || keyword,
         values: [],
       };
 
       rows.push(sequence);
 
       if (value === null) {
-        // Type 2 Sequence
         continue;
       }
 
       sequenceAsArray.forEach(item => {
-        const sequenceRows = getRows(item, depth + 1);
+        const sequenceItem =
+          item && typeof item === 'object' && Array.isArray(item.Value) ? item.Value[0] : item;
+        const sequenceRows = getRows(sequenceItem, depth + 1);
 
         if (sequenceRows.length) {
-          // Sort the sequence group.
           _sortTagList(sequenceRows);
           sequence.values.push(sequenceRows);
         }
