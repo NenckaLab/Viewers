@@ -315,10 +315,22 @@ const xnatRoute = {
       (urlHp && comparisonProtocolIds.includes(urlHp)) ||
       (explicitFromQuery && comparisonProtocolIds.includes(explicitFromQuery));
 
+    // Determine which specific comparison protocol was requested (if any).
+    // Prefer the explicit URL query parameter over the mode/xnat protocol id.
+    const requestedComparisonProtocol =
+      (explicitFromQuery && comparisonProtocolIds.includes(explicitFromQuery) ? explicitFromQuery : null) ||
+      (urlHp && comparisonProtocolIds.includes(urlHp) ? urlHp : null);
+
     if (isMultiStudy || wantsComparison) {
-      // Multi-study or explicit comparison protocol request → hpCompare
-      hangingProtocolId = '@ohif/hpCompare';
-      hangingProtocolService.setActiveProtocolIds(['@ohif/hpCompare', 'default']);
+      if (requestedComparisonProtocol === '@ohif/mrSubjectComparison') {
+        // MPR 3×2 side-by-side comparison was explicitly requested
+        hangingProtocolId = '@ohif/mrSubjectComparison';
+        hangingProtocolService.setActiveProtocolIds(['@ohif/mrSubjectComparison', '@ohif/hpCompare', 'default']);
+      } else {
+        // Default 2×2 compare layout
+        hangingProtocolId = '@ohif/hpCompare';
+        hangingProtocolService.setActiveProtocolIds(['@ohif/hpCompare', 'default']);
+      }
     } else if (urlHp) {
       // Query string (or Mode) requested a specific protocol — do not overwrite with XNAT defaults
       hangingProtocolId = urlHp;
@@ -660,7 +672,9 @@ const modeInstance = {
     'only3D',
     'primary3D',
     'primaryAxial',
-    'fourUp'
+    'fourUp',
+    '@ohif/mrSubjectComparison',
+    '@ohif/hpCompare',
   ],
   sopClassHandlers: [
     xnat.sopClassHandler,
