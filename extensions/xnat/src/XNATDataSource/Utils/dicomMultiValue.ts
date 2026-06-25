@@ -306,6 +306,56 @@ export function buildSyntheticPerFrameFunctionalGroups(meta: Record<string, unkn
   return { perFrame, shared };
 }
 
+/**
+ * True when XNAT session JSON already has plausible through-plane spacing
+ * (not the default 1.0 mm placeholder on thick-slice acquisitions).
+ */
+export function hasTrustworthySessionMultiframeSpacing(
+  meta: Record<string, unknown> | undefined
+): boolean {
+  if (!meta) {
+    return false;
+  }
+
+  const pixelSpacing = getPixelSpacingFromMetadata(meta);
+  const inPlaneSpacing = Math.max(Number(pixelSpacing[0]) || 1, Number(pixelSpacing[1]) || 1);
+  const spacing =
+    getSpacingBetweenSlicesFromMetadata(meta) ??
+    getSliceThicknessFromMetadata(meta) ??
+    (meta.SpacingBetweenSlices != null ? Number(meta.SpacingBetweenSlices) : undefined) ??
+    (meta.SliceThickness != null ? Number(meta.SliceThickness) : undefined);
+
+  if (spacing == null || spacing <= 0 || Number.isNaN(spacing)) {
+    return false;
+  }
+
+  if (spacing <= 1.01 && inPlaneSpacing > spacing * 1.5) {
+    return false;
+  }
+
+  return spacing >= inPlaneSpacing * 0.5;
+}
+
+/**
+ * Whether to download a DICOM file prefix to read functional groups.
+ * Skipped when session JSON (or an existing per-frame sequence) is already sufficient.
+ */
+export function shouldFetchEnhancedMrHeaderGeometry(meta: Record<string, unknown>): boolean {
+  const numFrames = Number(meta.NumberOfFrames) || 1;
+  if (numFrames < 2) {
+    return false;
+  }
+
+  if (meta.PerFrameFunctionalGroupsSequence) {
+    const computed = computeMeanSliceSpacingFromPerFrameGroups(meta);
+    if (computed != null && !isLikelySyntheticPerFrameGeometry(meta)) {
+      return false;
+    }
+  }
+
+  return !hasTrustworthySessionMultiframeSpacing(meta);
+}
+
 export function needsMultiframeGeometryRepair(meta: Record<string, unknown>): boolean {
   const numFrames = Number(meta.NumberOfFrames) || 1;
   if (numFrames < 2) {

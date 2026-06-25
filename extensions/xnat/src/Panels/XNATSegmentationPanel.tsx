@@ -10,12 +10,21 @@ export default function XNATSegmentationPanel({ configuration, commandsManager, 
   const systemContext = useSystem();
   commandsManager = commandsManager || systemContext.commandsManager;
   servicesManager = servicesManager || systemContext.servicesManager;
-  const { customizationService, displaySetService, viewportGridService } = servicesManager.services;
+  const { customizationService, displaySetService, viewportGridService, segmentationService } =
+    servicesManager.services;
   const [showImportMenu, setShowImportMenu] = useState(false);
   const [viewportData, setViewportData] = useState<any>(null);
 
   const { segmentationsWithRepresentations, disabled } =
     useActiveViewportSegmentationRepresentations();
+
+  // In collapsed mode the table shows `selectedSegmentationIdForType ?? segmentations[0]`.
+  // Without this, the panel always shows the first-created segmentation (e.g. a manual one)
+  // instead of the active/just-imported one. Track the active segmentation so the panel follows it.
+  const activeViewportIdForSelection = viewportGridService.getActiveViewportId();
+  const selectedSegmentationIdForType = segmentationService?.getActiveSegmentation(
+    activeViewportIdForSelection
+  )?.segmentationId;
 
   // Extract customization options
   const segmentationTableMode = customizationService.getCustomization(
@@ -183,6 +192,7 @@ export default function XNATSegmentationPanel({ configuration, commandsManager, 
     onSegmentationAdd,
     showAddSegment,
     renderInactiveSegmentations: handlers.getRenderInactiveSegmentations(),
+    selectedSegmentationIdForType,
     ...handlers,
   };
 

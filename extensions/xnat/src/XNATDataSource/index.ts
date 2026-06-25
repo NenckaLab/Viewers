@@ -26,6 +26,7 @@ import {
   normalizeImageOrientationPatient,
   normalizeImagePositionPatient,
   resolveThroughPlaneSpacing,
+  shouldFetchEnhancedMrHeaderGeometry,
 } from './Utils/dicomMultiValue';
 import { fetchEnhancedMrHeaderGeometry } from './Utils/fetchEnhancedMrHeader';
 
@@ -38,6 +39,7 @@ import { XNATQueryMethods } from './query';
 import { XNATStoreMethods } from './store';
 import { XNATApi } from './xnat-api';
 import {
+  MAX_OVERREAD_ACQUISITION_IMAGES,
   shouldSkipAcquisitionInOverreadMode,
 } from '../utils/acquisitionImageLimit';
 import {
@@ -384,7 +386,8 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
 
               if (shouldSkipAcquisitionInOverreadMode(xnatInstances, series.Modality, servicesManager)) {
                 log.warn(
-                  `XNAT Overread: Skipping acquisition ${series.SeriesInstanceUID} (${series.SeriesDescription || 'no description'}) — exceeds image limit`
+                  `XNAT Overread: Skipping scan/series ${series.SeriesInstanceUID} (${series.SeriesDescription || 'no description'}) — ` +
+                    `exceeds per-scan limit of ${MAX_OVERREAD_ACQUISITION_IMAGES} frames`
                 );
                 continue;
               }
@@ -469,28 +472,30 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   HighBit: xnatMeta.HighBit === undefined ? ((xnatMeta.BitsStored || (xnatMeta.BitsAllocated || 16)) - 1) : xnatMeta.HighBit,
                 };
 
-                // Multi-frame volumes (Enhanced MR/CT): always read real per-frame geometry
-                // from the DICOM header. Wrong slice spacing squashes sagittal/coronal MPR.
+                // Multi-frame volumes: fetch DICOM header only when session JSON lacks
+                // trustworthy slice spacing (avoids downloading every multiframe file at load).
                 const numFrames = naturalized.NumberOfFrames || 1;
                 if (numFrames > 1) {
-                  const headerGeometry = await fetchEnhancedMrHeaderGeometry(
-                    xnatInstance.url,
-                    configManager.getConfig().wadoRoot,
-                    configManager.getWadoHeader()
-                  );
+                  if (shouldFetchEnhancedMrHeaderGeometry(naturalized as Record<string, unknown>)) {
+                    const headerGeometry = await fetchEnhancedMrHeaderGeometry(
+                      xnatInstance.url,
+                      configManager.getConfig().wadoRoot,
+                      configManager.getAuthorizationHeader()
+                    );
 
-                  if (
-                    headerGeometry &&
-                    (headerGeometry.PerFrameFunctionalGroupsSequence || headerGeometry.PixelSpacing)
-                  ) {
-                    applyEnhancedMrHeaderGeometry(
-                      naturalized as Record<string, unknown>,
-                      headerGeometry
-                    );
-                  } else {
-                    log.warn(
-                      `XNAT: could not read multiframe geometry from DICOM header for ${xnatInstance.url}; MPR may appear vertically compressed`
-                    );
+                    if (
+                      headerGeometry &&
+                      (headerGeometry.PerFrameFunctionalGroupsSequence || headerGeometry.PixelSpacing)
+                    ) {
+                      applyEnhancedMrHeaderGeometry(
+                        naturalized as Record<string, unknown>,
+                        headerGeometry
+                      );
+                    } else {
+                      log.warn(
+                        `XNAT: could not read multiframe geometry from DICOM header for ${xnatInstance.url}; MPR may appear vertically compressed`
+                      );
+                    }
                   }
 
                   if (needsMultiframeGeometryRepair(naturalized as Record<string, unknown>)) {
@@ -578,6 +583,7 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   seriesInstanceUID: series.SeriesInstanceUID,
                   studyInstanceUID: StudyInstanceUID,
                 };
+                let registeredBaseImageUri = false;
                 for (let i = 0; i < numberOfFrames; i++) {
                   const frameNumber = i + 1;
                   const frameImageId = implementation.getImageIdsForInstance({
@@ -589,37 +595,47 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                     frameNumber: numberOfFrames > 1 ? frameNumber : undefined,
                   };
                   metadataProvider.addImageIdToUIDs(frameImageId, frameUids);
-                  // OHIF MetadataProvider getUIDsFromImageID strips &frame= and looks up base URL
-                  if (frameImageId.includes('&frame=')) {
-                    const baseImageId =
-                      (frameImageId.split('&frame=')[0] || '').replace(/[?&]$/, '') || frameImageId;
-                    if (baseImageId && baseImageId !== frameImageId) {
-                      const hasScheme = baseImageId.startsWith('dicomweb:') || baseImageId.startsWith('http');
-                      metadataProvider.addImageIdToUIDs(
-                        hasScheme ? baseImageId : `dicomweb:${baseImageId}`,
-                        frameUids
-                      );
-                      // So Cornerstone metadata provider can resolve imagePlaneModule for frame-level imageIds (MPR)
-                      const baseUri = utils.imageIdToURI(hasScheme ? baseImageId : `dicomweb:${baseImageId}`);
-                      setXNATImageIdUids(baseUri, { StudyInstanceUID: uids.StudyInstanceUID, SeriesInstanceUID: uids.SeriesInstanceUID, SOPInstanceUID: uids.SOPInstanceUID });
-                    }
-                  }
                   metadataProvider.addCustomMetadata(
                     frameImageId,
                     'generalSeriesModule',
                     generalSeriesModule
                   );
 
-                  const combinedForFrame = getCombinedInstanceForFrame(
-                    naturalized as Record<string, unknown>,
-                    frameNumber
-                  );
-                  if (combinedForFrame) {
-                    const imagePlaneModule = buildImagePlaneModuleFromInstance(combinedForFrame);
-                    csUtilities.genericMetadataProvider.addRaw(frameImageId, {
-                      type: 'imagePlaneModule',
-                      metadata: imagePlaneModule,
-                    });
+                  // Per-frame imagePlaneModule is resolved on demand via xnatFrameMetadataProvider.
+                  if (frameNumber === 1) {
+                    if (frameImageId.includes('&frame=') && !registeredBaseImageUri) {
+                      const baseImageId =
+                        (frameImageId.split('&frame=')[0] || '').replace(/[?&]$/, '') || frameImageId;
+                      if (baseImageId && baseImageId !== frameImageId) {
+                        const hasScheme =
+                          baseImageId.startsWith('dicomweb:') || baseImageId.startsWith('http');
+                        metadataProvider.addImageIdToUIDs(
+                          hasScheme ? baseImageId : `dicomweb:${baseImageId}`,
+                          frameUids
+                        );
+                        const baseUri = utils.imageIdToURI(
+                          hasScheme ? baseImageId : `dicomweb:${baseImageId}`
+                        );
+                        setXNATImageIdUids(baseUri, {
+                          StudyInstanceUID: uids.StudyInstanceUID,
+                          SeriesInstanceUID: uids.SeriesInstanceUID,
+                          SOPInstanceUID: uids.SOPInstanceUID,
+                        });
+                        registeredBaseImageUri = true;
+                      }
+                    }
+
+                    const combinedForFrame = getCombinedInstanceForFrame(
+                      naturalized as Record<string, unknown>,
+                      frameNumber
+                    );
+                    if (combinedForFrame) {
+                      const imagePlaneModule = buildImagePlaneModuleFromInstance(combinedForFrame);
+                      csUtilities.genericMetadataProvider.addRaw(frameImageId, {
+                        type: 'imagePlaneModule',
+                        metadata: imagePlaneModule,
+                      });
+                    }
                   }
                 }
                 // Register bare instance imageId (no ?_=0 or &frame=) for frame 1 so
