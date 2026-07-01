@@ -21,6 +21,11 @@ export function getDynamicVolumeInfo(instances: any[], appContext: AppContextTyp
   }
 
   const imageIds = instances.map(({ imageId }) => imageId);
+  if (imageIds.some(id => !id)) {
+    console.warn('getDynamicVolumeInfo: skipping instances with empty imageId');
+    return { isDynamicVolume: false, timePoints: [], getRegularTimePointData: () => [] };
+  }
+
   const volumeLoaderUtility = extensionManager.getModuleEntry(
     '@ohif/extension-cornerstone.utilityModule.volumeLoader'
   );

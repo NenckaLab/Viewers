@@ -4,14 +4,9 @@ import {
   Enums as ToolsEnums,
   segmentation as csSegmentation,
 } from '@cornerstonejs/tools';
-import {
-  cache,
-  getEnabledElementByViewportId,
-  metaData,
-  volumeLoader,
-  VolumeViewport,
-} from '@cornerstonejs/core';
 
+const { convertStackToVolumeLabelmap } = csSegmentation.helpers;
+import { cache, metaData } from '@cornerstonejs/core';
 /**
  * RGBA for label index `segmentLabel` — same entries as platform/core
  * SegmentationService uses via `generateNewColorLUT` → `cloneDeep(COLOR_LUT)`.
@@ -79,6 +74,112 @@ function ensureCentroidsStructure(centroids, segMetadata) {
 
 type PermutationEntry = { newIndex: number; oldIndex: number };
 
+function toPoint3(value: unknown): [number, number, number] | null {
+  if (!value) {
+    return null;
+  }
+  if (Array.isArray(value) || ArrayBuffer.isView(value)) {
+    const arr = Array.from(value as ArrayLike<number>);
+    if (arr.length < 3) {
+      return null;
+    }
+    const [x, y, z] = arr;
+    if ([x, y, z].some(component => component === undefined || component === null)) {
+      return null;
+    }
+    return [Number(x), Number(y), Number(z)];
+  }
+  if (typeof value === 'object') {
+    const { x, y, z } = value as Record<string, number>;
+    if ([x, y, z].some(component => component === undefined || component === null)) {
+      return null;
+    }
+    return [Number(x), Number(y), Number(z)];
+  }
+  return null;
+}
+
+function normalizeVector(vector: [number, number, number]): [number, number, number] | null {
+  const length = Math.hypot(vector[0], vector[1], vector[2]);
+  if (!length) {
+    return null;
+  }
+  return [vector[0] / length, vector[1] / length, vector[2] / length];
+}
+
+function dotProduct(a: [number, number, number], b: [number, number, number]) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function crossProduct3(
+  a: [number, number, number],
+  b: [number, number, number]
+): [number, number, number] {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+/** Ascending scan-normal order for SEG frame matching (Cornerstone volume convention). */
+function sortImageIdsByImagePosition(imageIds: string[]): string[] {
+  if (!imageIds || imageIds.length < 2) {
+    return imageIds;
+  }
+
+  const planeData = imageIds.map(imageId => ({
+    imageId,
+    plane: metaData.get('imagePlaneModule', imageId) as Record<string, unknown> | undefined,
+  }));
+
+  if (planeData.some(entry => !entry.plane)) {
+    return imageIds;
+  }
+
+  const referenceEntry = planeData.find(({ plane }) => {
+    const position = toPoint3(plane?.imagePositionPatient);
+    const rowCosines = toPoint3(plane?.rowCosines);
+    const columnCosines = toPoint3(plane?.columnCosines);
+    return Boolean(position && rowCosines && columnCosines);
+  });
+
+  if (!referenceEntry?.plane) {
+    return imageIds;
+  }
+
+  const rowCosines = toPoint3(referenceEntry.plane.rowCosines);
+  const columnCosines = toPoint3(referenceEntry.plane.columnCosines);
+  const normal =
+    rowCosines && columnCosines
+      ? normalizeVector(crossProduct3(rowCosines, columnCosines))
+      : null;
+
+  if (!normal) {
+    return imageIds;
+  }
+
+  const sortableData: { imageId: string; distance: number }[] = [];
+
+  for (const { imageId, plane } of planeData) {
+    const position = toPoint3(plane?.imagePositionPatient);
+    if (!position) {
+      return imageIds;
+    }
+    sortableData.push({
+      imageId,
+      distance: dotProduct(position, normal),
+    });
+  }
+
+  const sortedData = [...sortableData].sort((a, b) => a.distance - b.distance);
+  const alreadySorted = sortableData.every(
+    (entry, index) => entry.imageId === sortedData[index].imageId
+  );
+
+  return alreadySorted ? imageIds : sortedData.map(entry => entry.imageId);
+}
+
 function buildPermutation<T extends { referencedImageId?: string }>(
   labelmapImages: T[],
   referenceImageIds: string[]
@@ -92,7 +193,9 @@ function buildPermutation<T extends { referencedImageId?: string }>(
 
   for (let newIndex = 0; newIndex < referenceImageIds.length; newIndex++) {
     const referenceImageId = referenceImageIds[newIndex];
-    const oldIndex = labelmapImages.findIndex(image => image?.referencedImageId === referenceImageId);
+    const oldIndex = labelmapImages.findIndex(
+      image => image?.referencedImageId === referenceImageId
+    );
 
     if (oldIndex === -1) {
       return null;
@@ -124,7 +227,82 @@ function applyPermutation<T>(items: T[], permutation: PermutationEntry[]) {
   return result;
 }
 
-/** Reorder parsed slices so stack order matches OHIF referenced instances (same as SegmentationService). */
+function instanceOrderMatchesGeometricSort(instanceImageIds: string[]): boolean {
+  const geometricImageIds = sortImageIdsByImagePosition([...instanceImageIds]);
+  return instanceImageIds.every((id, index) => id === geometricImageIds[index]);
+}
+
+/** True when display-set instances are stored low→high along the scan axis. */
+function isAscendingInstanceOrder(instanceImageIds: string[]): boolean {
+  return instanceOrderMatchesGeometricSort(instanceImageIds);
+}
+
+async function ensureVolumeLoaded(volume: { load?: (...args: unknown[]) => unknown }): Promise<void> {
+  if (typeof volume?.load !== 'function') {
+    return;
+  }
+  const loadResult = volume.load();
+  if (loadResult && typeof (loadResult as Promise<unknown>).then === 'function') {
+    await loadResult;
+  }
+}
+
+/**
+ * Reverse labelmap voxel data along the volume k-axis. Ascending instance-order series
+ * use the same convertStackToVolumeLabelmap path as descending series, but the overlay
+ * ends up mirrored along z; flipping the cached labelmap volume fixes alignment.
+ */
+async function flipLabelmapVolumeAlongKAxis(volumeId: string): Promise<boolean> {
+  const volume = cache.getVolume(volumeId);
+  const voxelManager = volume?.voxelManager;
+  const dimensions = volume?.dimensions;
+
+  if (!voxelManager?.getAtIndex || !voxelManager?.setAtIndex || !dimensions || dimensions.length < 3) {
+    return false;
+  }
+
+  await ensureVolumeLoaded(volume);
+
+  const frameSize = dimensions[0] * dimensions[1];
+  const numFrames = dimensions[2];
+  if (numFrames < 2) {
+    return false;
+  }
+
+  const readFrame = (frameIndex: number): Uint8Array => {
+    const frame = new Uint8Array(frameSize);
+    const start = frameIndex * frameSize;
+    for (let i = 0; i < frameSize; i++) {
+      frame[i] = Number(voxelManager.getAtIndex(start + i) ?? 0);
+    }
+    return frame;
+  };
+
+  const writeFrame = (frameIndex: number, data: Uint8Array) => {
+    const start = frameIndex * frameSize;
+    for (let i = 0; i < frameSize; i++) {
+      voxelManager.setAtIndex(start + i, data[i]);
+    }
+  };
+
+  for (let k = 0; k < Math.floor(numFrames / 2); k++) {
+    const opposite = numFrames - 1 - k;
+    const frameK = readFrame(k);
+    const frameOpposite = readFrame(opposite);
+    writeFrame(k, frameOpposite);
+    writeFrame(opposite, frameK);
+  }
+
+  if (SEG_IMPORT_DEBUG) {
+    console.log(`[SEG import] flipped labelmap volume k-axis for ${volumeId}`);
+  }
+
+  return true;
+}
+
+/**
+ * Reorder labelmap slices to match a reference imageId list (by referencedImageId).
+ */
 function alignLabelmapImagesWithReferences(results: any, referenceImageIds: string[]) {
   if (!results?.labelMapImages?.length || !referenceImageIds?.length) {
     return;
@@ -135,7 +313,6 @@ function alignLabelmapImagesWithReferences(results: any, referenceImageIds: stri
     : results.labelMapImages;
 
   const permutation = buildPermutation(primaryLabelmaps, referenceImageIds);
-
   if (!permutation) {
     return;
   }
@@ -151,6 +328,37 @@ function alignLabelmapImagesWithReferences(results: any, referenceImageIds: stri
   if (Array.isArray(results.segmentsOnFrame) && results.segmentsOnFrame.length) {
     results.segmentsOnFrame = reorder(results.segmentsOnFrame);
   }
+}
+
+/** Frame order used by the active viewport's reference volume or stack. */
+function getViewportReferenceImageIds(viewportId: string, servicesManager: any): string[] | null {
+  const { cornerstoneViewportService } = servicesManager.services;
+  const viewport = cornerstoneViewportService?.getCornerstoneViewport(viewportId);
+  if (!viewport) {
+    return null;
+  }
+
+  try {
+    const volumeId =
+      typeof viewport.getVolumeId === 'function' ? viewport.getVolumeId() : undefined;
+    if (volumeId) {
+      const volume = cache.getVolume(volumeId);
+      if (volume?.imageIds?.length) {
+        return [...volume.imageIds];
+      }
+    }
+  } catch {
+    // stack viewports may not expose getVolumeId
+  }
+
+  if (typeof viewport.getImageIds === 'function') {
+    const stackImageIds = viewport.getImageIds();
+    if (stackImageIds?.length) {
+      return [...stackImageIds];
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -344,7 +552,7 @@ function reconcileSegmentsWithLabelmap(results: any) {
  * Toggle to print slice-ordering diagnostics during SEG import. Set to false to silence.
  * Remove this block (and the call below) once the flip root cause is confirmed.
  */
-const SEG_IMPORT_DEBUG = false;
+const SEG_IMPORT_DEBUG = true;
 
 function projectionOnNormal(ipp: number[], normal: number[]): number {
   return ipp[0] * normal[0] + ipp[1] * normal[1] + ipp[2] * normal[2];
@@ -437,144 +645,13 @@ function logSegImportDiagnostics(results: any, imageIds: string[]) {
   }
 }
 
-type StackLabelmapImage = {
-  referencedImageId?: string;
-  imageId?: string;
-  voxelManager?: { getScalarData?: () => ArrayLike<number> };
-};
-
-function getFlatLabelmapStack(labelMapImages: any): StackLabelmapImage[] {
-  if (!Array.isArray(labelMapImages) || !labelMapImages.length) {
-    return [];
-  }
-  return Array.isArray(labelMapImages[0]) ? labelMapImages[0] : labelMapImages;
-}
-
-function copyStackLabelmapsIntoVolume(
-  segVolume: { dimensions: number[]; imageIds: string[] },
-  refVolumeImageIds: string[],
-  labelmapByRefId: Map<string, StackLabelmapImage>
-): void {
-  const sliceSize = segVolume.dimensions[0] * segVolume.dimensions[1];
-
-  refVolumeImageIds.forEach((refImageId, frameIndex) => {
-    const labelmapImage = labelmapByRefId.get(refImageId);
-    if (!labelmapImage) {
-      return;
-    }
-
-    const srcData = labelmapImage.voxelManager?.getScalarData?.();
-    if (!srcData || srcData.length !== sliceSize) {
-      return;
-    }
-
-    const derivedImageId = segVolume.imageIds[frameIndex];
-    const derivedImage = cache.getImage(derivedImageId) as {
-      getPixelData?: () => Uint8Array;
-      voxelManager?: { setScalarData?: (data: Uint8Array) => void };
-    } | undefined;
-    if (!derivedImage) {
-      return;
-    }
-
-    const targetData = derivedImage.getPixelData?.();
-    if (!targetData || targetData.length !== sliceSize) {
-      return;
-    }
-
-    targetData.set(srcData as Uint8Array);
-    derivedImage.voxelManager?.setScalarData?.(targetData);
-  });
-}
-
-/**
- * Align imported labelmap geometry with the active viewport. Stack labelmaps are reordered to
- * match viewport.getImageIds(); volume viewports get a derived labelmap volume cloned from the
- * reference volume so each mask slice lands on the correct frame index regardless of display-set
- * instance order (ascending vs descending).
- */
-function patchSegmentationGeometryForViewport(
-  segmentationId: string,
-  viewportId: string,
-  flatLabelmaps: StackLabelmapImage[]
-): void {
-  const enabledElement = getEnabledElementByViewportId(viewportId);
-  const viewport = enabledElement?.viewport;
-  if (!viewport || !flatLabelmaps.length) {
-    return;
-  }
-
-  const segmentation = csSegmentation.state.getSegmentation(segmentationId);
-  const labelmapData = segmentation?.representationData?.[
-    ToolsEnums.SegmentationRepresentations.Labelmap
-  ] as {
-    volumeId?: string;
-    imageIds?: string[];
-    referencedImageIds?: string[];
-  } | undefined;
-
-  if (!labelmapData) {
-    return;
-  }
-
-  const labelmapByRefId = new Map<string, StackLabelmapImage>();
-  flatLabelmaps.forEach(lm => {
-    if (lm.referencedImageId) {
-      labelmapByRefId.set(lm.referencedImageId, lm);
-    }
-  });
-
-  if (viewport instanceof VolumeViewport) {
-    const refVolumeId = viewport.getVolumeId?.();
-    if (!refVolumeId) {
-      return;
-    }
-
-    const refVolume = cache.getVolume(refVolumeId);
-    const refVolumeImageIds = refVolume?.imageIds;
-    if (!refVolumeImageIds?.length) {
-      return;
-    }
-
-    const segVolumeId = `xnat-labelmap-${segmentationId}`;
-    const segVolume = volumeLoader.createAndCacheDerivedLabelmapVolume(refVolumeId, {
-      volumeId: segVolumeId,
-    });
-
-    copyStackLabelmapsIntoVolume(segVolume, refVolumeImageIds, labelmapByRefId);
-
-    labelmapData.volumeId = segVolumeId;
-    labelmapData.imageIds = [...segVolume.imageIds];
-    labelmapData.referencedImageIds = [...refVolumeImageIds];
-    return;
-  }
-
-  const stackImageIds: string[] = viewport.getImageIds?.() ?? [];
-  if (!stackImageIds.length || stackImageIds.length !== flatLabelmaps.length) {
-    return;
-  }
-
-  const ordered = stackImageIds
-    .map(refId => labelmapByRefId.get(refId))
-    .filter((lm): lm is StackLabelmapImage => Boolean(lm));
-
-  if (ordered.length !== stackImageIds.length) {
-    return;
-  }
-
-  labelmapData.imageIds = ordered.map(lm => lm.imageId).filter(Boolean) as string[];
-  labelmapData.referencedImageIds = [...stackImageIds];
-  delete labelmapData.volumeId;
-
-  csSegmentation.state.updateLabelmapSegmentationImageReferences(viewportId, segmentationId);
-}
-
 function getReferenceImageIds(displaySet: any): string[] {
+  // Must match SegmentationService.createSegmentationForSEGDisplaySet (instances → imageId).
   if (displaySet.instances?.length) {
     return displaySet.instances.map((inst: any) => inst.imageId).filter(Boolean);
   }
   if (displaySet.imageIds?.length) {
-    return [...displaySet.imageIds];
+    return displaySet.imageIds.filter(Boolean);
   }
   return displaySet.images?.map((img: any) => img.imageId).filter(Boolean) ?? [];
 }
@@ -616,16 +693,18 @@ export const importSegmentation = async ({
     }
 
     // Same order as SegmentationService.createSegmentationForSEGDisplaySet (instances → imageId)
-    const imageIds = getReferenceImageIds(referencedDisplaySet);
+    const instanceImageIds = getReferenceImageIds(referencedDisplaySet);
 
-    if (!imageIds || imageIds.length === 0) {
+    if (!instanceImageIds || instanceImageIds.length === 0) {
       throw new Error('No image IDs found in referenced display set');
     }
 
-    // Parse the DICOM SEG file using cornerstone adapters
+    const activeViewportId = viewportGridService.getActiveViewportId();
+
+    // Parse with display-set instance order (matches createSegmentationForSEGDisplaySet).
     const tolerance = 0.001;
     const results = await adaptersSEG.Cornerstone3D.Segmentation.createFromDICOMSegBuffer(
-      imageIds,
+      instanceImageIds,
       arrayBuffer,
       { metadataProvider: metaData, tolerance }
     );
@@ -634,11 +713,27 @@ export const importSegmentation = async ({
       throw new Error('Failed to parse DICOM SEG file');
     }
 
-    alignLabelmapImagesWithReferences(results, imageIds);
+    alignLabelmapImagesWithReferences(results, instanceImageIds);
+
     mergeOverlappingLabelMapStacks(results);
     reconcileSegmentsWithLabelmap(results);
 
-    logSegImportDiagnostics(results, imageIds);
+    const ascendingInstanceOrder = isAscendingInstanceOrder(instanceImageIds);
+
+    logSegImportDiagnostics(results, instanceImageIds);
+
+    if (SEG_IMPORT_DEBUG) {
+      const viewportImageIds = getViewportReferenceImageIds(activeViewportId, servicesManager);
+      console.log(`[SEG import] ascending instance order = ${ascendingInstanceOrder}`);
+      if (viewportImageIds) {
+        const viewportMatchesInstance = viewportImageIds.every(
+          (id, index) => id === instanceImageIds[index]
+        );
+        console.log(
+          `[SEG import] viewport ref order matches instance = ${viewportMatchesInstance}`
+        );
+      }
+    }
 
     // Ensure centroids are properly structured
     results.centroids = ensureCentroidsStructure(results.centroids, results.segMetadata);
@@ -668,7 +763,6 @@ export const importSegmentation = async ({
       SeriesDate: new Date().toISOString().split('T')[0], // Add SeriesDate for modifiedTime
       ...results, // Include all the parsed SEG data
     };
-    const flatLabelmaps = getFlatLabelmapStack(results.labelMapImages);
     const createdSegmentationId = await segmentationService.createSegmentationForSEGDisplaySet(
       segDisplaySet,
       {
@@ -677,16 +771,58 @@ export const importSegmentation = async ({
       }
     );
 
-    const activeViewportId = viewportGridService.getActiveViewportId();
-
-    // Place each mask slice on the frame index used by the viewport's reference volume/stack.
-    patchSegmentationGeometryForViewport(createdSegmentationId, activeViewportId, flatLabelmaps);
-
-    // Add segmentation representation to the viewport
     await segmentationService.addSegmentationRepresentation(activeViewportId, {
       segmentationId: createdSegmentationId,
       type: ToolsEnums.SegmentationRepresentations.Labelmap,
     });
+
+    if (ascendingInstanceOrder) {
+      let segmentation = csSegmentation.state.getSegmentation(createdSegmentationId);
+      const labelmapKey = ToolsEnums.SegmentationRepresentations.Labelmap;
+      let labelmapData = segmentation?.representationData?.[labelmapKey] as {
+        volumeId?: string;
+      };
+
+      if (segmentation && !labelmapData?.volumeId) {
+        try {
+          await convertStackToVolumeLabelmap(segmentation);
+          segmentation = csSegmentation.state.getSegmentation(createdSegmentationId);
+          labelmapData = segmentation?.representationData?.[labelmapKey] as {
+            volumeId?: string;
+          };
+          if (SEG_IMPORT_DEBUG) {
+            console.log(
+              `[SEG import] convertStackToVolumeLabelmap volumeId = ${labelmapData?.volumeId ?? 'none'}`
+            );
+          }
+        } catch (convertError) {
+          console.warn('XNAT SEG import: convertStackToVolumeLabelmap failed:', convertError);
+        }
+      }
+
+      if (labelmapData?.volumeId) {
+        try {
+          const flipped = await flipLabelmapVolumeAlongKAxis(labelmapData.volumeId);
+          if (flipped) {
+            csSegmentation.triggerSegmentationEvents.triggerSegmentationDataModified(
+              createdSegmentationId
+            );
+            csSegmentation.triggerSegmentationEvents.triggerSegmentationRepresentationModified(
+              activeViewportId,
+              createdSegmentationId,
+              ToolsEnums.SegmentationRepresentations.Labelmap
+            );
+          }
+          if (SEG_IMPORT_DEBUG) {
+            console.log(`[SEG import] ascending k-axis correction applied = ${flipped}`);
+          }
+        } catch (flipError) {
+          console.warn('XNAT SEG import: labelmap k-axis flip failed:', flipError);
+        }
+      } else if (SEG_IMPORT_DEBUG) {
+        console.warn('[SEG import] no labelmap volumeId after stack→volume conversion');
+      }
+    }
 
     applyOhifDefaultSegmentationColorLUT(activeViewportId, createdSegmentationId);
 

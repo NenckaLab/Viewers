@@ -4,6 +4,7 @@ import { id } from './id';
 import SessionRouter from '@ohif/extension-xnat/src/xnat-components/XNATNavigation/helpers/SessionRouter.js';
 import { defaultRouteInit } from '../../../platform/app/src/routes/Mode/defaultRouteInit';
 import sessionMap from '@ohif/extension-xnat/src/utils/sessionMap.js';
+import { parseExcludedScanTypesParam, fetchExcludedScanTypesForProject } from '@ohif/extension-xnat/src/utils/excludeScanTypes';
 import {
   mode as basicMode,
   modeInstance as basicModeInstance,
@@ -408,7 +409,7 @@ const modeInstance = {
   onModeInit: ({ servicesManager, extensionManager, commandsManager, appConfig, query }) => {
     // Get query parameters
     const queryParams = Object.fromEntries(query.entries());
-    const { projectId, parentProjectId, subjectId, experimentId, experimentLabel, overreadMode } = queryParams;
+    const { projectId, parentProjectId, subjectId, experimentId, experimentLabel, overreadMode, excludeScanTypes } = queryParams;
 
     // Check if we have StudyInstanceUIDs in the URL (for comparison views)
     const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
@@ -421,6 +422,17 @@ const modeInstance = {
     // Store overread mode flag in services manager for use in layout
     if (overreadMode === 'true') {
       servicesManager.services.isOverreadMode = true;
+    }
+
+    const excludedScanTypes = parseExcludedScanTypesParam(excludeScanTypes);
+    if (excludedScanTypes.length > 0) {
+      servicesManager.services.excludedScanTypes = excludedScanTypes;
+    } else if (overreadMode === 'true' && projectId) {
+      fetchExcludedScanTypesForProject(projectId).then(fetchedExcludedScanTypes => {
+        if (fetchedExcludedScanTypes.length > 0) {
+          servicesManager.services.excludedScanTypes = fetchedExcludedScanTypes;
+        }
+      });
     }
 
     // Set session map parameters if available

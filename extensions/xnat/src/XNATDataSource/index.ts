@@ -43,6 +43,11 @@ import {
   shouldSkipAcquisitionInOverreadMode,
 } from '../utils/acquisitionImageLimit';
 import {
+  getScanIdToTypeMap,
+  resolveExcludedScanTypes,
+  shouldSkipExcludedScanTypeInOverreadMode,
+} from '../utils/excludeScanTypes';
+import {
   buildImagePlaneModuleFromInstance,
   getCombinedInstanceForFrame,
 } from '../xnatImagePlaneModule';
@@ -254,6 +259,8 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
           }
 
           const retrieveSeriesMetadataAsync = async () => {
+            let resolvedExperimentId: string | undefined;
+            let resolvedProjectId: string | undefined;
 
             // Check if this is a comparison view (declare early for scope)
             const isComparisonView = ['@ohif/mrSubjectComparison', '@ohif/hpCompare'].includes((configManager.getConfig() as any)?.xnat?.hangingProtocolId);
@@ -271,8 +278,8 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                 (configManager.getConfig().xnat && configManager.getConfig().xnat?.studyMappings) || {};
               const mappedEntry = studyMappings[StudyInstanceUID] || {};
 
-              let resolvedProjectId = mappedEntry.projectId;
-              let resolvedExperimentId = mappedEntry.experimentId;
+              resolvedProjectId = mappedEntry.projectId;
+              resolvedExperimentId = mappedEntry.experimentId;
 
               // Handle synthetic UIDs for experiment-based comparison
               if (isSyntheticExperimentUID && !resolvedExperimentId) {
@@ -376,6 +383,14 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
 
             const allNaturalizedInstancesForStudy = [];
             const loadedSeries = [];
+            const excludedScanTypes = await resolveExcludedScanTypes(
+              servicesManager,
+              configManager.getConfig().xnat?.projectId || resolvedProjectId
+            );
+            const scanIdToTypeMap =
+              excludedScanTypes.length > 0 && resolvedExperimentId
+                ? await getScanIdToTypeMap(resolvedExperimentId)
+                : undefined;
 
             for (const series of study.series) {
               const xnatInstances = series.instances || [];
@@ -388,6 +403,22 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                 log.warn(
                   `XNAT Overread: Skipping scan/series ${series.SeriesInstanceUID} (${series.SeriesDescription || 'no description'}) — ` +
                     `exceeds per-scan limit of ${MAX_OVERREAD_ACQUISITION_IMAGES} frames`
+                );
+                continue;
+              }
+
+              if (
+                shouldSkipExcludedScanTypeInOverreadMode(
+                  xnatInstances,
+                  series,
+                  excludedScanTypes,
+                  scanIdToTypeMap,
+                  servicesManager
+                )
+              ) {
+                log.warn(
+                  `XNAT Overread: Skipping scan/series ${series.SeriesInstanceUID} (${series.SeriesDescription || 'no description'}) — ` +
+                    `scan type is excluded in overread preferences`
                 );
                 continue;
               }

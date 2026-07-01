@@ -3,6 +3,8 @@
  * Refactored to use extracted modules for better maintainability
  */
 
+import dcmjs from 'dcmjs';
+import { utils } from '@ohif/core';
 import {
     loadSegmentationsForViewport
 } from './SegmentationLoaders';
@@ -54,6 +56,37 @@ export const createSegmentationCommands = (
         generateSegmentation: ({ segmentationId, options = {} }) =>
             generateSegmentation(
                 { segmentationId, options },
+                { segmentationService }
+            ),
+
+        /**
+         * Downloads a DICOM SEG file for the given segmentation.
+         * Bypasses createStoreFunction — its download path calls DicomMetadataStore.addInstances
+         * on the raw dataset (no imageId), which crashes XNAT display-set creation.
+         */
+        downloadSegmentation: async ({ segmentationId }) => {
+            const segmentationInOHIF = segmentationService.getSegmentation(segmentationId);
+            if (!segmentationInOHIF) {
+                throw new Error('Segmentation not found');
+            }
+
+            const dataset = generateSegmentation(
+                { segmentationId },
+                { segmentationService }
+            );
+
+            const reportBlob = dcmjs.data.datasetToBlob(dataset);
+            utils.downloadBlob(reportBlob, {
+                filename: `${segmentationInOHIF.label || 'segmentation'}.dcm`,
+            });
+        },
+
+        /**
+         * Alias used by segmentation panel / dropdown menus for CSV export.
+         */
+        downloadCSVSegmentationReport: ({ segmentationId }) =>
+            exportSegmentationStatisticsToCSV(
+                { segmentationId },
                 { segmentationService }
             ),
 

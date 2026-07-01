@@ -428,6 +428,38 @@ export async function updateOverreadFormData(
   }
 }
 
+/**
+ * Marks a re-read as complete so the worklist item returns to Closed status.
+ * Optional belt-and-suspenders call after saving overread form data.
+ *
+ * @param experimentId - The experiment ID for the completed re-read
+ */
+export async function completeOverreadReread(experimentId: string): Promise<void> {
+  try {
+    const route = `xapi/overread/custom-fields/complete-reread?experimentId=${experimentId}`;
+
+    const { xnatRootUrl } = sessionMap;
+    const cleanRoute = route.startsWith('/') ? route.substring(1) : route;
+    const baseUrl = xnatRootUrl.endsWith('/') ? xnatRootUrl : xnatRootUrl + '/';
+    const url = `${baseUrl}${cleanRoute}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error('Error completing overread re-read:', error);
+    throw new Error(`Failed to complete overread re-read: ${error.message}`);
+  }
+}
+
 export default {
   fetchCustomForms,
   getExperimentCustomFormData,
@@ -442,4 +474,5 @@ export default {
   hasUserOverreadData,
   getAllUsersOverreadData,
   updateOverreadFormData,
+  completeOverreadReread,
 };
