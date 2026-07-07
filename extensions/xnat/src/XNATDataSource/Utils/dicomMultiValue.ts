@@ -307,6 +307,23 @@ export function buildSyntheticPerFrameFunctionalGroups(meta: Record<string, unkn
 }
 
 /**
+ * True when per-frame functional groups are present and their mean spacing
+ * matches session/header spacing (not a synthetic repair guess).
+ */
+export function hasValidMultiframePerFrameGeometry(meta: Record<string, unknown>): boolean {
+  if (!meta.PerFrameFunctionalGroupsSequence) {
+    return false;
+  }
+
+  const computed = computeMeanSliceSpacingFromPerFrameGroups(meta);
+  if (computed == null || computed <= 0 || Number.isNaN(computed)) {
+    return false;
+  }
+
+  return !isLikelySyntheticPerFrameGeometry(meta);
+}
+
+/**
  * True when XNAT session JSON already has plausible through-plane spacing
  * (not the default 1.0 mm placeholder on thick-slice acquisitions).
  */
@@ -315,6 +332,16 @@ export function hasTrustworthySessionMultiframeSpacing(
 ): boolean {
   if (!meta) {
     return false;
+  }
+
+  const numFrames = Number(meta.NumberOfFrames) || 1;
+  const sopClassUID = String(meta.SOPClassUID || '');
+  if (numFrames > 1 && sopClassUID === ENHANCED_MR_SOP_CLASS_UID) {
+    // Enhanced MR slice positions live in per-frame groups; top-level spacing alone
+    // is not enough to trust without validated per-frame geometry.
+    if (!hasValidMultiframePerFrameGeometry(meta)) {
+      return false;
+    }
   }
 
   const pixelSpacing = getPixelSpacingFromMetadata(meta);
@@ -346,11 +373,13 @@ export function shouldFetchEnhancedMrHeaderGeometry(meta: Record<string, unknown
     return false;
   }
 
-  if (meta.PerFrameFunctionalGroupsSequence) {
-    const computed = computeMeanSliceSpacingFromPerFrameGroups(meta);
-    if (computed != null && !isLikelySyntheticPerFrameGeometry(meta)) {
-      return false;
-    }
+  if (hasValidMultiframePerFrameGeometry(meta)) {
+    return false;
+  }
+
+  const sopClassUID = String(meta.SOPClassUID || '');
+  if (sopClassUID === ENHANCED_MR_SOP_CLASS_UID) {
+    return true;
   }
 
   return !hasTrustworthySessionMultiframeSpacing(meta);

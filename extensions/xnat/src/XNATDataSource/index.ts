@@ -584,6 +584,7 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                 const firstFramePosition = naturalized.PerFrameFunctionalGroupsSequence?.[0]?.PlanePositionSequence?.[0]?.ImagePositionPatient;
                 const sharedPixelMeasures = naturalized.SharedFunctionalGroupsSequence?.[0]?.PixelMeasuresSequence?.[0];
                 const spacingBetweenSlices = sharedPixelMeasures?.SpacingBetweenSlices ?? sharedPixelMeasures?.SliceThickness ?? naturalized.SliceThickness;
+                const hasPerFrameGeometry = Boolean(naturalized.PerFrameFunctionalGroupsSequence?.length);
                 const storable = {
                   ...denaturalizeDataset(dicomDatasetToDenaturalize),
                   StudyInstanceUID,
@@ -603,7 +604,12 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   Columns: naturalized.Columns,
                   PixelSpacing: naturalized.PixelSpacing,
                   SliceThickness: naturalized.SliceThickness,
-                  ImagePositionPatient: naturalized.ImagePositionPatient ?? firstFramePosition,
+                  ...(hasPerFrameGeometry
+                    ? {}
+                    : {
+                        ImagePositionPatient:
+                          naturalized.ImagePositionPatient ?? firstFramePosition,
+                      }),
                   ImageOrientationPatient: naturalized.ImageOrientationPatient,
                   ImageType: naturalized.ImageType,
                   NumberOfFrames: naturalized.NumberOfFrames,
@@ -649,41 +655,39 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                     generalSeriesModule
                   );
 
-                  // Per-frame imagePlaneModule is resolved on demand via xnatFrameMetadataProvider.
-                  if (frameNumber === 1) {
-                    if (frameImageId.includes('&frame=') && !registeredBaseImageUri) {
-                      const baseImageId =
-                        (frameImageId.split('&frame=')[0] || '').replace(/[?&]$/, '') || frameImageId;
-                      if (baseImageId && baseImageId !== frameImageId) {
-                        const hasScheme =
-                          baseImageId.startsWith('dicomweb:') || baseImageId.startsWith('http');
-                        metadataProvider.addImageIdToUIDs(
-                          hasScheme ? baseImageId : `dicomweb:${baseImageId}`,
-                          frameUids
-                        );
-                        const baseUri = utils.imageIdToURI(
-                          hasScheme ? baseImageId : `dicomweb:${baseImageId}`
-                        );
-                        setXNATImageIdUids(baseUri, {
-                          StudyInstanceUID: uids.StudyInstanceUID,
-                          SeriesInstanceUID: uids.SeriesInstanceUID,
-                          SOPInstanceUID: uids.SOPInstanceUID,
-                        });
-                        registeredBaseImageUri = true;
-                      }
-                    }
-
-                    const combinedForFrame = getCombinedInstanceForFrame(
-                      naturalized as Record<string, unknown>,
-                      frameNumber
-                    );
-                    if (combinedForFrame) {
-                      const imagePlaneModule = buildImagePlaneModuleFromInstance(combinedForFrame);
-                      csUtilities.genericMetadataProvider.addRaw(frameImageId, {
-                        type: 'imagePlaneModule',
-                        metadata: imagePlaneModule,
+                  if (frameImageId.includes('&frame=') && !registeredBaseImageUri) {
+                    const baseImageId =
+                      (frameImageId.split('&frame=')[0] || '').replace(/[?&]$/, '') || frameImageId;
+                    if (baseImageId && baseImageId !== frameImageId) {
+                      const hasScheme =
+                        baseImageId.startsWith('dicomweb:') || baseImageId.startsWith('http');
+                      metadataProvider.addImageIdToUIDs(
+                        hasScheme ? baseImageId : `dicomweb:${baseImageId}`,
+                        frameUids
+                      );
+                      const baseUri = utils.imageIdToURI(
+                        hasScheme ? baseImageId : `dicomweb:${baseImageId}`
+                      );
+                      setXNATImageIdUids(baseUri, {
+                        StudyInstanceUID: uids.StudyInstanceUID,
+                        SeriesInstanceUID: uids.SeriesInstanceUID,
+                        SOPInstanceUID: uids.SOPInstanceUID,
                       });
+                      registeredBaseImageUri = true;
                     }
+                  }
+
+                  // MPR volume viewports need per-frame imagePlaneModule (spacing + IPP).
+                  const combinedForFrame = getCombinedInstanceForFrame(
+                    naturalized as Record<string, unknown>,
+                    frameNumber
+                  );
+                  if (combinedForFrame) {
+                    const imagePlaneModule = buildImagePlaneModuleFromInstance(combinedForFrame);
+                    csUtilities.genericMetadataProvider.addRaw(frameImageId, {
+                      type: 'imagePlaneModule',
+                      metadata: imagePlaneModule,
+                    });
                   }
                 }
                 // Register bare instance imageId (no ?_=0 or &frame=) for frame 1 so
