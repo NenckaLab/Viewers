@@ -40,10 +40,12 @@ import { XNATStoreMethods } from './store';
 import { XNATApi } from './xnat-api';
 import {
   MAX_OVERREAD_ACQUISITION_IMAGES,
+  isOverreadModeActive,
   shouldSkipAcquisitionInOverreadMode,
 } from '../utils/acquisitionImageLimit';
 import {
-  getScanIdToTypeMap,
+  getScanIdToMetadataMap,
+  parseScanIdFromXnatUrl,
   resolveExcludedScanTypes,
   shouldSkipExcludedScanTypeInOverreadMode,
 } from '../utils/excludeScanTypes';
@@ -387,16 +389,31 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
               servicesManager,
               configManager.getConfig().xnat?.projectId || resolvedProjectId
             );
-            const scanIdToTypeMap =
+            const scanIdToMetadataMap =
               excludedScanTypes.length > 0 && resolvedExperimentId
-                ? await getScanIdToTypeMap(resolvedExperimentId)
+                ? await getScanIdToMetadataMap(resolvedExperimentId)
                 : undefined;
+
+            if (isOverreadModeActive(servicesManager) && excludedScanTypes.length > 0) {
+              log.debug(
+                `XNAT Overread: Applying ${excludedScanTypes.length} excluded scan type/description filters`
+              );
+            }
+
+            const scanIdFilter = configManager.getConfig().xnat?.scanId;
 
             for (const series of study.series) {
               const xnatInstances = series.instances || [];
               if (xnatInstances.length === 0) {
                 log.warn(`XNAT: No instances for series ${series.SeriesInstanceUID}`);
                 continue;
+              }
+
+              if (scanIdFilter) {
+                const seriesScanId = parseScanIdFromXnatUrl(xnatInstances[0]?.url);
+                if (!seriesScanId || decodeURIComponent(seriesScanId) !== decodeURIComponent(scanIdFilter)) {
+                  continue;
+                }
               }
 
               if (shouldSkipAcquisitionInOverreadMode(xnatInstances, series.Modality, servicesManager)) {
@@ -412,13 +429,13 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   xnatInstances,
                   series,
                   excludedScanTypes,
-                  scanIdToTypeMap,
+                  scanIdToMetadataMap,
                   servicesManager
                 )
               ) {
                 log.warn(
                   `XNAT Overread: Skipping scan/series ${series.SeriesInstanceUID} (${series.SeriesDescription || 'no description'}) — ` +
-                    `scan type is excluded in overread preferences`
+                    `scan type or series description is excluded in overread preferences`
                 );
                 continue;
               }

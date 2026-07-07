@@ -3,7 +3,7 @@ import React, { useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { CommandsManager } from '@ohif/core';
 
-import { LayoutSelector } from '@ohif/ui-next';
+import { Button, LayoutSelector } from '@ohif/ui-next';
 
 function ToolbarLayoutSelectorWithServices({
   commandsManager,
@@ -126,6 +126,13 @@ function ToolbarLayoutSelectorWithServices({
     [commandsManager]
   );
 
+  const handleSaveLayout = useCallback(() => {
+    commandsManager.run({
+      commandName: 'saveHangingProtocolToXnat',
+      commandOptions: {},
+    });
+  }, [commandsManager]);
+
   return (
     <div
       id="Layout"
@@ -184,6 +191,13 @@ function ToolbarLayoutSelectorWithServices({
               Hover to select <br />
               rows and columns <br /> Click to apply
             </LayoutSelector.HelpText>
+            <Button
+              variant="secondary"
+              className="mt-2 w-full"
+              onClick={handleSaveLayout}
+            >
+              Save layout to XNAT
+            </Button>
           </div>
         </LayoutSelector.Content>
       </LayoutSelector>
