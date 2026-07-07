@@ -1,5 +1,5 @@
 import React from 'react';
-import { Input, Dialog, ButtonEnums, LabellingFlow } from '@ohif/ui';
+import { Button, Input, LabellingFlow } from '@ohif/ui-next';
 
 /**
  *
@@ -29,20 +29,50 @@ export function callInputDialog(
     validateFunc = value => true,
   } = dialogConfig;
 
-  const onSubmitHandler = ({ action, value }) => {
-    switch (action.id) {
-      case 'save':
-        if (typeof validateFunc === 'function' && !validateFunc(value.label)) {
-          return;
-        }
+  const InputDialogContent = ({ onClose }: any) => {
+    const [text, setText] = React.useState(label);
 
-        callback(value.label, action.id);
-        break;
-      case 'cancel':
-        callback('', action.id);
-        break;
-    }
-    uiDialogService.hide(dialogId);
+    const save = () => {
+      if (typeof validateFunc === 'function' && !validateFunc(text)) {
+        return;
+      }
+      callback(text, 'save');
+      onClose();
+    };
+
+    const cancel = () => {
+      callback('', 'cancel');
+      onClose();
+    };
+
+    return (
+      <div className="max-w-[520px] p-4 text-white">
+        <div className="text-[16px] font-medium">{dialogTitle}</div>
+        <div className="mt-4">
+          <label className="text-[14px] leading-[1.2] text-white">{inputLabel}</label>
+          <div className="mt-2">
+            <Input
+              autoFocus
+              type="text"
+              id="annotation"
+              value={text}
+              onChange={(e: any) => setText(e.target.value)}
+              onKeyDown={(e: any) => {
+                if (e.key === 'Enter') {
+                  save();
+                }
+              }}
+            />
+          </div>
+        </div>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={cancel}>
+            Cancel
+          </Button>
+          <Button onClick={save}>Save</Button>
+        </div>
+      </div>
+    );
   };
 
   if (uiDialogService) {
@@ -51,39 +81,9 @@ export function callInputDialog(
       centralize: true,
       isDraggable: false,
       showOverlay: true,
-      content: Dialog,
+      content: InputDialogContent,
       contentProps: {
-        title: dialogTitle,
-        value: { label },
-        noCloseButton: true,
         onClose: () => uiDialogService.hide(dialogId),
-        actions: [
-          { id: 'cancel', text: 'Cancel', type: ButtonEnums.type.secondary },
-          { id: 'save', text: 'Save', type: ButtonEnums.type.primary },
-        ],
-        onSubmit: onSubmitHandler,
-        body: ({ value, setValue }) => {
-          return (
-            <Input
-              autoFocus
-              className="border-primary-main bg-black"
-              type="text"
-              id="annotation"
-              label={inputLabel}
-              labelClassName="text-white text-[14px] leading-[1.2]"
-              value={value.label}
-              onChange={event => {
-                event.persist();
-                setValue(value => ({ ...value, label: event.target.value }));
-              }}
-              onKeyPress={event => {
-                if (event.key === 'Enter') {
-                  onSubmitHandler({ value, action: { id: 'save' } });
-                }
-              }}
-            />
-          );
-        },
       },
     });
   }

@@ -20,13 +20,8 @@ export const HYDRATE_SEG_SYNC_GROUP = {
   },
 };
 
-/** Sync pan and zoom across MPR viewports (same sync pattern as VOI/window-level). */
-export const CAMERA_POSITION_SYNC_GROUP = {
-  type: 'zoompan',
-  id: 'mpr-zoompan',
-  source: true,
-  target: true,
-};
+/** Sync id used by the Pan/Zoom Sync toolbar toggle (not applied by default). */
+export const ZOOM_PAN_SYNC_ID = 'mpr-zoompan';
 
 export const mpr: Types.HangingProtocol.Protocol = {
   id: 'mpr',
@@ -133,7 +128,7 @@ export const mpr: Types.HangingProtocol.Protocol = {
             initialImageOptions: {
               preset: 'middle',
             },
-            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP, CAMERA_POSITION_SYNC_GROUP],
+            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
           },
           displaySets: [
             {
@@ -150,7 +145,7 @@ export const mpr: Types.HangingProtocol.Protocol = {
             initialImageOptions: {
               preset: 'middle',
             },
-            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP, CAMERA_POSITION_SYNC_GROUP],
+            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
           },
           displaySets: [
             {
@@ -167,7 +162,7 @@ export const mpr: Types.HangingProtocol.Protocol = {
             initialImageOptions: {
               preset: 'middle',
             },
-            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP, CAMERA_POSITION_SYNC_GROUP],
+            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
           },
           displaySets: [
             {

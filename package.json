@@ -28,7 +28,6 @@
         "build:dev": "lerna run build:dev --stream",
         "build:ci": "lerna run build:viewer:ci --stream",
         "build:qa": "lerna run build:viewer:qa --stream",
-        "build:xnat": "lerna run build:viewer:xnat --stream",
         "clean": "npx lerna run clean --stream",
         "clean:deep": "npx lerna run clean:deep --stream",
         "cli": "node ./platform/cli/src/index.js",
@@ -36,6 +35,7 @@
         "build:demo": "lerna run build:viewer:demo --stream",
         "build:package-all": "lerna run build:package --stream --concurrency 4",
         "build:package-all-1": "lerna run build:package-1 --stream --concurrency 4",
+        "build:xnat": "lerna run build:viewer:xnat --stream",
         "dev:fast": "cd platform/app && yarn run dev:fast",
         "show:config": "echo Config is $APP_CONFIG on $PUBLIC_URL",
         "dev": "lerna run dev:viewer --stream",
@@ -169,7 +169,8 @@
         "serialize-javascript": "7.0.4",
         "svgo": "3.3.3",
         "flatted": "3.4.2",
-        "handlebars": "4.7.9"
+        "handlebars": "4.7.9",
+        "protobufjs": "7.5.5"
     },
     "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

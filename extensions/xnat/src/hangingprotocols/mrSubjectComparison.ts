@@ -1,5 +1,3 @@
-import { CAMERA_POSITION_SYNC_GROUP } from './mpr';
-
 // Sync groups for coordinated viewing
 const VOI_SYNC_GROUP = {
     type: 'voi',
@@ -21,6 +19,36 @@ const HYDRATE_SEG_SYNC_GROUP = {
     },
 };
 
+// Shared series matching rules: prefer reconstructable MR volumes with many frames
+const mprSeriesMatchingRules = [
+    {
+        // Prefer reconstructable volumes (needed for MPR)
+        weight: 4,
+        attribute: 'isReconstructable',
+        constraint: {
+            equals: { value: true },
+        },
+        required: false,
+    },
+    {
+        // Prefer MR modality
+        weight: 3,
+        attribute: 'Modality',
+        constraint: {
+            equals: { value: 'MR' },
+        },
+        required: false,
+    },
+    {
+        // Require at least some frames
+        weight: 1,
+        attribute: 'numImageFrames',
+        constraint: {
+            greaterThan: { value: 0 },
+        },
+    },
+];
+
 // Display set selector for current study (index 0)
 const currentDisplaySetSelector = {
     studyMatchingRules: [
@@ -34,23 +62,7 @@ const currentDisplaySetSelector = {
             },
         },
     ],
-    seriesMatchingRules: [
-        {
-            weight: 2,
-            attribute: 'isReconstructable',
-            constraint: {
-                equals: { value: true },
-            },
-            required: false,
-        },
-        {
-            weight: 1,
-            attribute: 'numImageFrames',
-            constraint: {
-                greaterThan: { value: 0 },
-            },
-        },
-    ],
+    seriesMatchingRules: mprSeriesMatchingRules,
 };
 
 // Display set selector for prior study (index 1)
@@ -66,23 +78,7 @@ const priorDisplaySetSelector = {
             },
         },
     ],
-    seriesMatchingRules: [
-        {
-            weight: 2,
-            attribute: 'isReconstructable',
-            constraint: {
-                equals: { value: true },
-            },
-            required: false,
-        },
-        {
-            weight: 1,
-            attribute: 'numImageFrames',
-            constraint: {
-                greaterThan: { value: 0 },
-            },
-        },
-    ],
+    seriesMatchingRules: mprSeriesMatchingRules,
 };
 
 // Current study viewports (top row)
@@ -96,7 +92,7 @@ const currentAxialViewport = {
         initialImageOptions: {
             preset: 'middle',
         },
-        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP, CAMERA_POSITION_SYNC_GROUP],
+        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
     },
     displaySets: [
         {
@@ -115,7 +111,7 @@ const currentSagittalViewport = {
         initialImageOptions: {
             preset: 'middle',
         },
-        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP, CAMERA_POSITION_SYNC_GROUP],
+        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
     },
     displaySets: [
         {
@@ -134,7 +130,7 @@ const currentCoronalViewport = {
         initialImageOptions: {
             preset: 'middle',
         },
-        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP, CAMERA_POSITION_SYNC_GROUP],
+        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
     },
     displaySets: [
         {
@@ -154,7 +150,7 @@ const priorAxialViewport = {
         initialImageOptions: {
             preset: 'middle',
         },
-        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP, CAMERA_POSITION_SYNC_GROUP],
+        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
     },
     displaySets: [
         {
@@ -173,7 +169,7 @@ const priorSagittalViewport = {
         initialImageOptions: {
             preset: 'middle',
         },
-        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP, CAMERA_POSITION_SYNC_GROUP],
+        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
     },
     displaySets: [
         {
@@ -192,7 +188,7 @@ const priorCoronalViewport = {
         initialImageOptions: {
             preset: 'middle',
         },
-        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP, CAMERA_POSITION_SYNC_GROUP],
+        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
     },
     displaySets: [
         {
@@ -202,21 +198,24 @@ const priorCoronalViewport = {
 };
 
 /**
- * Hanging protocol for comparing two MR studies from the same subject
- * Layout: 3x2 grid with MPR views
- * - Top row: Current study (Axial, Sagittal, Coronal)
- * - Bottom row: Prior study (Axial, Sagittal, Coronal)
+ * Hanging protocol for comparing two MR studies from the same subject.
+ * Layout: 3×2 grid with MPR views.
+ * - Top row:    Current study  (Axial, Sagittal, Coronal)
+ * - Bottom row: Prior study    (Axial, Sagittal, Coronal)
+ *
+ * This protocol is activated explicitly via `hangingprotocolId=@ohif/mrSubjectComparison`
+ * in the URL. The weight (2000) is intentionally higher than hpCompare (1000) so that
+ * when both protocols are in the active list this one wins when two MR studies are loaded.
  */
 const mrSubjectComparison = {
     id: '@ohif/mrSubjectComparison',
     description: 'Compare two MR studies with MPR views (3x2 grid)',
     name: 'MR Subject Comparison MPR',
-    numberOfPriorsReferenced: 1, // Expect exactly 1 prior study
+    numberOfPriorsReferenced: 1,
     protocolMatchingRules: [
         {
             id: 'Two Studies Required',
-            weight: 1000,
-            // Check that a prior study exists
+            weight: 2000,
             attribute: 'StudyInstanceUID',
             from: 'prior',
             required: true,
@@ -240,7 +239,7 @@ const mrSubjectComparison = {
             initialImageOptions: {
                 preset: 'middle',
             },
-            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP, CAMERA_POSITION_SYNC_GROUP],
+            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
         },
         displaySets: [
             {
@@ -254,7 +253,7 @@ const mrSubjectComparison = {
             name: 'MPR Side-by-Side Comparison (3x2)',
             stageActivation: {
                 enabled: {
-                    minViewportsMatched: 2, // At least 2 viewports to activate
+                    minViewportsMatched: 1,
                 },
             },
             viewportStructure: {

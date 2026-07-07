@@ -37,6 +37,8 @@ export interface EvaluateFunctionResult {
     disabled?: boolean;
     disabledText?: string;
     isActive?: boolean;
+    isToggled?: boolean;
+    icon?: string;
 }
 
 export interface ToolbarModuleItem {

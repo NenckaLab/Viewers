@@ -2,26 +2,21 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { UserPreferences, AboutModal, useModal } from '@ohif/ui';
-import { Header } from '@ohif/ui-next';
-import i18n from '@ohif/i18n';
-import { hotkeys } from '@ohif/core';
+import { Button, Header, Icons, useModal } from '@ohif/ui-next';
+import { Types, useSystem } from '@ohif/core';
+import { preserveQueryParameters } from '@ohif/app';
+
 import { Toolbar } from '../Toolbar/Toolbar';
 import HeaderPatientInfo from './HeaderPatientInfo';
 import { PatientInfoVisibility } from './HeaderPatientInfo/HeaderPatientInfo';
-import { preserveQueryParameters, publicUrl } from '@ohif/app';
 
-const { availableLanguages, defaultLanguage, currentLanguage } = i18n;
+function ViewerHeader({ appConfig }: withAppTypes<{ appConfig: AppTypes.Config }>) {
+  const { servicesManager, extensionManager, commandsManager } = useSystem();
+  const { customizationService } = servicesManager.services;
 
-function ViewerHeader({
-  hotkeysManager,
-  extensionManager,
-  servicesManager,
-  appConfig,
-}: withAppTypes<{ appConfig: AppTypes.Config }>) {
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const onClickReturnButton = () => {
     const { pathname } = location;
     const dataSourceIdx = pathname.indexOf('/', 1);
@@ -36,58 +31,42 @@ function ViewerHeader({
     preserveQueryParameters(searchQuery);
 
     navigate({
-      pathname: publicUrl,
+      pathname: '/',
       search: decodeURIComponent(searchQuery.toString()),
     });
   };
 
   const { t } = useTranslation();
-  const { show, hide } = useModal();
-  const { hotkeyDefinitions, hotkeyDefaults } = hotkeysManager;
-  const versionNumber = process.env.VERSION_NUMBER;
-  const commitHash = process.env.COMMIT_HASH;
+  const { show } = useModal();
+
+  const AboutModal = customizationService.getCustomization(
+    'ohif.aboutModal'
+  ) as Types.MenuComponentCustomization;
+
+  const UserPreferencesModal = customizationService.getCustomization(
+    'ohif.userPreferencesModal'
+  ) as Types.MenuComponentCustomization;
 
   const menuOptions = [
     {
-      title: t('Header:About'),
+      title: AboutModal?.menuTitle ?? t('Header:About'),
       icon: 'info',
       onClick: () =>
         show({
           content: AboutModal,
-          title: t('AboutModal:About OHIF Viewer'),
-          contentProps: { versionNumber, commitHash },
-          containerClassName: 'max-w-4xl max-h-4xl',
+          title: AboutModal?.title ?? t('AboutModal:About OHIF Viewer'),
+          containerClassName: AboutModal?.containerClassName ?? 'max-w-md',
         }),
     },
     {
-      title: t('Header:Preferences'),
+      title: UserPreferencesModal.menuTitle ?? t('Header:Preferences'),
       icon: 'settings',
       onClick: () =>
         show({
-          title: t('UserPreferencesModal:User preferences'),
-          content: UserPreferences,
-          containerClassName: 'w-[70%] max-w-[900px]',
-          contentProps: {
-            hotkeyDefaults: hotkeysManager.getValidHotkeyDefinitions(hotkeyDefaults),
-            hotkeyDefinitions,
-            currentLanguage: currentLanguage(),
-            availableLanguages,
-            defaultLanguage,
-            onCancel: () => {
-              hotkeys.stopRecord();
-              hotkeys.unpause();
-              hide();
-            },
-            onSubmit: ({ hotkeyDefinitions, language }) => {
-              if (language.value !== currentLanguage().value) {
-                i18n.changeLanguage(language.value);
-              }
-              hotkeysManager.setHotkeys(hotkeyDefinitions);
-              hide();
-            },
-            onReset: () => hotkeysManager.restoreDefaultBindings(),
-            hotkeysModule: hotkeys,
-          },
+          content: UserPreferencesModal,
+          title: UserPreferencesModal.title ?? t('UserPreferencesModal:User preferences'),
+          containerClassName:
+            UserPreferencesModal?.containerClassName ?? 'flex max-w-4xl p-6 flex-col',
         }),
     },
   ];
@@ -108,12 +87,7 @@ function ViewerHeader({
       isReturnEnabled={!!appConfig.showStudyList}
       onClickReturnButton={onClickReturnButton}
       WhiteLabeling={appConfig.whiteLabeling}
-      Secondary={
-        <Toolbar
-          servicesManager={servicesManager}
-          buttonSection="secondary"
-        />
-      }
+      Secondary={<Toolbar servicesManager={servicesManager} buttonSection="secondary" />}
       PatientInfo={
         appConfig.showPatientInfo !== PatientInfoVisibility.DISABLED && (
           <HeaderPatientInfo
@@ -122,9 +96,31 @@ function ViewerHeader({
           />
         )
       }
+      UndoRedo={
+        <div className="text-primary flex cursor-pointer items-center">
+          <Button
+            variant="ghost"
+            className="hover:bg-muted"
+            onClick={() => {
+              commandsManager.run('undo');
+            }}
+          >
+            <Icons.Undo className="" />
+          </Button>
+          <Button
+            variant="ghost"
+            className="hover:bg-muted"
+            onClick={() => {
+              commandsManager.run('redo');
+            }}
+          >
+            <Icons.Redo className="" />
+          </Button>
+        </div>
+      }
     >
       <div className="relative flex justify-center gap-[4px]">
-        <Toolbar servicesManager={servicesManager} />
+        <Toolbar servicesManager={servicesManager} buttonSection="primary" />
       </div>
     </Header>
   );

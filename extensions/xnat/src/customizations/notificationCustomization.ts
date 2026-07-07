@@ -1,5 +1,5 @@
-import { Notification } from '@ohif/ui';
+import { ViewportDialog } from '@ohif/ui-next';
 
 export default {
-  'ui.notificationComponent': Notification,
+  'ui.notificationComponent': ViewportDialog,
 };

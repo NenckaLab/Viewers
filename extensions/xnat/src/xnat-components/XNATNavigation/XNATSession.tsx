@@ -5,6 +5,7 @@ import SessionRouter from './helpers/SessionRouter';
 // import navigateConfirmationContent from './helpers/navigateConfirmationContent.js';
 //import { getUnsavedRegions } from 'meteor/icr:peppermint-tools';
 import sessionMap from '../../utils/sessionMap';
+import { appendOverreadViewerQueryParams } from '../../utils/excludeScanTypes';
 import {
   queryXnatSessionRoiCollections,
   queryXnatRoiCollection,
@@ -263,19 +264,7 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
       // Keep the current experiment ID for context
       viewerUrl += `&experimentId=${encodeURIComponent(currentExperimentId)}`;
 
-      // Check if overreadMode=true is present in current URL and add it to viewer URL
-      try {
-        const currentSearchParams = new URLSearchParams(window.location.search || '');
-        const isOverreadModeActive =
-          currentSearchParams.get('overreadMode') === 'true' ||
-          (window.location.pathname && window.location.pathname.includes('/overreads'));
-
-        if (isOverreadModeActive) {
-          viewerUrl += `&overreadMode=true`;
-        }
-      } catch (error) {
-        console.warn('XNATSession: Unable to determine overread mode state from current URL.', error);
-      }
+      viewerUrl = appendOverreadViewerQueryParams(viewerUrl);
 
       // Navigate to the comparison view
       window.location.href = viewerUrl;
@@ -330,19 +319,7 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
     const { subjectId, projectId, ID, label } = this.props;
     let viewerUrl = `/VIEWER/?subjectId=${subjectId}&projectId=${projectId}&experimentId=${ID}&experimentLabel=${label}`;
 
-    // Check if overreadMode=true is present in current URL and add it to viewer URL
-    try {
-      const currentSearchParams = new URLSearchParams(window.location.search || '');
-      const isOverreadModeActive =
-        currentSearchParams.get('overreadMode') === 'true' ||
-        (window.location.pathname && window.location.pathname.includes('/overreads'));
-
-      if (isOverreadModeActive) {
-        viewerUrl += `&overreadMode=true`;
-      }
-    } catch (error) {
-      console.warn('XNATSession: Unable to determine overread mode state from current URL.', error);
-    }
+    viewerUrl = appendOverreadViewerQueryParams(viewerUrl);
 
     window.open(viewerUrl, '_blank');
   }

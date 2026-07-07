@@ -14,6 +14,13 @@ export interface SegmentationGeneratorParams {
 
 const DEFAULT_RGBA = [255, 0, 0, 255];
 
+type Labelmap2D = {
+  segmentsOnLabelmap: number[];
+  pixelData: ArrayLike<number>;
+  rows: number;
+  columns: number;
+};
+
 function getSegmentColor(
   representation: any,
   segmentIndex: number
@@ -56,15 +63,156 @@ function rgbaToDICOMLab(rgba: number[]): number[] {
   return cielab.map((value: number) => Math.round(value));
 }
 
+export function normalizeImageOrientationPatient(raw: unknown): number[] | undefined {
+  if (!raw) {
+    return undefined;
+  }
+
+  let arr: unknown = raw;
+  if (typeof raw === 'string') {
+    arr = raw.split('\\').map(v => Number(v.trim()));
+  } else if (Array.isArray(raw)) {
+    arr = raw.map(v => Number(v));
+  } else {
+    return undefined;
+  }
+
+  if (!Array.isArray(arr) || arr.length !== 6) {
+    return undefined;
+  }
+
+  return arr.map(v => {
+    const n = Number(v);
+    if (Math.abs(n) < 1e-12) {
+      return 0;
+    }
+    return Math.round(n * 1e5) / 1e5;
+  });
+}
+
+/**
+ * Fill shared/per-frame functional groups that external viewers (Horos, ITK-Snap) and
+ * XNAT ROI import expect.
+ */
+export function enrichSegDataset(
+  dataset: Record<string, any>,
+  sourceMeta: {
+    PixelSpacing?: unknown;
+    SliceThickness?: unknown;
+    SpacingBetweenSlices?: unknown;
+    ImageOrientationPatient?: unknown;
+  }
+): void {
+  if (!dataset) {
+    return;
+  }
+
+  const pixelSpacing = sourceMeta.PixelSpacing;
+  const sliceThickness =
+    sourceMeta.SliceThickness ?? sourceMeta.SpacingBetweenSlices;
+  const normalizedOrientation = normalizeImageOrientationPatient(
+    sourceMeta.ImageOrientationPatient
+  );
+
+  if (!dataset.SharedFunctionalGroupsSequence?.length) {
+    dataset.SharedFunctionalGroupsSequence = [{}];
+  }
+  const sharedFG = dataset.SharedFunctionalGroupsSequence[0];
+
+  if (pixelSpacing && sliceThickness != null) {
+    if (!sharedFG.PixelMeasuresSequence?.length) {
+      sharedFG.PixelMeasuresSequence = [
+        {
+          PixelSpacing: pixelSpacing,
+          SliceThickness: sliceThickness,
+          SpacingBetweenSlices: sourceMeta.SpacingBetweenSlices ?? sliceThickness,
+        },
+      ];
+    }
+  }
+
+  if (normalizedOrientation) {
+    sharedFG.PlaneOrientationSequence = [
+      { ImageOrientationPatient: normalizedOrientation },
+    ];
+
+    if (Array.isArray(dataset.PerFrameFunctionalGroupsSequence)) {
+      dataset.PerFrameFunctionalGroupsSequence.forEach((frameFG: Record<string, any>) => {
+        if (!frameFG) {
+          return;
+        }
+        if (!frameFG.PlaneOrientationSequence?.length) {
+          frameFG.PlaneOrientationSequence = [
+            { ImageOrientationPatient: normalizedOrientation },
+          ];
+          return;
+        }
+        frameFG.PlaneOrientationSequence[0].ImageOrientationPatient =
+          normalizedOrientation;
+      });
+    }
+  }
+}
+
+function enrichSegDatasetFromImageId(dataset: Record<string, any>, imageId: string) {
+  const instance = metaData.get('instance', imageId) as Record<string, unknown> | undefined;
+  const plane = metaData.get('imagePlaneModule', imageId) as Record<string, unknown> | undefined;
+  enrichSegDataset(dataset, {
+    PixelSpacing: plane?.pixelSpacing ?? instance?.PixelSpacing,
+    SliceThickness: plane?.sliceThickness ?? instance?.SliceThickness,
+    SpacingBetweenSlices:
+      plane?.spacingBetweenSlices ?? instance?.SpacingBetweenSlices,
+    ImageOrientationPatient:
+      plane?.imageOrientationPatient ?? instance?.ImageOrientationPatient,
+  });
+}
+
+/**
+ * Cornerstone3D's generateSegmentation builds one dataset per slice and runs dcmjs
+ * convertToMultiframe on MR buffers — that produces invalid SEGs (Horos/ITK-Snap
+ * cannot open them). The legacy Cornerstone adapter reads the real DICOM buffer
+ * from the first multiframe source image instead.
+ */
+function prepareReferenceImagesForSegExport(referencedImages: any[]): any[] {
+  const valid = referencedImages.filter(image => image?.imageId);
+  if (!valid.length) {
+    throw new Error('No reference images available for SEG export');
+  }
+
+  const first = valid[0];
+  const instance = metaData.get('instance', first.imageId) as Record<string, unknown> | undefined;
+  const numberOfFrames = Number(first.NumberOfFrames ?? instance?.NumberOfFrames ?? 0);
+
+  if (numberOfFrames > 1) {
+    if (!first.NumberOfFrames) {
+      first.NumberOfFrames = numberOfFrames;
+    }
+    if (!first.data?.byteArray?.buffer) {
+      throw new Error(
+        'Multiframe reference image is missing DICOM byte data required for SEG export'
+      );
+    }
+    return [first];
+  }
+
+  for (const image of valid) {
+    if (!image.data?.byteArray?.buffer) {
+      throw new Error(
+        `Reference image ${image.imageId} is missing DICOM byte data required for SEG export`
+      );
+    }
+  }
+
+  return valid;
+}
+
 /**
  * Generates a DICOM SEG dataset from a segmentation
- * Uses a more robust approach that works with XNAT segmentation structure
  */
 export function generateSegmentation(
   { segmentationId, options = {} }: { segmentationId: string; options?: any },
   { segmentationService }: SegmentationGeneratorParams
 ) {
-  // Get segmentation from both sources to ensure compatibility
   const segmentationInOHIF = segmentationService.getSegmentation(segmentationId);
   const cornerstoneSegmentation = cornerstoneToolsSegmentation.state.getSegmentation(segmentationId);
 
@@ -72,7 +220,6 @@ export function generateSegmentation(
     throw new Error('Segmentation not found');
   }
 
-  // Get the labelmap representation data
   const { representationData } = cornerstoneSegmentation;
   const labelmapData = representationData.Labelmap;
 
@@ -80,39 +227,34 @@ export function generateSegmentation(
     throw new Error('No labelmap data found in segmentation');
   }
 
-  // Get image IDs - handle both volumeId and imageIds cases
   let imageIds: string[] = [];
   if ('imageIds' in labelmapData && labelmapData.imageIds) {
     imageIds = labelmapData.imageIds;
   } else if ('volumeId' in labelmapData && labelmapData.volumeId) {
-    // Get imageIds from volume cache
     const volume = cache.getVolume(labelmapData.volumeId);
-    if (volume && volume.imageIds) {
+    if (volume?.imageIds) {
       imageIds = volume.imageIds;
     }
   }
 
-  if (!imageIds || imageIds.length === 0) {
+  if (!imageIds.length) {
     throw new Error('No image IDs found for segmentation');
   }
 
   const segImages = imageIds.map(imageId => cache.getImage(imageId));
   const referencedImages = segImages.map(image => cache.getImage(image.referencedImageId));
 
-  // Reverse the order of images for DICOM SEG export
-  // ITK-Snap shows frames flipped, so reverse the current order
-  const reversedReferencedImages = [...referencedImages].reverse();
-  const reversedSegImages = [...segImages].reverse();
+  const labelmaps2D: Labelmap2D[] = [];
 
-  const labelmaps2D = [];
-  let z = 0;
+  for (const segImage of segImages) {
+    if (!segImage?.getPixelData) {
+      throw new Error('Missing labelmap image data for SEG export');
+    }
 
-  for (const segImage of reversedSegImages) {
-    const segmentsOnLabelmap = new Set();
+    const segmentsOnLabelmap = new Set<number>();
     const pixelData = segImage.getPixelData();
     const { rows, columns } = segImage;
 
-    // Use a single pass through the pixel data
     for (let i = 0; i < pixelData.length; i++) {
       const segment = pixelData[i];
       if (segment !== 0) {
@@ -120,38 +262,34 @@ export function generateSegmentation(
       }
     }
 
-    labelmaps2D[z++] = {
+    labelmaps2D.push({
       segmentsOnLabelmap: Array.from(segmentsOnLabelmap),
       pixelData,
       rows,
       columns,
-    };
+    });
   }
 
-  const allSegmentsOnLabelmap = labelmaps2D.map(labelmap => labelmap.segmentsOnLabelmap);
-
   const labelmap3D = {
-    segmentsOnLabelmap: Array.from(new Set(allSegmentsOnLabelmap.flat())),
-    metadata: [],
+    segmentsOnLabelmap: Array.from(
+      new Set(labelmaps2D.flatMap(labelmap => labelmap.segmentsOnLabelmap))
+    ),
+    metadata: [] as any[],
     labelmaps2D,
   };
 
-  // Get representations for color information
   const representations = segmentationService.getRepresentationsForSegmentation(segmentationId);
 
-  // Build segment metadata
   Object.entries(segmentationInOHIF.segments || {}).forEach(([segmentIndex, segment]) => {
     if (!segment) {
       return;
     }
     const segmentLabel = (segment as any).label || `Segment ${segmentIndex}`;
-
-    // Use the first representation to get color information
-    const representation = representations && representations.length > 0 ? representations[0] : null;
+    const representation = representations?.length ? representations[0] : null;
     const rgbaColor = getSegmentColor(representation, Number(segmentIndex));
     const RecommendedDisplayCIELabValue = rgbaToDICOMLab(rgbaColor);
 
-    labelmap3D.metadata[parseInt(segmentIndex)] = {
+    labelmap3D.metadata[parseInt(segmentIndex, 10)] = {
       SegmentNumber: segmentIndex,
       SegmentLabel: segmentLabel,
       SegmentAlgorithmType: 'MANUAL',
@@ -170,17 +308,17 @@ export function generateSegmentation(
     };
   });
 
-  // Generate the segmentation using cornerstone adapters
   const {
-    Cornerstone3D: {
-      Segmentation: { generateSegmentation: csGenerateSegmentation },
+    Cornerstone: {
+      Segmentation: { generateSegmentation: cornerstoneGenerateSegmentation },
     },
   } = adaptersSEG;
 
-  const dataset = csGenerateSegmentation(
-    reversedReferencedImages,
+  const exportReferenceImages = prepareReferenceImagesForSegExport(referencedImages);
+
+  const segResult = cornerstoneGenerateSegmentation(
+    exportReferenceImages,
     labelmap3D,
-    metaData,
     {
       ...options,
       SeriesDescription: options.SeriesDescription || 'Segmentation',
@@ -189,13 +327,17 @@ export function generateSegmentation(
       Manufacturer: options.Manufacturer || 'Cornerstone.js',
       ManufacturerModelName: options.ManufacturerModelName || 'Cornerstone3D',
       SoftwareVersions: options.SoftwareVersions || '1.0.0',
-      TransferSyntaxUID: options.TransferSyntaxUID || '1.2.840.10008.1.2', // Implicit VR Little Endian
-      ImplementationClassUID: options.ImplementationClassUID || '1.2.40.0.13.1.1',
-      ImplementationVersionName: options.ImplementationVersionName || 'OHIF_XNAT',
+      rleEncode: false,
+      includeSliceSpacing: true,
     }
   );
 
-  // The Cornerstone adapters return a Segmentation object with a .dataset property
-  // Extract the actual DICOM dataset for compatibility with dcmjs
-  return dataset.dataset;
+  const dataset = segResult?.dataset;
+  if (!dataset) {
+    throw new Error('Failed to generate DICOM SEG dataset');
+  }
+
+  enrichSegDatasetFromImageId(dataset, exportReferenceImages[0].imageId);
+
+  return dataset;
 }

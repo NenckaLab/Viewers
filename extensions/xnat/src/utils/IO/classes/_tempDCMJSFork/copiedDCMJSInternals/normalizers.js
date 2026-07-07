@@ -196,8 +196,8 @@ class ImageNormalizer extends Normalizer {
         if (ds.Modality !== 'US') {
             if (ds.BitsAllocated !== 16) {
                 log.error(
-                  'Only works with 16 bit data, not ' +
-                  String(this.dataset.BitsAllocated),
+                    'Only works with 16 bit data, not ' +
+                    String(this.dataset.BitsAllocated),
                 );
             }
         }
@@ -239,7 +239,7 @@ class ImageNormalizer extends Normalizer {
             if (ds.NumberOfFrames < 2) {
                 // TODO
                 log.error(
-                  'Cannot populate shared groups uniquely without multiple frames',
+                    'Cannot populate shared groups uniquely without multiple frames',
                 );
             }
         }
@@ -296,14 +296,12 @@ class ImageNormalizer extends Normalizer {
         this.dataset.DimensionOrganizationSequence = {
             DimensionOrganizationUID: dimensionUID
         };
-        this.dataset.DimensionIndexSequence = [
-            {
-                DimensionOrganizationUID: dimensionUID,
-                DimensionIndexPointer: 2097202,
-                FunctionalGroupPointer: 2134291, // PlanePositionSequence
-                DimensionDescriptionLabel: "ImagePositionPatient"
-            }
-        ];
+        this.dataset.DimensionIndexSequence = [{
+            DimensionOrganizationUID: dimensionUID,
+            DimensionIndexPointer: 2097202,
+            FunctionalGroupPointer: 2134291, // PlanePositionSequence
+            DimensionDescriptionLabel: "ImagePositionPatient"
+        }];
     }
 
     normalizeMultiframe() {
@@ -377,7 +375,7 @@ class ImageNormalizer extends Normalizer {
             if (!isNaN(frameTime)) {
                 let frameContentSequence =
                     ds.PerFrameFunctionalGroupsSequence[frameNumber - 1]
-                        .FrameContentSequence;
+                    .FrameContentSequence;
                 frameContentSequence.FrameAcquisitionDateTime = frameTime;
                 frameContentSequence.FrameReferenceDateTime = frameTime;
             }
@@ -454,8 +452,7 @@ class MRImageNormalizer extends ImageNormalizer {
         super.normalizeMultiframe();
         let ds = this.dataset;
 
-        if (
-            !ds.ImageType ||
+        if (!ds.ImageType ||
             !ds.ImageType.constructor ||
             ds.ImageType.constructor.name != "Array" ||
             ds.ImageType.length != 4

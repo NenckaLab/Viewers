@@ -1,6 +1,7 @@
 import checkSessionJSONExists from './checkSessionJSONExists';
 import fetchJSON from '../../../utils/IO/fetchJSON';
 import sessionMap from '../../../utils/sessionMap';
+import { appendOverreadViewerQueryParams } from '../../../utils/excludeScanTypes';
 import { DicomMetadataStore } from '@ohif/core';
 //import progressDialog from '../../../../lib/dialogUtils/progressDialog.js';
 
@@ -197,18 +198,7 @@ export default class SessionRouter {
             params += `&parentProjectId=${this.parentProjectId}`;
         }
 
-        try {
-            const currentSearchParams = new URLSearchParams(window.location.search || '');
-            const isOverreadModeActive =
-                currentSearchParams.get('overreadMode') === 'true' ||
-                (window.location.pathname && window.location.pathname.includes('/overreads'));
-
-            if (isOverreadModeActive && !params.includes('overreadMode')) {
-                params += `&overreadMode=true`;
-            }
-        } catch (error) {
-            console.warn('SessionRouter: Unable to determine overread mode state from current URL.', error);
-        }
+        params = appendOverreadViewerQueryParams(params);
 
         const { xnatRootUrl } = sessionMap;
 

@@ -58,12 +58,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -93,12 +87,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -130,12 +118,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -165,12 +147,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -202,12 +178,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -237,12 +207,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -274,12 +238,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -309,12 +267,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -346,12 +298,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -381,12 +327,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -418,12 +358,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -453,12 +387,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -490,12 +418,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -525,12 +447,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -562,12 +478,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -597,12 +507,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -647,12 +551,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -682,12 +580,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -719,12 +611,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -754,12 +640,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -791,12 +671,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -826,12 +700,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -863,12 +731,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -899,12 +761,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -934,12 +790,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -984,12 +834,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -1019,12 +863,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -1056,12 +894,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -1091,12 +923,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -1128,12 +954,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -1163,12 +983,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -1213,12 +1027,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -1248,12 +1056,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -1285,12 +1087,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -1320,12 +1116,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -1370,12 +1160,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -1406,12 +1190,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -1441,12 +1219,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',
@@ -1491,12 +1263,6 @@ const frameView: Types.HangingProtocol.Protocol = {
             toolGroupId: 'default',
             syncGroups: [
               {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
-              {
                 type: 'voi',
                 id: 'wlsync',
                 source: true,
@@ -1526,12 +1292,6 @@ const frameView: Types.HangingProtocol.Protocol = {
           viewportOptions: {
             toolGroupId: 'default',
             syncGroups: [
-              {
-                type: 'zoompan',
-                id: 'zoompansync',
-                source: true,
-                target: true,
-              },
               {
                 type: 'voi',
                 id: 'wlsync',

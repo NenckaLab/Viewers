@@ -42,6 +42,32 @@ export const utilityButtons: Button[] = [
     },
   },
   {
+    id: 'PanZoomSync',
+    uiType: 'ohif.toolButton',
+    props: {
+      icon: 'link',
+      label: 'Pan/Zoom Sync',
+      tooltip: 'Synchronize pan and zoom across viewports',
+      commands: {
+        commandName: 'toggleSynchronizer',
+        commandOptions: {
+          type: 'zoompan',
+          syncId: 'mpr-zoompan',
+        },
+      },
+      evaluate: [
+        {
+          name: 'evaluate.cornerstone.synchronizerById',
+          syncId: 'mpr-zoompan',
+        },
+        {
+          name: 'evaluate.viewport.supported',
+          unsupportedViewportTypes: ['video', 'volume3d'],
+        },
+      ],
+    },
+  },
+  {
     id: 'TrackballRotate',
     uiType: 'ohif.toolButton',
     props: {
@@ -89,8 +115,19 @@ export const utilityButtons: Button[] = [
       type: 'tool',
       icon: 'tool-crosshair',
       label: 'Crosshairs',
-      commands: 'toggleEnabledDisabledToolbar',
-      evaluate: 'evaluate.cornerstoneTool.toggle',
+      tooltip: 'Click to toggle on or off',
+      commands: {
+        commandName: 'toggleActiveDisabledToolbar',
+        commandOptions: {
+          toolGroupIds: ['mpr'],
+        },
+      },
+      evaluate: {
+        name: 'evaluate.cornerstoneTool.toggleWithModifier',
+        disabledText: 'Select an MPR viewport to enable this tool',
+        toggledOnIcon: 'tool-crosshair-checked',
+        defaultIcon: 'tool-crosshair',
+      },
     },
   },
 ];

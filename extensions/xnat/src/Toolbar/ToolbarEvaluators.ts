@@ -22,6 +22,7 @@ export function getToolbarEvaluators(servicesManager: any): ToolbarModuleItem[] 
     toolbarService,
     displaySetService,
     viewportGridService,
+    syncGroupService,
   } = servicesManager.services;
 
   return [
@@ -215,6 +216,26 @@ export function getToolbarEvaluators(servicesManager: any): ToolbarModuleItem[] 
     {
       name: 'evaluate.action',
       evaluate: (): EvaluateFunctionResult => ({}),
+    },
+    {
+      name: 'evaluate.cornerstone.synchronizerById',
+      evaluate: ({ button, syncId }: EvaluateFunctionParams & { syncId?: string }): EvaluateFunctionResult => {
+        const resolvedSyncId =
+          syncId ?? button?.props?.commands?.commandOptions?.syncId;
+
+        if (!resolvedSyncId || !syncGroupService) {
+          return { isToggled: false };
+        }
+
+        const synchronizer = syncGroupService.getSynchronizer(resolvedSyncId);
+        const isToggled = synchronizer ? !synchronizer.isDisabled() : false;
+
+        return {
+          isToggled,
+          icon: isToggled ? 'icon-link' : 'link',
+          className: utils.getToggledClassName(isToggled),
+        };
+      },
     },
   ];
 }

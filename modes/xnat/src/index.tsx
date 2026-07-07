@@ -4,6 +4,7 @@ import { id } from './id';
 import SessionRouter from '@ohif/extension-xnat/src/xnat-components/XNATNavigation/helpers/SessionRouter.js';
 import { defaultRouteInit } from '../../../platform/app/src/routes/Mode/defaultRouteInit';
 import sessionMap from '@ohif/extension-xnat/src/utils/sessionMap.js';
+import { parseExcludedScanTypesParam, fetchExcludedScanTypesForProject } from '@ohif/extension-xnat/src/utils/excludeScanTypes';
 import {
   mode as basicMode,
   modeInstance as basicModeInstance,
@@ -315,10 +316,22 @@ const xnatRoute = {
       (urlHp && comparisonProtocolIds.includes(urlHp)) ||
       (explicitFromQuery && comparisonProtocolIds.includes(explicitFromQuery));
 
+    // Determine which specific comparison protocol was requested (if any).
+    // Prefer the explicit URL query parameter over the mode/xnat protocol id.
+    const requestedComparisonProtocol =
+      (explicitFromQuery && comparisonProtocolIds.includes(explicitFromQuery) ? explicitFromQuery : null) ||
+      (urlHp && comparisonProtocolIds.includes(urlHp) ? urlHp : null);
+
     if (isMultiStudy || wantsComparison) {
-      // Multi-study or explicit comparison protocol request → hpCompare
-      hangingProtocolId = '@ohif/hpCompare';
-      hangingProtocolService.setActiveProtocolIds(['@ohif/hpCompare', 'default']);
+      if (requestedComparisonProtocol === '@ohif/mrSubjectComparison') {
+        // MPR 3×2 side-by-side comparison was explicitly requested
+        hangingProtocolId = '@ohif/mrSubjectComparison';
+        hangingProtocolService.setActiveProtocolIds(['@ohif/mrSubjectComparison', '@ohif/hpCompare', 'default']);
+      } else {
+        // Default 2×2 compare layout
+        hangingProtocolId = '@ohif/hpCompare';
+        hangingProtocolService.setActiveProtocolIds(['@ohif/hpCompare', 'default']);
+      }
     } else if (urlHp) {
       // Query string (or Mode) requested a specific protocol — do not overwrite with XNAT defaults
       hangingProtocolId = urlHp;
@@ -396,7 +409,7 @@ const modeInstance = {
   onModeInit: ({ servicesManager, extensionManager, commandsManager, appConfig, query }) => {
     // Get query parameters
     const queryParams = Object.fromEntries(query.entries());
-    const { projectId, parentProjectId, subjectId, experimentId, experimentLabel, overreadMode } = queryParams;
+    const { projectId, parentProjectId, subjectId, experimentId, experimentLabel, overreadMode, excludeScanTypes } = queryParams;
 
     // Check if we have StudyInstanceUIDs in the URL (for comparison views)
     const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
@@ -409,6 +422,17 @@ const modeInstance = {
     // Store overread mode flag in services manager for use in layout
     if (overreadMode === 'true') {
       servicesManager.services.isOverreadMode = true;
+    }
+
+    const excludedScanTypes = parseExcludedScanTypesParam(excludeScanTypes);
+    if (excludedScanTypes.length > 0) {
+      servicesManager.services.excludedScanTypes = excludedScanTypes;
+    } else if (overreadMode === 'true' && projectId) {
+      fetchExcludedScanTypesForProject(projectId).then(fetchedExcludedScanTypes => {
+        if (fetchedExcludedScanTypes.length > 0) {
+          servicesManager.services.excludedScanTypes = fetchedExcludedScanTypes;
+        }
+      });
     }
 
     // Set session map parameters if available
@@ -480,7 +504,7 @@ const modeInstance = {
     const utilityModule = extensionManager.getModuleEntry(
       '@ohif/extension-cornerstone.utilityModule.tools'
     );
-    const { toolNames } = utilityModule.exports;
+    const { toolNames, Enums } = utilityModule.exports;
     const segmentationTools = createTools({ commandsManager, utilityModule });
 
     // Add missing basic measurement tools that are not in segmentation tools.
@@ -532,7 +556,8 @@ const modeInstance = {
         ...(crosshairsConfig
           ? [
             {
-              toolName: 'Crosshairs',
+              toolName: toolNames.Crosshairs,
+              bindings: [{ mouseButton: Enums.MouseBindings.Primary }],
               configuration: {
                 ...crosshairsConfig,
                 // Keep crosshairs visible when switching to another tool.
@@ -612,12 +637,16 @@ const modeInstance = {
       }),
     });
 
-    // Set up toolbar sections specific to XNAT
+    // Set up toolbar sections specific to XNAT.
+    // clearButtonSection is required: updateSection appends when the section already
+    // exists (basic mode registers it first), which would leave new buttons at the end.
+    toolbarService.clearButtonSection(toolbarService.sections.primary);
     toolbarService.updateSection(toolbarService.sections.primary, [
       'returnToXNAT',
       'MeasurementTools',
       'Zoom',
       'Pan',
+      'PanZoomSync',
       'TrackballRotate',
       'WindowLevel',
       'Layout',
@@ -655,7 +684,9 @@ const modeInstance = {
     'only3D',
     'primary3D',
     'primaryAxial',
-    'fourUp'
+    'fourUp',
+    '@ohif/mrSubjectComparison',
+    '@ohif/hpCompare',
   ],
   sopClassHandlers: [
     xnat.sopClassHandler,

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
-import { ToolbarButton } from '@ohif/ui';
+import { ToolButton } from '@ohif/ui-next';
 
 function NestedMenu({ children, label = 'More', icon = 'tool-more-menu', isActive }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -21,15 +21,20 @@ function NestedMenu({ children, label = 'More', icon = 'tool-more-menu', isActiv
   }, [isOpen]);
 
   return (
-    <ToolbarButton
-      id="NestedMenu"
-      label={label}
-      icon={icon}
-      onClick={toggleNestedMenu}
-      dropdownContent={isOpen && children}
-      isActive={isActive || isOpen}
-      type="primary"
-    />
+    <div className="relative">
+      <ToolButton
+        id="NestedMenu"
+        label={label}
+        icon={icon}
+        onClick={toggleNestedMenu}
+        isActive={isActive || isOpen}
+      />
+      {isOpen && (
+        <div className="absolute right-0 top-full z-50 mt-1 min-w-[220px] rounded bg-black p-2 shadow">
+          {children}
+        </div>
+      )}
+    </div>
   );
 }
 

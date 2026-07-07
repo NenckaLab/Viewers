@@ -6,7 +6,7 @@
 import dcmjs from 'dcmjs';
 import DICOMSEGExporter from '../utils/IO/classes/DICOMSEGExporter';
 import sessionMap from '../utils/sessionMap';
-import { generateSegmentation } from './SegmentationGenerators';
+import { generateSegmentation, enrichSegDataset } from './SegmentationGenerators';
 
 const { datasetToBlob } = dcmjs.data;
 
@@ -81,91 +81,11 @@ export async function exportSegmentationToXNAT(
   // when adapters don't populate it as expected, we can synthesize it from the
   // source image metadata (which we have via the displaySet).
   try {
-    const normalizeOrientationPatient = raw => {
-      if (!raw) {
-        return undefined;
-      }
-
-      let arr: any = raw;
-      if (typeof raw === 'string') {
-        arr = raw.split('\\').map(v => Number(v.trim()));
-      } else if (Array.isArray(raw)) {
-        arr = raw.map(v => Number(v));
-      } else {
-        return undefined;
-      }
-
-      if (!Array.isArray(arr) || arr.length !== 6) {
-        return undefined;
-      }
-
-      // Snap to a stable representation to avoid tiny per-instance float drift
-      // triggering "oblique segmentation" checks on import.
-      return arr.map(v => {
-        const n = Number(v);
-        if (Math.abs(n) < 1e-12) {
-          return 0;
-        }
-        return Math.round(n * 1e5) / 1e5; // 5 decimal places
-      });
-    };
-
-    // Prefer the first image instance from the displaySet if available
     const sourceMeta =
       (displaySet && Array.isArray(displaySet.images) && displaySet.images[0]) ||
       displaySet?.instance ||
       displaySet;
-    const pixelSpacing = sourceMeta?.PixelSpacing;
-    const sliceThickness =
-      sourceMeta?.SliceThickness ?? sourceMeta?.SpacingBetweenSlices;
-    const imageOrientationPatient = sourceMeta?.ImageOrientationPatient;
-    const normalizedOrientation = normalizeOrientationPatient(imageOrientationPatient);
-    if (!dataset.SharedFunctionalGroupsSequence || !dataset.SharedFunctionalGroupsSequence.length) {
-      dataset.SharedFunctionalGroupsSequence = [{}];
-    }
-    const sharedFG = dataset.SharedFunctionalGroupsSequence[0];
-    // PixelMeasuresSequence (we already added this, keep it)
-    if (pixelSpacing && sliceThickness != null) {
-      if (!sharedFG.PixelMeasuresSequence || !sharedFG.PixelMeasuresSequence.length) {
-        sharedFG.PixelMeasuresSequence = [
-          {
-            PixelSpacing: pixelSpacing,
-            SliceThickness: sliceThickness,
-            SpacingBetweenSlices: sourceMeta?.SpacingBetweenSlices ?? sliceThickness,
-          },
-        ];
-      }
-    }
-    // PlaneOrientationSequence for import geometry checks.
-    // Force a canonical snapped orientation so tiny float fluctuations
-    // don't cause "oblique to acquisition plane" errors.
-    if (normalizedOrientation) {
-      sharedFG.PlaneOrientationSequence = [
-        {
-          ImageOrientationPatient: normalizedOrientation,
-        },
-      ];
-
-      // Also override per-frame orientation if present
-      if (Array.isArray(dataset.PerFrameFunctionalGroupsSequence)) {
-        dataset.PerFrameFunctionalGroupsSequence.forEach(frameFG => {
-          if (!frameFG) {
-            return;
-          }
-
-          if (!frameFG.PlaneOrientationSequence || !frameFG.PlaneOrientationSequence.length) {
-            frameFG.PlaneOrientationSequence = [
-              {
-                ImageOrientationPatient: normalizedOrientation,
-              },
-            ];
-            return;
-          }
-
-          frameFG.PlaneOrientationSequence[0].ImageOrientationPatient = normalizedOrientation;
-        });
-      }
-    }
+    enrichSegDataset(dataset, sourceMeta);
   } catch (metaError) {
     console.warn('XNAT: Failed to enrich SEG functional groups from source metadata', metaError);
   }

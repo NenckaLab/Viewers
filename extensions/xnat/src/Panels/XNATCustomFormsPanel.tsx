@@ -6,6 +6,7 @@ import {
   updateExperimentFormData,
   getOverreadFormData,
   updateOverreadFormData,
+  completeOverreadReread,
   hasUserOverreadData,
   CustomFormData,
   ParsedCustomForm,
@@ -541,9 +542,15 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         });
       }
 
-      // Update user has overread data flag
+      // Update user has overread data flag and mark re-read complete on worklist
       if (isOverreadMode) {
         setUserHasOverreadData(true);
+
+        try {
+          await completeOverreadReread(experimentId);
+        } catch (completeRereadError) {
+          console.warn('Failed to complete re-read on worklist:', completeRereadError);
+        }
       }
     } catch (err) {
       console.error('Failed to save form data:', err);
