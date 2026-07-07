@@ -63,11 +63,15 @@ function sanitizeProtocolId(name: string): string {
   return slug ? `user.${slug}` : `user.layout-${Date.now()}`;
 }
 
-function pickViewportOptions(viewportOptions: Record<string, any> = {}) {
+function pickViewportOptions(viewportOptions: Record<string, any> = {}, positionId?: string) {
   const picked: Record<string, any> = {
     viewportType: viewportOptions.viewportType || 'stack',
     toolGroupId: viewportOptions.toolGroupId || 'default',
   };
+
+  if (positionId) {
+    picked.positionId = positionId;
+  }
 
   if (viewportOptions.orientation) {
     picked.orientation = viewportOptions.orientation;
@@ -82,6 +86,67 @@ function pickViewportOptions(viewportOptions: Record<string, any> = {}) {
   }
 
   return picked;
+}
+
+function getViewportGridPosition(
+  viewport: Record<string, any> | undefined,
+  viewportId: string
+): { row: number; col: number } {
+  const positionId = viewport?.positionId ?? viewport?.viewportOptions?.positionId;
+  if (typeof positionId === 'string') {
+    const match = positionId.match(/^(\d+)-(\d+)$/);
+    if (match) {
+      return {
+        col: Number(match[1]),
+        row: Number(match[2]),
+      };
+    }
+  }
+
+  if (typeof viewport?.y === 'number' && typeof viewport?.x === 'number') {
+    return {
+      row: viewport.y,
+      col: viewport.x,
+    };
+  }
+
+  const trailingIndex = Number(String(viewportId).match(/(\d+)$/)?.[1]);
+  return {
+    row: 0,
+    col: Number.isFinite(trailingIndex) ? trailingIndex : Number.MAX_SAFE_INTEGER,
+  };
+}
+
+function buildLayoutOptions(
+  numRows: number,
+  numCols: number,
+  existingLayoutOptions?: Array<Record<string, any>>
+) {
+  if (Array.isArray(existingLayoutOptions) && existingLayoutOptions.length) {
+    return existingLayoutOptions.map((option, index) => {
+      const col = index % numCols;
+      const row = Math.floor(index / numCols);
+      return {
+        ...option,
+        positionId: option?.positionId || `${col}-${row}`,
+      };
+    });
+  }
+
+  const generatedLayoutOptions: Array<Record<string, any>> = [];
+  for (let row = 0; row < numRows; row++) {
+    for (let col = 0; col < numCols; col++) {
+      generatedLayoutOptions.push({
+        x: col / numCols,
+        y: row / numRows,
+        width: 1 / numCols,
+        height: 1 / numRows,
+        positionId: `${col}-${row}`,
+      });
+    }
+  }
+
+  return generatedLayoutOptions;
 }
 
 export function serializeCurrentHangingProtocol(
@@ -102,28 +167,30 @@ export function serializeCurrentHangingProtocol(
   const viewportStructureProperties: Record<string, any> = {
     rows: numRows,
     columns: numCols,
+    layoutOptions: buildLayoutOptions(numRows, numCols, layoutOptions),
   };
-
-  if (Array.isArray(layoutOptions) && layoutOptions.length) {
-    viewportStructureProperties.layoutOptions = layoutOptions;
-  }
 
   const displaySetSelectors: Record<string, any> = {};
   const stageViewports: Array<Record<string, any>> = [];
   let selectorIndex = 0;
 
   const viewportEntries = Array.from(viewports.entries()).sort((a, b) => {
-    const aPosition = a[1]?.viewportOptions?.positionId ?? a[0];
-    const bPosition = b[1]?.viewportOptions?.positionId ?? b[0];
-    return String(aPosition).localeCompare(String(bPosition));
+    const aPosition = getViewportGridPosition(a[1], a[0]);
+    const bPosition = getViewportGridPosition(b[1], b[0]);
+
+    if (aPosition.row !== bPosition.row) {
+      return aPosition.row - bPosition.row;
+    }
+
+    return aPosition.col - bPosition.col;
   });
 
   for (const [, viewport] of viewportEntries) {
     const {
       viewportOptions = {},
       displaySetInstanceUIDs = [],
-      displaySetOptions = [],
     } = viewport;
+    const positionId = viewport.positionId ?? viewportOptions.positionId;
 
     const displaySetsForViewport: Array<{ id: string }> = [];
 
@@ -163,7 +230,7 @@ export function serializeCurrentHangingProtocol(
     }
 
     stageViewports.push({
-      viewportOptions: pickViewportOptions(viewportOptions),
+      viewportOptions: pickViewportOptions(viewportOptions, positionId),
       displaySets: displaySetsForViewport,
     });
   }

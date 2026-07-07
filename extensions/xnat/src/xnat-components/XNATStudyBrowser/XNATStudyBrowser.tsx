@@ -62,7 +62,12 @@ export default function XNATStudyBrowser({
           description: thumb.SeriesDescription,
           componentType: 'thumbnail' as const,
           isTracked: false,
-          dragData: supportsDrag ? { type: 'displaySet' } : undefined,
+          dragData: supportsDrag
+            ? {
+                type: 'displayset',
+                displaySetInstanceUID: thumb.displaySetInstanceUID,
+              }
+            : undefined,
         }))
       }))
     }],

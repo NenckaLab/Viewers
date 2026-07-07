@@ -299,6 +299,7 @@ function WrappedXNATStudyBrowserPanel({ extensionManager, servicesManager, comma
           studies={studyBrowserData} // Pass data with resolved imageSrc
           onThumbnailClick={onThumbnailClick}
           onThumbnailDoubleClick={onThumbnailDoubleClick}
+          supportsDrag
         />
       )}
     </div>

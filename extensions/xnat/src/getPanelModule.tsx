@@ -63,8 +63,8 @@ function getPanelModule({ commandsManager, extensionManager, servicesManager }) 
     {
       name: 'overreadNavigation',
       iconName: 'tab-studies',
-      iconLabel: 'Overread',
-      label: i18n.t('SidePanel:Overread'),
+      iconLabel: 'Subject Navigation',
+      label: i18n.t('SidePanel:Navigation'),
       component: props => (
         <WrappedOverreadNavigationPanel
           {...props}
