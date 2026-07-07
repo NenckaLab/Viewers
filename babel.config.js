@@ -1,11 +1,11 @@
 // https://babeljs.io/docs/en/options#babelrcroots
 module.exports = {
     babelrcRoots: ['./platform/*', './extensions/*', './modes/*'],
-    exclude: ['**/.webpack/**'],
     presets: ['@babel/preset-env', '@babel/preset-react', '@babel/preset-typescript'],
     plugins: [
         ['@babel/plugin-transform-class-properties', { loose: true }],
         '@babel/plugin-transform-typescript', ['@babel/plugin-transform-private-property-in-object', { loose: true }],
+        ['@babel/plugin-transform-private-methods', { loose: true }],
         '@babel/plugin-transform-class-static-block',
     ],
     env: {
@@ -25,7 +25,9 @@ module.exports = {
                 '@babel/preset-typescript',
             ],
             plugins: [
-                'babel-plugin-istanbul',
+                // jest's babel coverage provider injects babel-plugin-istanbul when
+                // --collectCoverage is set; adding it here too makes babel 7 (pulled in
+                // by jest 30) throw "Duplicate plugin/preset detected".
                 '@babel/plugin-transform-object-rest-spread',
                 '@babel/plugin-syntax-dynamic-import',
                 '@babel/plugin-transform-regenerator',
