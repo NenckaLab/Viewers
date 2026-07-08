@@ -1,3 +1,5 @@
+import fetchCSRFToken from '../IO/fetchCSRFToken.js';
+
 type ManifestFileEntry = {
   id: string;
   label: string;
@@ -8,6 +10,11 @@ type HangingProtocolManifest = {
   files: ManifestFileEntry[];
   defaultProtocolId?: string;
 };
+
+function appendCsrfToken(url: string, csrfToken: string): string {
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}XNAT_CSRF=${encodeURIComponent(csrfToken)}`;
+}
 
 function getXnatBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
@@ -66,7 +73,8 @@ async function fetchJson(url: string, options: RequestInit = {}): Promise<any> {
 }
 
 async function putJson(url: string, body: unknown): Promise<void> {
-  const response = await fetch(url, {
+  const csrfToken = await fetchCSRFToken();
+  const response = await fetch(appendCsrfToken(url, csrfToken), {
     method: 'PUT',
     credentials: 'include',
     headers: {
@@ -138,7 +146,8 @@ export async function saveUserHangingProtocol({
 
   if (setAsDefault) {
     try {
-      const response = await fetch(getUserDefaultProtocolPrefUrl(projectId), {
+      const csrfToken = await fetchCSRFToken();
+      const response = await fetch(appendCsrfToken(getUserDefaultProtocolPrefUrl(projectId), csrfToken), {
         method: 'PUT',
         credentials: 'include',
         headers: {

@@ -17,11 +17,8 @@ import StaticWadoClient from './utils/StaticWadoClient';
 import getDirectURL from '../utils/getDirectURL';
 import { fixBulkDataURI } from './utils/fixBulkDataURI';
 import { HeadersInterface } from '@ohif/core/src/types/RequestHeaders';
-<<<<<<< HEAD
-=======
 import { getGetThumbnailSrc, ThumbnailContext } from './retrieveThumbnail';
 import { getRenderedURL } from './retrieveRendered';
->>>>>>> upstream/master
 
 const { DicomMetaDictionary, DicomDict } = dcmjs.data;
 

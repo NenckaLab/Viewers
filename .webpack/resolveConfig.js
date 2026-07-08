@@ -21,6 +21,12 @@ const alias = {
   // workspace dependency would create an app<->default cycle, so we resolve the
   // bare specifier to the app source here ($ = exact match).
   '@ohif/app$': path.resolve(__dirname, '../platform/app/src/index.js'),
+  '@ohif/app/src/App': path.resolve(__dirname, '../platform/app/src/App.tsx'),
+  // Legacy XNAT extension imports still reference the old viewer package name.
+  '@ohif/viewer/src/App': path.resolve(__dirname, '../platform/app/src/App.tsx'),
+  // XNAT extension/mode deep imports (not linked as app dependencies).
+  '@ohif/extension-xnat': path.resolve(__dirname, '../extensions/xnat'),
+  '@ohif/mode-xnat': path.resolve(__dirname, '../modes/xnat'),
   '@': path.resolve(__dirname, '../platform/app/src'),
   '@components': path.resolve(__dirname, '../platform/app/src/components'),
   '@hooks': path.resolve(__dirname, '../platform/app/src/hooks'),
