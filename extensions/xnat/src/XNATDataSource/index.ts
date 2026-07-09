@@ -518,6 +518,22 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   BitsAllocated: xnatMeta.BitsAllocated || 16,
                   BitsStored: xnatMeta.BitsStored || (xnatMeta.BitsAllocated || 16),
                   HighBit: xnatMeta.HighBit === undefined ? ((xnatMeta.BitsStored || (xnatMeta.BitsAllocated || 16)) - 1) : xnatMeta.HighBit,
+                  // Study/series tags live on the XNAT JSON, not per-instance metadata.
+                  SeriesNumber: series.SeriesNumber ?? (xnatMeta as any).SeriesNumber,
+                  SeriesDescription: series.SeriesDescription || (xnatMeta as any).SeriesDescription || '',
+                  SeriesDate: series.SeriesDate || (xnatMeta as any).SeriesDate,
+                  SeriesTime: series.SeriesTime || (xnatMeta as any).SeriesTime,
+                  PatientID:
+                    study.PatientID ||
+                    configManager.getConfig().xnat?.subjectId ||
+                    (xnatMeta as any).PatientID,
+                  PatientName:
+                    study.PatientName ||
+                    configManager.getConfig().xnat?.subjectId ||
+                    (xnatMeta as any).PatientName,
+                  StudyDate: study.StudyDate || (xnatMeta as any).StudyDate,
+                  StudyTime: study.StudyTime || (xnatMeta as any).StudyTime,
+                  StudyDescription: study.StudyDescription || (xnatMeta as any).StudyDescription,
                 };
 
                 // Multi-frame volumes: fetch DICOM header only when session JSON lacks
@@ -621,7 +637,12 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   HighBit: naturalized.HighBit,
                   wadoRoot: configManager.getConfig().wadoRoot,
                   wadoUri: configManager.getConfig().wadoUri,
-                  SeriesDescription: series.SeriesDescription || '',
+                  SeriesDescription: series.SeriesDescription || naturalized.SeriesDescription || '',
+                  SeriesNumber: naturalized.SeriesNumber,
+                  PatientID: naturalized.PatientID,
+                  PatientName: naturalized.PatientName,
+                  StudyDate: naturalized.StudyDate,
+                  StudyDescription: naturalized.StudyDescription,
                 };
                 instancesToStoreForThisSeries.push(storable);
 
@@ -636,6 +657,8 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   modality: naturalized.Modality || series.Modality || 'OT',
                   seriesInstanceUID: series.SeriesInstanceUID,
                   studyInstanceUID: StudyInstanceUID,
+                  seriesNumber: naturalized.SeriesNumber,
+                  seriesDescription: naturalized.SeriesDescription,
                 };
                 let registeredBaseImageUri = false;
                 for (let i = 0; i < numberOfFrames; i++) {

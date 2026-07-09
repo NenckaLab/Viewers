@@ -3,7 +3,7 @@
  * Extracted from getSopClassHandlerModule.tsx
  */
 
-import { utils, classes } from '@ohif/core';
+import { utils, classes, DicomMetadataStore } from '@ohif/core';
 import i18n from '@ohif/i18n';
 import { id } from '../id';
 import getDisplaySetMessages from '../getDisplaySetMessages';
@@ -104,6 +104,13 @@ export function makeDisplaySet(instances: any[], appContext: AppContextType) {
         );
       }
     }
+  }
+
+  if (!studyMetadata) {
+    studyMetadata = DicomMetadataStore.getStudy(StudyInstanceUID);
+  }
+  if (!seriesMetadata) {
+    seriesMetadata = DicomMetadataStore.getSeries(StudyInstanceUID, SeriesInstanceUID);
   }
 
   // Build initial attributes

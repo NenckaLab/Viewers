@@ -28,6 +28,7 @@ import {
   loadExternalHangingProtocols,
 } from './loadExternalHangingProtocols';
 import { fetchUserDefaultProtocolId } from '@ohif/extension-xnat/src/utils/hangingProtocol/hangingProtocolApi';
+import viewportOverlayCustomization from '../../../extensions/cornerstone/src/customizations/viewportOverlayCustomization';
 
 /** Match `hangingProtocolId` regardless of query key casing (Mode uses lower-case keys). */
 function getHangingProtocolIdFromQuery(searchParams: URLSearchParams): string | null {
@@ -622,15 +623,10 @@ const modeInstance = {
       console.warn('Could not configure J2K logging level:', e);
     }
 
-    // Load cornerstone extension's customizations first
-    try {
-      const cornerstoneCustomizations = extensionManager.getModuleEntry('@ohif/extension-cornerstone.customizationModule.default');
-      if (cornerstoneCustomizations && typeof cornerstoneCustomizations === 'object') {
-        customizationService.setCustomizations(cornerstoneCustomizations as Record<string, any>);
-      }
-    } catch (error) {
-      console.warn('Could not load cornerstone customizations:', error);
-    }
+    // Ensure viewport corner overlays (date, series, W/L, instance) are registered at mode scope.
+    customizationService.setCustomizations(
+      viewportOverlayCustomization as Record<string, unknown>
+    );
 
     // Set up XNAT-specific customizations
     customizationService.setCustomizations({

@@ -1,6 +1,7 @@
 import React from 'react';
 import { DicomMetadataStore, utils } from '@ohif/core';
 import { Enums } from '@cornerstonejs/tools';
+import viewportOverlayCustomization from '../../cornerstone/src/customizations/viewportOverlayCustomization';
 import defaultContextMenuCustomization from './customizations/defaultContextMenuCustomization';
 import helloPageCustomization from './customizations/helloPageCustomization';
 import labellingFlowCustomization from './customizations/labellingFlowCustomization';
@@ -90,24 +91,18 @@ function CustomizableXNATViewportLabels({ servicesManager }) {
  * This customization improves the display of XNAT studies in the study browser
  */
 export default function getCustomizationModule({ servicesManager, extensionManager }) {
-  // Add hooks to enhance study metadata when retrieved from DicomMetadataStore
-  // Override the getStudy method to map metadata properly
-  const originalGetStudy = DicomMetadataStore.getStudy;
-  DicomMetadataStore.getStudy = function (studyInstanceUID) {
-    const study = originalGetStudy.call(DicomMetadataStore, studyInstanceUID);
-    if (!study) return null;
+  // Patch study metadata once; getCustomizationModule can be evaluated more than once.
+  if (!(DicomMetadataStore.getStudy as { __xnatPatched?: boolean }).__xnatPatched) {
+    const originalGetStudy = DicomMetadataStore.getStudy;
+    DicomMetadataStore.getStudy = function (studyInstanceUID) {
+      const study = originalGetStudy.call(DicomMetadataStore, studyInstanceUID);
+      if (!study) return null;
 
-    // Apply our metadata mapping to this study
-    const mappedStudies = mapXNATMetadataForDisplay([study]);
-    return mappedStudies[0];
-  };
-
-  // Also hook into getStudyInstanceUIDs to ensure all studies are processed
-  const originalGetStudyInstanceUIDs = DicomMetadataStore.getStudyInstanceUIDs;
-  DicomMetadataStore.getStudyInstanceUIDs = function () {
-    const studyUIDs = originalGetStudyInstanceUIDs.call(DicomMetadataStore);
-    return studyUIDs;
-  };
+      const mappedStudies = mapXNATMetadataForDisplay([study]);
+      return mappedStudies[0];
+    };
+    (DicomMetadataStore.getStudy as { __xnatPatched?: boolean }).__xnatPatched = true;
+  }
 
   // Return customization module with proper name for each element
   return [
@@ -131,6 +126,7 @@ export default function getCustomizationModule({ servicesManager, extensionManag
       name: 'default',
       value: {
         ...layoutSelectorCustomization,
+        ...viewportOverlayCustomization,
         // Ensure measurement tools are enabled by default for passive rendering
         tools: {
           Length: {
@@ -153,10 +149,6 @@ export default function getCustomizationModule({ servicesManager, extensionManag
           },
         },
         autoCineModalities: ['OT', 'US'],
-        'viewportOverlay.topLeft': [],
-        'viewportOverlay.topRight': [],
-        'viewportOverlay.bottomLeft': [],
-        'viewportOverlay.bottomRight': [],
       },
     },
     {

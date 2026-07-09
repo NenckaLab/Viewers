@@ -81,11 +81,89 @@ function pickViewportOptions(viewportOptions: Record<string, any> = {}, position
     picked.initialImageOptions = viewportOptions.initialImageOptions;
   }
 
+  if (viewportOptions.displayArea) {
+    picked.displayArea = viewportOptions.displayArea;
+  }
+
   if (Array.isArray(viewportOptions.syncGroups) && viewportOptions.syncGroups.length) {
     picked.syncGroups = viewportOptions.syncGroups;
   }
 
   return picked;
+}
+
+function mapViewportTypeForHangingProtocol(viewportType: unknown): string | undefined {
+  if (viewportType == null) {
+    return undefined;
+  }
+
+  const normalized = String(viewportType).toLowerCase();
+
+  if (normalized === 'orthographic' || normalized === 'volume') {
+    return 'volume';
+  }
+
+  if (normalized === 'volume3d') {
+    return 'volume3d';
+  }
+
+  if (normalized === 'stack') {
+    return 'stack';
+  }
+
+  return normalized;
+}
+
+function resolveLiveViewportOptions(
+  viewportId: string,
+  viewportOptions: Record<string, any> = {},
+  cornerstoneViewportService?: {
+    getViewportInfo?: (id: string) => {
+      getOrientation?: () => string;
+      getViewportType?: () => string;
+      getViewportOptions?: () => Record<string, any>;
+    };
+  }
+): Record<string, any> {
+  const resolved = { ...viewportOptions };
+  const viewportInfo = cornerstoneViewportService?.getViewportInfo?.(viewportId);
+
+  if (!viewportInfo) {
+    return resolved;
+  }
+
+  const liveOptions = viewportInfo.getViewportOptions?.() ?? {};
+  const orientation = viewportInfo.getOrientation?.();
+
+  if (orientation) {
+    resolved.orientation = orientation;
+  }
+
+  const viewportType = mapViewportTypeForHangingProtocol(
+    liveOptions.viewportType ?? viewportInfo.getViewportType?.()
+  );
+
+  if (viewportType) {
+    resolved.viewportType = viewportType;
+  }
+
+  if (liveOptions.toolGroupId) {
+    resolved.toolGroupId = liveOptions.toolGroupId;
+  }
+
+  if (liveOptions.initialImageOptions) {
+    resolved.initialImageOptions = liveOptions.initialImageOptions;
+  }
+
+  if (liveOptions.displayArea) {
+    resolved.displayArea = liveOptions.displayArea;
+  }
+
+  if (Array.isArray(liveOptions.syncGroups) && liveOptions.syncGroups.length) {
+    resolved.syncGroups = liveOptions.syncGroups;
+  }
+
+  return resolved;
 }
 
 function getViewportGridPosition(
@@ -159,7 +237,8 @@ export function serializeCurrentHangingProtocol(
     protocolId?: string;
   }
 ): Record<string, any> {
-  const { viewportGridService, displaySetService } = servicesManager.services;
+  const { viewportGridService, displaySetService, cornerstoneViewportService } =
+    servicesManager.services;
   const gridState = viewportGridService.getState();
   const { layout, viewports } = gridState;
   const { numRows, numCols, layoutOptions } = layout;
@@ -185,12 +264,17 @@ export function serializeCurrentHangingProtocol(
     return aPosition.col - bPosition.col;
   });
 
-  for (const [, viewport] of viewportEntries) {
+  for (const [viewportId, viewport] of viewportEntries) {
     const {
       viewportOptions = {},
       displaySetInstanceUIDs = [],
     } = viewport;
     const positionId = viewport.positionId ?? viewportOptions.positionId;
+    const resolvedViewportOptions = resolveLiveViewportOptions(
+      viewportId,
+      viewportOptions,
+      cornerstoneViewportService
+    );
 
     const displaySetsForViewport: Array<{ id: string }> = [];
 
@@ -230,7 +314,7 @@ export function serializeCurrentHangingProtocol(
     }
 
     stageViewports.push({
-      viewportOptions: pickViewportOptions(viewportOptions, positionId),
+      viewportOptions: pickViewportOptions(resolvedViewportOptions, positionId),
       displaySets: displaySetsForViewport,
     });
   }
