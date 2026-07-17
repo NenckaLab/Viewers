@@ -6,6 +6,7 @@
 import { cache, metaData } from '@cornerstonejs/core';
 import { segmentation as cornerstoneToolsSegmentation } from '@cornerstonejs/tools';
 import { adaptersSEG } from '@cornerstonejs/adapters';
+import dicomImageLoader from '@cornerstonejs/dicom-image-loader';
 import dcmjs from 'dcmjs';
 
 export interface SegmentationGeneratorParams {
@@ -20,6 +21,65 @@ type Labelmap2D = {
   rows: number;
   columns: number;
 };
+
+function hasDicomByteArray(image: any): boolean {
+  return Boolean(image?.data?.byteArray?.buffer);
+}
+
+/**
+ * Legacy Cornerstone SEG export reads Part-10 bytes from `image.data.byteArray`.
+ * Streaming / naturalized-metadata loads often leave `image.data` as metadata only
+ * (no byteArray). Hydrate from the dicom-image-loader dataset cache or re-fetch.
+ */
+async function ensureDicomByteArray(image: any): Promise<any> {
+  if (hasDicomByteArray(image)) {
+    return image;
+  }
+
+  const imageId = image?.imageId;
+  if (!imageId) {
+    throw new Error('Reference image is missing imageId required for SEG export');
+  }
+
+  const { parseImageId, dataSetCacheManager, getLoaderForScheme } =
+    dicomImageLoader.wadouri;
+  const parsed = parseImageId(imageId);
+  const loader = getLoaderForScheme(parsed.scheme);
+
+  let dataSet = dataSetCacheManager.get(parsed.url);
+  if (!dataSet) {
+    if (loader) {
+      dataSet = await dataSetCacheManager.load(parsed.url, loader, imageId);
+    } else {
+      const response = await fetch(parsed.url, {
+        credentials: 'include',
+        headers: { Accept: 'application/dicom,*/*' },
+      });
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch DICOM bytes for ${imageId}: HTTP ${response.status}`
+        );
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      return {
+        ...image,
+        data: { byteArray: new Uint8Array(arrayBuffer) },
+      };
+    }
+  }
+
+  if (!dataSet?.byteArray?.buffer) {
+    throw new Error(
+      `Reference image ${imageId} is missing DICOM byte data required for SEG export`
+    );
+  }
+
+  // Shallow copy so we do not replace naturalized metadata on the cached image.
+  return {
+    ...image,
+    data: dataSet,
+  };
+}
 
 function getSegmentColor(
   representation: any,
@@ -173,21 +233,28 @@ function enrichSegDatasetFromImageId(dataset: Record<string, any>, imageId: stri
  * cannot open them). The legacy Cornerstone adapter reads the real DICOM buffer
  * from the first multiframe source image instead.
  */
-function prepareReferenceImagesForSegExport(referencedImages: any[]): any[] {
+async function prepareReferenceImagesForSegExport(
+  referencedImages: any[]
+): Promise<any[]> {
   const valid = referencedImages.filter(image => image?.imageId);
   if (!valid.length) {
     throw new Error('No reference images available for SEG export');
   }
 
-  const first = valid[0];
-  const instance = metaData.get('instance', first.imageId) as Record<string, unknown> | undefined;
-  const numberOfFrames = Number(first.NumberOfFrames ?? instance?.NumberOfFrames ?? 0);
+  const firstCached = valid[0];
+  const instance = metaData.get('instance', firstCached.imageId) as
+    | Record<string, unknown>
+    | undefined;
+  const numberOfFrames = Number(
+    firstCached.NumberOfFrames ?? instance?.NumberOfFrames ?? 0
+  );
 
   if (numberOfFrames > 1) {
+    const first = await ensureDicomByteArray(firstCached);
     if (!first.NumberOfFrames) {
       first.NumberOfFrames = numberOfFrames;
     }
-    if (!first.data?.byteArray?.buffer) {
+    if (!hasDicomByteArray(first)) {
       throw new Error(
         'Multiframe reference image is missing DICOM byte data required for SEG export'
       );
@@ -195,21 +262,23 @@ function prepareReferenceImagesForSegExport(referencedImages: any[]): any[] {
     return [first];
   }
 
-  for (const image of valid) {
-    if (!image.data?.byteArray?.buffer) {
+  const hydrated = await Promise.all(valid.map(ensureDicomByteArray));
+
+  for (const image of hydrated) {
+    if (!hasDicomByteArray(image)) {
       throw new Error(
         `Reference image ${image.imageId} is missing DICOM byte data required for SEG export`
       );
     }
   }
 
-  return valid;
+  return hydrated;
 }
 
 /**
  * Generates a DICOM SEG dataset from a segmentation
  */
-export function generateSegmentation(
+export async function generateSegmentation(
   { segmentationId, options = {} }: { segmentationId: string; options?: any },
   { segmentationService }: SegmentationGeneratorParams
 ) {
@@ -314,7 +383,8 @@ export function generateSegmentation(
     },
   } = adaptersSEG;
 
-  const exportReferenceImages = prepareReferenceImagesForSegExport(referencedImages);
+  const exportReferenceImages =
+    await prepareReferenceImagesForSegExport(referencedImages);
 
   const segResult = cornerstoneGenerateSegmentation(
     exportReferenceImages,

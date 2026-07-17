@@ -111,7 +111,9 @@ export default class SessionRouter {
                                     DicomMetadataStore.addStudy({
                                         StudyInstanceUID: studyInstanceUID,
                                         PatientID: sessionData.subject_ID || subjectId,
-                                        PatientName: sessionData.dcmPatientName || subjectId,
+                                        // Prefer DICOM PN from XNAT session; leave empty rather than
+                                        // seeding subjectId (addStudy will not overwrite later).
+                                        PatientName: sessionData.dcmPatientName || '',
                                         StudyDate: sessionData.date || '',
                                         StudyTime: '',
                                         AccessionNumber: experimentId,

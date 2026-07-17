@@ -59,6 +59,8 @@ const xnatConfig = {
     showWarningMessageForCrossOrigin: true,
     showCPUFallbackMessage: true,
     showLoadingIndicator: true,
+    // Expand patient name in the header by default (otherwise it only shows "Patient").
+    showPatientInfo: 'visible',
     experimentalStudyBrowserSort: false,
     strictZSpacingForVolumeViewport: true,
     groupEnabledModesFirst: true,

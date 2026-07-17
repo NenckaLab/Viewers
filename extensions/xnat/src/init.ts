@@ -3,6 +3,8 @@ import { calculateSUVScalingFactors } from '@cornerstonejs/calculate-suv';
 import { initXNATDicomLoader } from './XNATDicomLoader';
 import { registerXnatMetadataFallback } from './metadataProviderFallback';
 import { registerXnatImageGeometryCalibration } from './xnatImageGeometryCalibration';
+import { registerVoiLutModuleHandler } from './registerVoiLutModuleHandler';
+import { patchAsyncDicomReaderEofGuard } from './patchAsyncDicomReaderEof';
 
 import getPTImageIdInstanceMetadata from './getPTImageIdInstanceMetadata';
 import { registerHangingProtocolAttributes } from './hangingprotocols';
@@ -46,7 +48,7 @@ export default function init({
 
   registerXnatMetadataFallback();
   registerXnatImageGeometryCalibration();
-
+  registerVoiLutModuleHandler();
   // Initialize XNAT DICOM loader with the configuration, returning a standard promise
   const initializeXNATLoader = async () => {
     try {
@@ -153,6 +155,8 @@ export function preRegistration({
 }) {
   registerXnatMetadataFallback();
   registerXnatImageGeometryCalibration();
+  registerVoiLutModuleHandler();
+  patchAsyncDicomReaderEofGuard();
 
   // Global safety net: if volume rendering (VTK) hits a hard error (e.g. shader compile),
   // reload the viewer with the stack protocol in the URL so the error boundary is cleared.

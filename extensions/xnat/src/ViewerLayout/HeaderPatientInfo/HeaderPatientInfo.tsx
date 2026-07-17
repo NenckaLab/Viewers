@@ -62,7 +62,9 @@ function HeaderPatientInfo({ servicesManager, appConfig }: withAppTypes) {
           </>
         ) : (
           <div className="text-primary-active self-center text-[13px]">
-            {isMixedPatients ? 'Multiple Patients' : 'Patient'}
+            {isMixedPatients
+              ? 'Multiple Patients'
+              : formatWithEllipsis(patientInfo.PatientName, 27) || 'Patient'}
           </div>
         )}
       </div>

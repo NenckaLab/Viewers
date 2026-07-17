@@ -7,6 +7,7 @@ import helloPageCustomization from './customizations/helloPageCustomization';
 import labellingFlowCustomization from './customizations/labellingFlowCustomization';
 import viewportNotificationCustomization from './customizations/notificationCustomization';
 import layoutSelectorCustomization from './customizations/layoutSelectorCustomization';
+import { coalescePatientField } from './XNATDataSource/Utils/DataSourceUtils';
 
 /**
  * Maps XNAT metadata to a format the study browser expects
@@ -24,8 +25,8 @@ function mapXNATMetadataForDisplay(studies) {
     const currentTime = new Date().toTimeString().slice(0, 8).replace(/:/g, '');
 
     // Ensure key fields exist with proper formatting
-    const patientName = study.PatientName || 'No Name';
-    const patientId = study.PatientID || '';
+    const patientName = coalescePatientField(study.PatientName) || 'No Name';
+    const patientId = coalescePatientField(study.PatientID) || '';
     const accessionNumber = study.AccessionNumber || '';
 
     // Set a default date if missing

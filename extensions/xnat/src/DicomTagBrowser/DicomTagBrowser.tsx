@@ -600,8 +600,13 @@ function getRows(metadata, depth = 0) {
       value = value.toString();
     }
 
+    // dcmjs PersonName / value accessors are String objects (typeof === 'object').
+    if (value instanceof String) {
+      value = value.toString();
+    }
+
     if (typeof value !== 'string') {
-      if (value === null) {
+      if (value === null || value === undefined) {
         value = ' ';
       } else {
         if (typeof value === 'object') {
@@ -611,6 +616,11 @@ function getRows(metadata, depth = 0) {
             value = `Bulk Data URI`; //: ${value.BulkDataURI}`;
           } else if (value.Alphabetic) {
             value = value.Alphabetic;
+          } else if (Array.isArray(value) && value[0]?.Alphabetic) {
+            value = value[0].Alphabetic;
+          } else if (typeof value.toString === 'function') {
+            const asString = value.toString();
+            value = asString && asString !== '[object Object]' ? asString : ' ';
           } else {
             console.warn(`Unrecognised Value: ${value} for ${keyword}:`);
             console.warn(value);

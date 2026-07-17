@@ -126,9 +126,10 @@ function PanelStudyBrowser({
             getStudiesForPatientByMRN,
             setStudyDisplayList,
             setExpandedStudyInstanceUIDs,
-            navigate
+            navigate,
+            servicesManager
         ));
-    }, [StudyInstanceUIDs, dataSource, getStudiesForPatientByMRN, navigate]);
+    }, [StudyInstanceUIDs, dataSource, getStudiesForPatientByMRN, navigate, servicesManager]);
 
     // Initial thumbnail loading
     useEffect(() => {

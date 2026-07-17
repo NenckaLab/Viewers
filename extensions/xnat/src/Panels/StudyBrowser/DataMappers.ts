@@ -53,6 +53,23 @@ export async function _mapDataSourceStudies(studies) {
             displayStudyDate = 'Invalid Date';
         }
 
+        // patientName after processResults; also accept raw DICOM JSON PN (0010,0010)
+        const patientNameFromTag = (() => {
+            const tag = study['00100010'] || study.PatientName;
+            if (!tag) return '';
+            if (typeof tag === 'string') return tag;
+            if (tag.Alphabetic) return tag.Alphabetic;
+            if (Array.isArray(tag) && tag[0]?.Alphabetic) return tag[0].Alphabetic;
+            if (Array.isArray(tag?.Value) && tag.Value[0]) {
+                const first = tag.Value[0];
+                return typeof first === 'string' ? first : first?.Alphabetic || String(first || '');
+            }
+            return '';
+        })();
+
+        const patientName =
+            study.patientName || study.PatientName || patientNameFromTag || '';
+
         return {
             AccessionNumber: study.accession || study.AccessionNumber || '',
             StudyDate: studyDate,
@@ -60,12 +77,12 @@ export async function _mapDataSourceStudies(studies) {
             NumInstances: study.instances || study.NumInstances || 0,
             ModalitiesInStudy: study.modalities || study.ModalitiesInStudy || [],
             PatientID: study.mrn || study.PatientID || '',
-            PatientName: study.patientName || study.PatientName || '',
+            PatientName: patientName,
             StudyInstanceUID: studyInstanceUID,
             StudyTime: studyTime,
             // Add display fields for the UI
             displayStudyDate: displayStudyDate,
-            displayPatientName: study.patientName || study.PatientName || '',
+            displayPatientName: patientName,
             displayStudyDescription: study.description || study.StudyDescription || '',
         };
     }));
@@ -267,11 +284,11 @@ export function _mapDisplaySets(displaySets, thumbnailImageSrcMap, xnatSeriesMet
                                 const lastSection = seriesInstanceUID.split('.').pop();
                                 seriesDescription = `Series ${lastSection}`;
                             } else {
-                                seriesDescription = 'Unknown Series';
+                                seriesDescription = 'Unnamed Series';
                             }
                         }
                     } else {
-                        seriesDescription = 'Unknown Series';
+                        seriesDescription = 'Unnamed Series';
                     }
                 }
             }

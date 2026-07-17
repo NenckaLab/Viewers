@@ -5,7 +5,7 @@ import {
     processResults,
     processSeriesResults,
 } from './qido';
-import { getXNATStatusFromStudyInstanceUID } from './Utils/DataSourceUtils';
+import { getXNATStatusFromStudyInstanceUID, resolveXnatPatientName, resolveXnatPatientId } from './Utils/DataSourceUtils';
 import { generateRandomUID } from './Utils/UIDUtils';
 
 /**
@@ -61,6 +61,8 @@ export class XNATQueryMethods {
 
                         const results = [];
                         xnatMetadata.studies.forEach((study: any) => {
+                            const patientName = resolveXnatPatientName(study, this.config);
+                            const patientId = resolveXnatPatientId(study, this.config);
                             const result: any = {
                                 "00080020": { vr: "DA", Value: [study.StudyDate || ""] },
                                 "00080030": { vr: "TM", Value: [study.StudyTime || ""] },
@@ -70,8 +72,8 @@ export class XNATQueryMethods {
                                 "00080061": { vr: "CS", Value: study.ModalitiesInStudy || study.Modalities || (study.series && study.series.length > 0 ? Array.from(new Set(study.series.map((s: any) => s.Modality).filter(Boolean))) : ["UNKNOWN"]) },
                                 "00080090": { vr: "PN", Value: [{ Alphabetic: study.ReferringPhysicianName || "" }] },
                                 "00081190": { vr: "UR", Value: [this.config.qidoRoot || ""] },
-                                "00100010": { vr: "PN", Value: [{ Alphabetic: study.PatientName || "Anonymous" }] },
-                                "00100020": { vr: "LO", Value: [study.PatientID || ""] },
+                                "00100010": { vr: "PN", Value: [{ Alphabetic: patientName || "" }] },
+                                "00100020": { vr: "LO", Value: [patientId || ""] },
                                 "00100030": { vr: "DA", Value: [study.PatientBirthDate || ""] },
                                 "00100040": { vr: "CS", Value: [study.PatientSex || ""] },
                                 "0020000D": { vr: "UI", Value: [studyInstanceUid || study.StudyInstanceUID || xnatMetadata.transactionId || generateRandomUID()] },

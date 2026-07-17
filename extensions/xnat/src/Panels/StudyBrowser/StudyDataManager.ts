@@ -21,7 +21,8 @@ export async function fetchStudiesForPatient(
     getStudiesForPatientByMRN: Function,
     setStudyDisplayList: Function,
     setExpandedStudyInstanceUIDs: Function,
-    navigate: ReturnType<typeof useNavigate>
+    navigate: ReturnType<typeof useNavigate>,
+    servicesManager?: any
 ) {
     // current study qido
     try {
@@ -41,6 +42,10 @@ export async function fetchStudiesForPatient(
             throw new Error('Invalid study URL');
         }
 
+        if (typeof dataSource.query.studies.processResults === 'function') {
+            qidoForStudyUID = dataSource.query.studies.processResults(qidoForStudyUID);
+        }
+
         let qidoStudiesForPatient = qidoForStudyUID;
 
         // try to fetch the prior studies based on the patientID if the
@@ -53,6 +58,14 @@ export async function fetchStudiesForPatient(
             }
         } catch (error) {
             console.warn('XNAT: Failed to get studies for patient by MRN:', error);
+        }
+
+        // If prior lookup returned DICOM-tag payloads, normalize again.
+        if (
+            qidoStudiesForPatient?.[0]?.['00100010'] != null &&
+            typeof dataSource.query?.studies?.processResults === 'function'
+        ) {
+            qidoStudiesForPatient = dataSource.query.studies.processResults(qidoStudiesForPatient);
         }
 
         const mappedStudies = await _mapDataSourceStudies(qidoStudiesForPatient);
@@ -68,16 +81,48 @@ export async function fetchStudiesForPatient(
             return updated;
         });
 
+        // Prefer PN already on display sets / metadata store when QIDO left it blank.
+        const fallbackPatientName = (() => {
+            try {
+                const ds =
+                    servicesManager?.services?.displaySetService?.getActiveDisplaySets?.()?.[0];
+                const fromDs = ds?.PatientName || ds?.instances?.[0]?.PatientName;
+                if (fromDs) {
+                    return typeof fromDs === 'string' ? fromDs : fromDs?.Alphabetic || '';
+                }
+                const studyMeta = DicomMetadataStore.getStudy?.(StudyInstanceUID);
+                const fromStore = studyMeta?.PatientName;
+                if (fromStore) {
+                    return typeof fromStore === 'string' ? fromStore : fromStore?.Alphabetic || '';
+                }
+            } catch {
+                // ignore
+            }
+            return '';
+        })();
+
         const actuallyMappedStudies = mappedStudies.map(qidoStudy => {
+            const patientName =
+                qidoStudy.displayPatientName ||
+                qidoStudy.PatientName ||
+                qidoStudy.patientName ||
+                fallbackPatientName ||
+                '';
             const study = {
                 studyInstanceUid: qidoStudy.StudyInstanceUID,
-                date: qidoStudy.StudyDate,
-                description: qidoStudy.StudyDescription,
+                // StudyBrowser UI shows `date` as the primary accordion label — put PN there.
+                date: patientName || qidoStudy.displayStudyDate || formatDate(qidoStudy.StudyDate) || '',
+                description:
+                    qidoStudy.StudyDescription ||
+                    qidoStudy.displayStudyDescription ||
+                    qidoStudy.displayStudyDate ||
+                    formatDate(qidoStudy.StudyDate) ||
+                    '',
                 modalities: qidoStudy.ModalitiesInStudy,
                 numInstances: qidoStudy.NumInstances,
-                // Add display fields
+                PatientName: patientName,
                 displayStudyDate: qidoStudy.displayStudyDate || formatDate(qidoStudy.StudyDate),
-                displayPatientName: qidoStudy.displayPatientName || qidoStudy.PatientName,
+                displayPatientName: patientName,
                 displayStudyDescription: qidoStudy.displayStudyDescription || qidoStudy.StudyDescription
             };
             return study;
@@ -98,5 +143,5 @@ export async function fetchStudiesForPatient(
 }
 
 // Import formatDate from utils
-import { utils } from '@ohif/core';
+import { utils, DicomMetadataStore } from '@ohif/core';
 const { formatDate } = utils;

@@ -132,7 +132,11 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     // Check URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const mode = urlParams.get('mode');
-    const isOverreadUrl = mode === 'overread' || window.location.pathname.includes('/overreads');
+    const overreadModeParam = urlParams.get('overreadMode');
+    const isOverreadUrl =
+      mode === 'overread' ||
+      overreadModeParam === 'true' ||
+      window.location.pathname.includes('/overreads');
 
     // Check if we're in overread mode based on services manager
     const isOverreadService = servicesManager?.services?.isOverreadMode === true;
@@ -808,7 +812,10 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
   }
 
   return (
-    <div className="h-full overflow-y-auto overflow-x-hidden space-y-4 p-4">
+    <div
+      className="h-full overflow-y-auto overflow-x-hidden space-y-4 p-4"
+      data-cy="overread-custom-forms-panel"
+    >
       {/* API Information */}
       <PanelSection>
         <PanelSection.Header>
@@ -816,28 +823,45 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
             <Icons.Clipboard className="w-4 h-4" />
             <span>Scan Information</span>
             {isOverreadMode && (
-              <span className="ml-2 px-2 py-1 bg-orange-500 text-white text-xs rounded">
+              <span
+                className="ml-2 px-2 py-1 bg-orange-500 text-white text-xs rounded"
+                data-cy="overread-mode-badge"
+              >
                 OVERREAD MODE
               </span>
             )}
           </div>
         </PanelSection.Header>
         <PanelSection.Content>
-          <div className="text-sm space-y-2 text-aqua-pale">
-            <p><strong>Project:</strong> {projectId || 'Not detected'}</p>
-            <p><strong>Subject:</strong> {subjectId || 'Not detected'}</p>
-            <p><strong>Experiment:</strong> {experimentId || 'Not detected'}</p>
+          <div className="text-sm space-y-2 text-aqua-pale" data-cy="overread-scan-info">
+            <p data-cy="overread-project-id">
+              <strong>Project:</strong> {projectId || 'Not detected'}
+            </p>
+            <p data-cy="overread-subject-id">
+              <strong>Subject:</strong> {subjectId || 'Not detected'}
+            </p>
+            <p data-cy="overread-experiment-id">
+              <strong>Experiment:</strong> {experimentId || 'Not detected'}
+            </p>
             {currentUser && (
-              <p><strong>Current User:</strong> {currentUser.username} (ID: {currentUser.userId})</p>
+              <p data-cy="overread-current-user">
+                <strong>Current User:</strong> {currentUser.username} (ID: {currentUser.userId})
+              </p>
             )}
             {isOverreadMode && (
-              <div className="mt-3 p-2 bg-orange-100 dark:bg-orange-900 rounded border border-orange-300 dark:border-orange-700">
+              <div
+                className="mt-3 p-2 bg-orange-100 dark:bg-orange-900 rounded border border-orange-300 dark:border-orange-700"
+                data-cy="overread-mode-notice"
+              >
                 <p className="text-orange-800 dark:text-orange-200 text-sm">
                   <strong>Overread Mode:</strong> You can only see and edit your own overread results.
                   Other radiologists' data is not visible to you.
                 </p>
                 {userHasOverreadData && (
-                  <p className="text-green-700 dark:text-green-300 text-sm mt-1">
+                  <p
+                    className="text-green-700 dark:text-green-300 text-sm mt-1"
+                    data-cy="overread-has-existing-data"
+                  >
                     ✓ You have existing overread data for this experiment.
                   </p>
                 )}
@@ -861,6 +885,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
               <p>Multiple experiments are loaded. Select which experiment's custom forms you want to view:</p>
               <div className="space-y-2">
                 <select
+                  data-cy="overread-experiment-select"
                   value={selectedExperimentId}
                   onChange={(e) => {
                     const newExperimentId = e.target.value;
@@ -913,6 +938,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
               </p>
               <label className="block text-sm font-medium text-foreground">Select form</label>
               <select
+                data-cy="overread-form-select"
                 value={selectedFormUuid}
                 onChange={(e) => handleFormSelect(e.target.value)}
                 className="w-full p-2 border border-input rounded text-sm bg-background text-foreground"
@@ -933,7 +959,9 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         <PanelSection>
           <PanelSection.Header className="text-destructive">Error</PanelSection.Header>
           <PanelSection.Content>
-            <div className="text-destructive text-sm">{error}</div>
+            <div className="text-destructive text-sm" data-cy="overread-form-save-error">
+              {error}
+            </div>
           </PanelSection.Content>
         </PanelSection>
       )}
@@ -956,6 +984,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                 <span>{customForms.find(f => f.uuid === selectedFormUuid)?.title || 'Form Data'}</span>
               </div>
               <button
+                data-cy="overread-form-save"
                 onClick={handleSave}
                 disabled={loading}
                 className="px-3 py-1 bg-primary text-primary-foreground rounded text-xs border-none cursor-pointer disabled:bg-muted disabled:cursor-not-allowed"
@@ -1022,7 +1051,11 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                       }
 
                       return (
-                        <div key={fieldName} className="mb-3 border border-border p-3 rounded bg-card">
+                        <div
+                          key={fieldName}
+                          className="mb-3 border border-border p-3 rounded bg-card"
+                          data-cy={`overread-form-field-${fieldName}`}
+                        >
                           <div className="flex items-center justify-between mb-2">
                             <label className="block text-sm font-medium text-aqua-pale">
                               {fieldDef.label}

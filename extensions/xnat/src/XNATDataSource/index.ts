@@ -11,6 +11,11 @@ import dcm4cheeReject from '../DicomWebDataSource/dcm4cheeReject.js';
 // Utility imports
 import {
   getXNATStatusFromStudyInstanceUID,
+  resolveXnatPatientName,
+  resolveXnatPatientId,
+  coalescePatientField,
+  patchStudyPatientFieldsInStore,
+  normalizePatientName,
 } from './Utils/DataSourceUtils';
 import { getSOPClassUIDForModality } from './Utils/SOPUtils';
 import { ensureInstanceRequiredFields } from './Utils/instanceUtils';
@@ -382,6 +387,35 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
               return [];
             }
 
+            // SessionRouter may have already seeded the study with subjectId as PatientName;
+            // overwrite with DICOM-derived study values (and first-instance tags when present).
+            const firstInstanceMeta = study.series?.[0]?.instances?.[0]?.metadata;
+            const resolvedPatientName = resolveXnatPatientName(
+              study,
+              configManager.getConfig(),
+              firstInstanceMeta
+            );
+            const resolvedPatientId = resolveXnatPatientId(
+              study,
+              configManager.getConfig(),
+              firstInstanceMeta
+            );
+            if (resolvedPatientName || resolvedPatientId) {
+              study.PatientName = resolvedPatientName || study.PatientName;
+              study.PatientID = resolvedPatientId || study.PatientID;
+              patchStudyPatientFieldsInStore(
+                StudyInstanceUID,
+                { PatientName: resolvedPatientName, PatientID: resolvedPatientId },
+                uid => DicomMetadataStore.getStudy(uid)
+              );
+              DicomMetadataStore.addStudy({
+                StudyInstanceUID,
+                PatientName: resolvedPatientName,
+                PatientID: resolvedPatientId,
+                StudyDate: study.StudyDate,
+                StudyDescription: study.StudyDescription,
+              });
+            }
 
             const allNaturalizedInstancesForStudy = [];
             const loadedSeries = [];
@@ -454,7 +488,7 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
               for (let index = 0; index < xnatInstances.length; index++) {
                 const xnatInstance = xnatInstances[index];
                 const xnatMeta = xnatInstance.metadata || {};
-                const determinedModality = series.Modality || xnatMeta.Modality || 'Unknown';
+                const determinedModality = series.Modality || xnatMeta.Modality || 'OT';
                 // SOPInstanceUID is critical for SEG import (frames reference SOPInstanceUIDs).
                 // If XNAT metadata is missing SOPInstanceUID, we must generate it deterministically
                 // so that exported SEG files can be re-imported after reload.
@@ -523,18 +557,25 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   SeriesDescription: series.SeriesDescription || (xnatMeta as any).SeriesDescription || '',
                   SeriesDate: series.SeriesDate || (xnatMeta as any).SeriesDate,
                   SeriesTime: series.SeriesTime || (xnatMeta as any).SeriesTime,
-                  PatientID:
-                    study.PatientID ||
-                    configManager.getConfig().xnat?.subjectId ||
+                  // Prefer DICOM PatientName/ID from instance metadata (0010,0010 / 0010,0020),
+                  // then study-level JSON; never let experimentLabel mask the DICOM name.
+                  PatientID: coalescePatientField(
                     (xnatMeta as any).PatientID,
-                  PatientName:
-                    study.PatientName ||
-                    configManager.getConfig().xnat?.subjectId ||
+                    study.PatientID,
+                    configManager.getConfig().xnat?.subjectId,
+                  ),
+                  PatientName: coalescePatientField(
                     (xnatMeta as any).PatientName,
+                    study.PatientName,
+                    configManager.getConfig().xnat?.subjectId,
+                  ),
                   StudyDate: study.StudyDate || (xnatMeta as any).StudyDate,
                   StudyTime: study.StudyTime || (xnatMeta as any).StudyTime,
                   StudyDescription: study.StudyDescription || (xnatMeta as any).StudyDescription,
                 };
+
+                // Keep PN as a plain string — dcmjs naturalize can turn it into
+                // [{ Alphabetic }] which formatPN used to render as blank.
 
                 // Multi-frame volumes: fetch DICOM header only when session JSON lacks
                 // trustworthy slice spacing (avoids downloading every multiframe file at load).
@@ -639,8 +680,12 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   wadoUri: configManager.getConfig().wadoUri,
                   SeriesDescription: series.SeriesDescription || naturalized.SeriesDescription || '',
                   SeriesNumber: naturalized.SeriesNumber,
-                  PatientID: naturalized.PatientID,
-                  PatientName: naturalized.PatientName,
+                  PatientID: normalizePatientName(naturalized.PatientID),
+                  // Naturalized PN shape — plain strings make DicomTagBrowser warn on 00100010
+                  PatientName: (() => {
+                    const pn = normalizePatientName(naturalized.PatientName);
+                    return pn ? { Alphabetic: pn } : undefined;
+                  })(),
                   StudyDate: naturalized.StudyDate,
                   StudyDescription: naturalized.StudyDescription,
                 };
@@ -729,7 +774,7 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
               return {
                 StudyInstanceUID, // This will be the synthetic UID for synthetic cases
                 SeriesInstanceUID: s.SeriesInstanceUID,
-                Modality: s.Modality || "Unknown",
+                Modality: s.Modality || 'OT',
                 SeriesDescription: s.SeriesDescription || "XNAT Series",
                 SeriesNumber: s.SeriesNumber || "1",
                 // Add other relevant series tags from XNAT if available
@@ -810,10 +855,11 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
               return null;
             }
 
+            const xnatCfg = configManager.getConfig();
             const studyMetadataForStore = {
               StudyInstanceUID: studyUid,
-              PatientID: studyFromXnat.PatientID || 'Unknown',
-              PatientName: studyFromXnat.PatientName || 'Unknown',
+              PatientID: resolveXnatPatientId(studyFromXnat, xnatCfg),
+              PatientName: resolveXnatPatientName(studyFromXnat, xnatCfg),
               StudyDate: studyFromXnat.StudyDate || '',
               StudyTime: studyFromXnat.StudyTime || '',
               AccessionNumber: studyFromXnat.AccessionNumber || '',
@@ -829,6 +875,14 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
               xnatTransactionId: xnatMetadata.transactionId,
             };
             DicomMetadataStore.addStudy(studyMetadataForStore);
+            patchStudyPatientFieldsInStore(
+              studyUid,
+              {
+                PatientName: studyMetadataForStore.PatientName,
+                PatientID: studyMetadataForStore.PatientID,
+              },
+              uid => DicomMetadataStore.getStudy(uid)
+            );
 
             // The retrieve.series.metadata will handle instance and series population.
             // This function now primarily ensures the study-level summary is in the store.
