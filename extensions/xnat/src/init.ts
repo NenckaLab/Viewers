@@ -4,7 +4,7 @@ import { initXNATDicomLoader } from './XNATDicomLoader';
 import { registerXnatMetadataFallback } from './metadataProviderFallback';
 import { registerXnatImageGeometryCalibration } from './xnatImageGeometryCalibration';
 import { registerVoiLutModuleHandler } from './registerVoiLutModuleHandler';
-import { patchAsyncDicomReaderEofGuard } from './patchAsyncDicomReaderEof';
+import { registerLegacyWadoUriLoaders } from './registerLegacyWadoUriLoaders';
 
 import getPTImageIdInstanceMetadata from './getPTImageIdInstanceMetadata';
 import { registerHangingProtocolAttributes } from './hangingprotocols';
@@ -49,6 +49,8 @@ export default function init({
   registerXnatMetadataFallback();
   registerXnatImageGeometryCalibration();
   registerVoiLutModuleHandler();
+  registerLegacyWadoUriLoaders();
+
   // Initialize XNAT DICOM loader with the configuration, returning a standard promise
   const initializeXNATLoader = async () => {
     try {
@@ -156,7 +158,8 @@ export function preRegistration({
   registerXnatMetadataFallback();
   registerXnatImageGeometryCalibration();
   registerVoiLutModuleHandler();
-  patchAsyncDicomReaderEofGuard();
+  // After cornerstone registers naturalized loaders; onModeEnter re-applies if needed.
+  registerLegacyWadoUriLoaders();
 
   // Global safety net: if volume rendering (VTK) hits a hard error (e.g. shader compile),
   // reload the viewer with the stack protocol in the URL so the error boundary is cleared.
