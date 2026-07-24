@@ -3,7 +3,7 @@
  * Extracted from getSopClassHandlerModule.tsx
  */
 
-import { utils, classes } from '@ohif/core';
+import { utils, classes, DicomMetadataStore } from '@ohif/core';
 import i18n from '@ohif/i18n';
 import { id } from '../id';
 import getDisplaySetMessages from '../getDisplaySetMessages';
@@ -11,6 +11,7 @@ import getDisplaySetMessages from '../getDisplaySetMessages';
 import type { AppContextType, XNATSeriesMetadata, DisplaySetAttributes } from './Types';
 import { sopClassHandlerName } from './Constants';
 import { getDisplaySetInfo, getVolumeLoaderScheme, isMultiFrame } from './VolumeUtils';
+import { coalescePatientField } from '../XNATDataSource/Utils/DataSourceUtils';
 
 const { sortStudyInstances, instancesSortCriteria } = utils;
 const { ImageSet } = classes;
@@ -106,6 +107,13 @@ export function makeDisplaySet(instances: any[], appContext: AppContextType) {
     }
   }
 
+  if (!studyMetadata) {
+    studyMetadata = DicomMetadataStore.getStudy(StudyInstanceUID);
+  }
+  if (!seriesMetadata) {
+    seriesMetadata = DicomMetadataStore.getSeries(StudyInstanceUID, SeriesInstanceUID);
+  }
+
   // Build initial attributes
   const initialAttributes: DisplaySetAttributes = {
     SeriesDate: (seriesMetadata?.SeriesDate) || instance?.SeriesDate,
@@ -115,8 +123,13 @@ export function makeDisplaySet(instances: any[], appContext: AppContextType) {
     SeriesNumber: (seriesMetadata?.SeriesNumber) || instance?.SeriesNumber || 0,
     SeriesDescription: (seriesMetadata?.SeriesDescription) || instance?.SeriesDescription || '',
     Modality: (seriesMetadata?.Modality) || instance?.Modality,
-    PatientID: (seriesMetadata?.PatientID) || (studyMetadata?.PatientID) || instance?.PatientID,
-    PatientName: (seriesMetadata?.PatientName) || (studyMetadata?.PatientName) || instance?.PatientName,
+    PatientID: coalescePatientField(instance?.PatientID, seriesMetadata?.PatientID, studyMetadata?.PatientID),
+    // Keep a display string on the ImageSet (formatPN / header / study list)
+    PatientName: coalescePatientField(
+      instance?.PatientName,
+      seriesMetadata?.PatientName,
+      studyMetadata?.PatientName,
+    ),
     StudyDate: (seriesMetadata?.StudyDate) || (studyMetadata?.StudyDate) || instance?.StudyDate,
     StudyTime: (seriesMetadata?.StudyTime) || (studyMetadata?.StudyTime) || instance?.StudyTime,
     StudyDescription: (seriesMetadata?.StudyDescription) || (studyMetadata?.StudyDescription) || instance?.StudyDescription || 'No Description',

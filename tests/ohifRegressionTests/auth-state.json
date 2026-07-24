@@ -1,0 +1,15 @@
+{
+  "cookies": [
+    {
+      "name": "JSESSIONID",
+      "value": "A8470ED529DE65879F178C2C0AB34359",
+      "domain": "localhost",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

@@ -27,6 +27,8 @@ import {
   getExternalHangingProtocolRegistry,
   loadExternalHangingProtocols,
 } from './loadExternalHangingProtocols';
+import { fetchUserDefaultProtocolId } from '@ohif/extension-xnat/src/utils/hangingProtocol/hangingProtocolApi';
+import viewportOverlayCustomization from '../../../extensions/cornerstone/src/customizations/viewportOverlayCustomization';
 
 /** Match `hangingProtocolId` regardless of query key casing (Mode uses lower-case keys). */
 function getHangingProtocolIdFromQuery(searchParams: URLSearchParams): string | null {
@@ -150,7 +152,7 @@ const xnatRoute = {
 
     // Parse identifiers from URL query parameters for comparison views
     const query = new URLSearchParams(window.location.search);
-    const xnatProtocolIdFromQuery = getXnatHangingProtocolIdFromQuery(query);
+    let xnatProtocolIdFromQuery = getXnatHangingProtocolIdFromQuery(query);
     const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
     const experimentIdsFromURL = query.getAll('experimentIds');
 
@@ -178,6 +180,27 @@ const xnatRoute = {
       hangingProtocolService,
     });
     servicesManager.services.xnatExternalHangingProtocols = getExternalHangingProtocolRegistry();
+
+    if (!xnatProtocolIdFromQuery) {
+      const projectId = query.get('projectId');
+      if (projectId) {
+        try {
+          const savedDefaultId = await fetchUserDefaultProtocolId(projectId);
+          if (savedDefaultId && hangingProtocolService.getProtocolById(savedDefaultId)) {
+            xnatProtocolIdFromQuery = savedDefaultId;
+            console.info(
+              `XNAT: Applying saved hanging protocol "${savedDefaultId}" for project ${projectId}`
+            );
+          } else if (savedDefaultId) {
+            console.warn(
+              `XNAT: Saved hanging protocol "${savedDefaultId}" was not loaded for project ${projectId}`
+            );
+          }
+        } catch (error) {
+          console.warn('XNAT: Could not load saved hanging protocol preference:', error);
+        }
+      }
+    }
 
     // Initialize data source
     try {
@@ -409,7 +432,7 @@ const modeInstance = {
   onModeInit: ({ servicesManager, extensionManager, commandsManager, appConfig, query }) => {
     // Get query parameters
     const queryParams = Object.fromEntries(query.entries());
-    const { projectId, parentProjectId, subjectId, experimentId, experimentLabel, overreadMode, excludeScanTypes } = queryParams;
+    const { projectId, parentProjectId, subjectId, experimentId, experimentLabel, overreadMode, excludeScanTypes, scanId } = queryParams;
 
     // Check if we have StudyInstanceUIDs in the URL (for comparison views)
     const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
@@ -424,13 +447,19 @@ const modeInstance = {
       servicesManager.services.isOverreadMode = true;
     }
 
-    const excludedScanTypes = parseExcludedScanTypesParam(excludeScanTypes);
-    if (excludedScanTypes.length > 0) {
-      servicesManager.services.excludedScanTypes = excludedScanTypes;
-    } else if (overreadMode === 'true' && projectId) {
+    const excludedScanTypesFromUrl = parseExcludedScanTypesParam(excludeScanTypes);
+    if (excludedScanTypesFromUrl.length > 0) {
+      servicesManager.services.excludedScanTypes = excludedScanTypesFromUrl;
+    }
+
+    if (overreadMode === 'true' && projectId) {
       fetchExcludedScanTypesForProject(projectId).then(fetchedExcludedScanTypes => {
         if (fetchedExcludedScanTypes.length > 0) {
-          servicesManager.services.excludedScanTypes = fetchedExcludedScanTypes;
+          const merged = new Set([
+            ...(servicesManager.services.excludedScanTypes || []),
+            ...fetchedExcludedScanTypes,
+          ]);
+          servicesManager.services.excludedScanTypes = Array.from(merged);
         }
       });
     }
@@ -460,6 +489,10 @@ const modeInstance = {
     }
     if (experimentId) {
       safeSetSessionValue('xnat_experimentId', experimentId);
+    }
+    if (scanId) {
+      servicesManager.services.scanId = scanId;
+      safeSetSessionValue('xnat_scanId', scanId);
     }
 
     // Initialize session router if we have single experiment parameters, or skip for comparison/multi-experiment modes
@@ -590,15 +623,10 @@ const modeInstance = {
       console.warn('Could not configure J2K logging level:', e);
     }
 
-    // Load cornerstone extension's customizations first
-    try {
-      const cornerstoneCustomizations = extensionManager.getModuleEntry('@ohif/extension-cornerstone.customizationModule.default');
-      if (cornerstoneCustomizations && typeof cornerstoneCustomizations === 'object') {
-        customizationService.setCustomizations(cornerstoneCustomizations as Record<string, any>);
-      }
-    } catch (error) {
-      console.warn('Could not load cornerstone customizations:', error);
-    }
+    // Ensure viewport corner overlays (date, series, W/L, instance) are registered at mode scope.
+    customizationService.setCustomizations(
+      viewportOverlayCustomization as Record<string, unknown>
+    );
 
     // Set up XNAT-specific customizations
     customizationService.setCustomizations({

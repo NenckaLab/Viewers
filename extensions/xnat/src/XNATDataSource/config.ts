@@ -40,11 +40,13 @@ export class XNATDataSourceConfigManager {
         const queryExperimentId = params?.experimentId || query?.get?.('experimentId');
         const querySessionId = params?.sessionId || query?.get?.('sessionId');
         const querySubjectId = params?.subjectId || query?.get?.('subjectId');
+        const queryScanId = params?.scanId || query?.get?.('scanId');
 
         if (queryProjectId) this.xnatConfig.xnat.projectId = queryProjectId;
         if (queryExperimentId) this.xnatConfig.xnat.experimentId = queryExperimentId;
         if (querySessionId) this.xnatConfig.xnat.sessionId = querySessionId;
         if (querySubjectId) this.xnatConfig.xnat.subjectId = querySubjectId;
+        if (queryScanId) this.xnatConfig.xnat.scanId = queryScanId;
 
         const getAllFromQuery = (key: string) =>
             typeof query?.getAll === 'function' ? query.getAll(key) : [];

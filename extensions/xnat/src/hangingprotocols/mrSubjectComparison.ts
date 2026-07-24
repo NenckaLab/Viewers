@@ -1,7 +1,18 @@
-// Sync groups for coordinated viewing
-const VOI_SYNC_GROUP = {
+// Window/level sync is per study so comparison sessions stay independent.
+// Axial/sagittal/coronal within one row still share W/L.
+const CURRENT_VOI_SYNC_GROUP = {
     type: 'voi',
-    id: 'mpr-comparison',
+    id: 'mpr-comparison-current',
+    source: true,
+    target: true,
+    options: {
+        syncColormap: true,
+    },
+};
+
+const PRIOR_VOI_SYNC_GROUP = {
+    type: 'voi',
+    id: 'mpr-comparison-prior',
     source: true,
     target: true,
     options: {
@@ -92,7 +103,7 @@ const currentAxialViewport = {
         initialImageOptions: {
             preset: 'middle',
         },
-        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
+        syncGroups: [CURRENT_VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
     },
     displaySets: [
         {
@@ -111,7 +122,7 @@ const currentSagittalViewport = {
         initialImageOptions: {
             preset: 'middle',
         },
-        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
+        syncGroups: [CURRENT_VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
     },
     displaySets: [
         {
@@ -130,7 +141,7 @@ const currentCoronalViewport = {
         initialImageOptions: {
             preset: 'middle',
         },
-        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
+        syncGroups: [CURRENT_VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
     },
     displaySets: [
         {
@@ -150,7 +161,7 @@ const priorAxialViewport = {
         initialImageOptions: {
             preset: 'middle',
         },
-        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
+        syncGroups: [PRIOR_VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
     },
     displaySets: [
         {
@@ -169,7 +180,7 @@ const priorSagittalViewport = {
         initialImageOptions: {
             preset: 'middle',
         },
-        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
+        syncGroups: [PRIOR_VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
     },
     displaySets: [
         {
@@ -188,7 +199,7 @@ const priorCoronalViewport = {
         initialImageOptions: {
             preset: 'middle',
         },
-        syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
+        syncGroups: [PRIOR_VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
     },
     displaySets: [
         {
@@ -239,7 +250,7 @@ const mrSubjectComparison = {
             initialImageOptions: {
                 preset: 'middle',
             },
-            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
+            syncGroups: [CURRENT_VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
         },
         displaySets: [
             {

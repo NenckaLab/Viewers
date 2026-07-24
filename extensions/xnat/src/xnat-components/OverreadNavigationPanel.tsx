@@ -136,21 +136,26 @@ const OverreadNavigationPanel: React.FC<OverreadNavigationPanelProps> = ({ servi
   }
 
   return (
-    <div className="h-full overflow-y-auto overflow-x-hidden p-4 space-y-4">
+    <div
+      className="h-full overflow-y-auto overflow-x-hidden p-4 space-y-4"
+      data-cy="overread-navigation-panel"
+    >
       {/* Active Subject Section */}
       <PanelSection>
         <PanelSection.Header>This Subject</PanelSection.Header>
         <PanelSection.Content>
           {activeSubjects.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-2" data-cy="overread-subject-list">
               {activeSubjects.map(subject => (
-                <div key={subject.ID}>
+                <div key={subject.ID} data-cy={`overread-subject-${subject.ID}`}>
                   <XNATSubject ID={subject.ID} label={subject.label} projectId={subject.project} parentProjectId={subject.project} />
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No active subject selected</div>
+            <div className="text-sm text-muted-foreground" data-cy="overread-no-subject">
+              No active subject selected
+            </div>
           )}
         </PanelSection.Content>
       </PanelSection>

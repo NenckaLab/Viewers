@@ -1,17 +1,152 @@
 import { isOverreadModeActive } from './acquisitionImageLimit';
 
-const scanIdToTypeCache = new Map<string, Map<string, string>>();
+export type ScanMetadata = {
+  type?: string;
+  seriesDescription?: string;
+};
+
+const scanIdToMetadataCache = new Map<string, Map<string, ScanMetadata>>();
 const excludedScanTypesByProjectCache = new Map<string, string[]>();
+
+function normalizeMatchValue(value?: string): string {
+  return (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\s+/g, ' ');
+}
+
+function tryParseExcludedJsonArray(value: string): string[] | null {
+  const attempts = [value];
+
+  try {
+    attempts.push(decodeURIComponent(value));
+  } catch {
+    // Keep the original value only.
+  }
+
+  for (const candidate of attempts) {
+    const trimmed = candidate.trim();
+    if (!trimmed.startsWith('[')) {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return uniqueMatchValues(parsed.map(entry => String(entry)));
+      }
+    } catch {
+      // Try the next decoding candidate.
+    }
+  }
+
+  return null;
+}
+
+function looksLikeBrokenJsonList(value: string): boolean {
+  return value.includes('[') || value.includes(']') || value.includes('"');
+}
+
+function uniqueMatchValues(values: Array<string | undefined>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  values.forEach(value => {
+    const trimmed = (value || '').trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const normalized = normalizeMatchValue(trimmed);
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      result.push(trimmed);
+    }
+  });
+
+  return result;
+}
+
+function extractExcludedEntry(item: unknown): string[] {
+  if (typeof item === 'string') {
+    const trimmed = item.trim();
+    return trimmed ? [trimmed] : [];
+  }
+
+  if (!item || typeof item !== 'object') {
+    return [];
+  }
+
+  const record = item as Record<string, unknown>;
+  const candidate =
+    record.label ??
+    record.name ??
+    record.type ??
+    record.series_description ??
+    record.seriesDescription ??
+    record.value;
+
+  const trimmed = candidate ? String(candidate).trim() : '';
+  return trimmed ? [trimmed] : [];
+}
+
+function splitCommaSeparatedRespectingParentheses(value: string): string[] {
+  const items: string[] = [];
+  let current = '';
+  let depth = 0;
+
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+
+    if (char === '(') {
+      depth += 1;
+    } else if (char === ')') {
+      depth = Math.max(0, depth - 1);
+    }
+
+    if (char === ',' && depth === 0) {
+      if (current.trim()) {
+        items.push(current.trim());
+      }
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (current.trim()) {
+    items.push(current.trim());
+  }
+
+  return items;
+}
 
 export function parseExcludedScanTypesParam(value: string | null | undefined): string[] {
   if (!value || !value.trim()) {
     return [];
   }
 
-  return value
-    .split(',')
-    .map(entry => entry.trim())
-    .filter(Boolean);
+  const trimmed = value.trim();
+  const parsedJson = tryParseExcludedJsonArray(trimmed);
+  if (parsedJson) {
+    return parsedJson;
+  }
+
+  if (looksLikeBrokenJsonList(trimmed)) {
+    return [];
+  }
+
+  return uniqueMatchValues(splitCommaSeparatedRespectingParentheses(trimmed));
+}
+
+export function formatExcludedScanTypesParam(excludedScanTypes: string[]): string {
+  if (!excludedScanTypes.length) {
+    return '';
+  }
+
+  return encodeURIComponent(JSON.stringify(excludedScanTypes));
 }
 
 export function parseExcludedScansApiResponse(data: unknown): string[] {
@@ -20,13 +155,29 @@ export function parseExcludedScansApiResponse(data: unknown): string[] {
   }
 
   if (Array.isArray(data)) {
-    if (data.length > 0 && typeof data[0] === 'string') {
-      return data.map(String).filter(entry => entry.trim());
+    if (data.length === 0) {
+      return [];
     }
 
-    if (data.length > 0 && typeof data[0] === 'object') {
-      const first = data[0] as Record<string, unknown>;
-      return parseExcludedScansApiResponse(first.excludedScans ?? first.excluded_scans);
+    if (typeof data[0] === 'string') {
+      return uniqueMatchValues(data.map(String));
+    }
+
+    if (typeof data[0] === 'object') {
+      const nestedValues = data.flatMap(item => {
+        if (!item || typeof item !== 'object') {
+          return [];
+        }
+
+        const record = item as Record<string, unknown>;
+        if (record.excludedScans || record.excluded_scans) {
+          return parseExcludedScansApiResponse(record.excludedScans ?? record.excluded_scans);
+        }
+
+        return extractExcludedEntry(item);
+      });
+
+      return uniqueMatchValues(nestedValues);
     }
 
     return [];
@@ -73,9 +224,9 @@ export async function fetchExcludedScanTypesForProject(projectId: string): Promi
 
       const data = await response.json();
       const excludedScanTypes = parseExcludedScansApiResponse(data);
-      excludedScanTypesByProjectCache.set(projectId, excludedScanTypes);
 
-      if (excludedScanTypes.length > 0 || endpoint.includes('excluded-scans')) {
+      if (excludedScanTypes.length > 0) {
+        excludedScanTypesByProjectCache.set(projectId, excludedScanTypes);
         return excludedScanTypes;
       }
     } catch (error) {
@@ -91,21 +242,36 @@ export async function resolveExcludedScanTypes(
   servicesManager?: { services?: { excludedScanTypes?: string[]; isOverreadMode?: boolean } },
   projectId?: string
 ): Promise<string[]> {
-  const fromUrlOrService = getExcludedScanTypes(servicesManager);
-  if (fromUrlOrService.length > 0) {
-    return fromUrlOrService;
+  const merged = new Set<string>();
+
+  const addValues = (values?: string[]) => {
+    (values || []).forEach(value => {
+      const trimmed = value.trim();
+      if (trimmed) {
+        merged.add(trimmed);
+      }
+    });
+  };
+
+  addValues(servicesManager?.services?.excludedScanTypes);
+
+  if (typeof window !== 'undefined') {
+    addValues(
+      parseExcludedScanTypesParam(new URLSearchParams(window.location.search).get('excludeScanTypes'))
+    );
   }
 
-  if (!isOverreadModeActive(servicesManager) || !projectId) {
-    return [];
+  if (isOverreadModeActive(servicesManager) && projectId) {
+    addValues(await fetchExcludedScanTypesForProject(projectId));
   }
 
-  const fetched = await fetchExcludedScanTypesForProject(projectId);
-  if (fetched.length > 0 && servicesManager?.services) {
-    servicesManager.services.excludedScanTypes = fetched;
+  const resolved = Array.from(merged);
+
+  if (resolved.length > 0 && servicesManager?.services) {
+    servicesManager.services.excludedScanTypes = resolved;
   }
 
-  return fetched;
+  return resolved;
 }
 
 export function getExcludedScanTypes(
@@ -133,8 +299,9 @@ export function parseScanIdFromXnatUrl(url?: string): string | undefined {
   return match?.[1];
 }
 
+/** @deprecated Use normalizeMatchValue internally; kept for existing imports. */
 export function normalizeScanType(scanType?: string): string {
-  return (scanType || '').trim().toLowerCase();
+  return normalizeMatchValue(scanType);
 }
 
 export function isScanTypeExcluded(scanType: string | undefined, excludedTypes: string[]): boolean {
@@ -142,36 +309,95 @@ export function isScanTypeExcluded(scanType: string | undefined, excludedTypes: 
     return false;
   }
 
-  const normalized = normalizeScanType(scanType);
-  return excludedTypes.some(type => normalizeScanType(type) === normalized);
+  const normalized = normalizeMatchValue(scanType);
+  return excludedTypes.some(type => normalizeMatchValue(type) === normalized);
 }
 
-export function getSeriesScanType(
-  series: { type?: string; scanType?: string; ScanType?: string },
-  xnatInstances: Array<{ url?: string; metadata?: { type?: string; scanType?: string } }>,
-  scanIdToTypeMap?: Map<string, string>
-): string | undefined {
-  const directType = series.scanType || series.ScanType || series.type;
-  if (directType) {
-    return directType;
+export function isSeriesMatchExcluded(
+  matchValues: string[],
+  excludedTypes: string[]
+): boolean {
+  if (!matchValues.length || !excludedTypes.length) {
+    return false;
   }
 
+  const normalizedMatchValues = matchValues.map(normalizeMatchValue);
+  const normalizedExcluded = excludedTypes.map(normalizeMatchValue);
+
+  return normalizedExcluded.some(excluded =>
+    normalizedMatchValues.some(matchValue => matchValue === excluded)
+  );
+}
+
+export function getSeriesMatchValues(
+  series: {
+    type?: string;
+    scanType?: string;
+    ScanType?: string;
+    SeriesDescription?: string;
+    seriesDescription?: string;
+  },
+  xnatInstances: Array<{
+    url?: string;
+    metadata?: {
+      type?: string;
+      scanType?: string;
+      SeriesDescription?: string;
+      series_description?: string;
+    };
+  }>,
+  scanIdToMetadataMap?: Map<string, ScanMetadata>
+): string[] {
+  const values: Array<string | undefined> = [
+    series.SeriesDescription,
+    series.seriesDescription,
+    series.scanType,
+    series.ScanType,
+    series.type,
+  ];
+
   const firstInstance = xnatInstances[0];
-  const metadataType = firstInstance?.metadata?.scanType || firstInstance?.metadata?.type;
-  if (metadataType) {
-    return metadataType;
+  const metadata = firstInstance?.metadata;
+
+  if (metadata) {
+    values.push(
+      metadata.SeriesDescription,
+      metadata.series_description,
+      metadata.scanType,
+      metadata.type
+    );
   }
 
   const scanId = parseScanIdFromXnatUrl(firstInstance?.url);
-  if (scanId && scanIdToTypeMap?.has(scanId)) {
-    return scanIdToTypeMap.get(scanId);
+  if (scanId && scanIdToMetadataMap?.has(scanId)) {
+    const scanMetadata = scanIdToMetadataMap.get(scanId);
+    values.push(scanMetadata?.type, scanMetadata?.seriesDescription);
   }
 
-  return undefined;
+  return uniqueMatchValues(values);
 }
 
-export function parseXnatScansResponse(data: unknown): Map<string, string> {
-  const map = new Map<string, string>();
+/** @deprecated Use getSeriesMatchValues for exclusion checks. */
+export function getSeriesScanType(
+  series: { type?: string; scanType?: string; ScanType?: string; SeriesDescription?: string },
+  xnatInstances: Array<{ url?: string; metadata?: { type?: string; scanType?: string } }>,
+  scanIdToTypeMap?: Map<string, string>
+): string | undefined {
+  const metadataMap = scanIdToTypeMap
+    ? new Map(
+        Array.from(scanIdToTypeMap.entries()).map(([scanId, type]) => [
+          scanId,
+          { type, seriesDescription: undefined },
+        ])
+      )
+    : undefined;
+
+  const matchValues = getSeriesMatchValues(series, xnatInstances, metadataMap);
+  return matchValues[0];
+}
+
+export function parseXnatScansResponse(data: unknown): Map<string, ScanMetadata> {
+  const map = new Map<string, ScanMetadata>();
   const items: Array<Record<string, unknown>> = [];
 
   if (Array.isArray(data)) {
@@ -193,17 +419,23 @@ export function parseXnatScansResponse(data: unknown): Map<string, string> {
     const fields = (item.data_fields as Record<string, unknown> | undefined) || item;
     const scanId = fields.ID || fields.id || fields.scanId;
     const scanType = fields.type || fields.scanType;
+    const seriesDescription = fields.series_description || fields.seriesDescription;
 
-    if (scanId && scanType) {
-      map.set(String(scanId), String(scanType));
+    if (!scanId) {
+      continue;
     }
+
+    map.set(String(scanId), {
+      type: scanType ? String(scanType) : undefined,
+      seriesDescription: seriesDescription ? String(seriesDescription) : undefined,
+    });
   }
 
   return map;
 }
 
-export async function getScanIdToTypeMap(experimentId: string): Promise<Map<string, string>> {
-  const cached = scanIdToTypeCache.get(experimentId);
+export async function getScanIdToMetadataMap(experimentId: string): Promise<Map<string, ScanMetadata>> {
+  const cached = scanIdToMetadataCache.get(experimentId);
   if (cached) {
     return cached;
   }
@@ -216,38 +448,52 @@ export async function getScanIdToTypeMap(experimentId: string): Promise<Map<stri
 
     if (!response.ok) {
       console.warn(
-        `XNAT Overread: Failed to fetch scan types for ${experimentId}: HTTP ${response.status}`
+        `XNAT Overread: Failed to fetch scan metadata for ${experimentId}: HTTP ${response.status}`
       );
       return new Map();
     }
 
     const data = await response.json();
     const map = parseXnatScansResponse(data);
-    scanIdToTypeCache.set(experimentId, map);
+    scanIdToMetadataCache.set(experimentId, map);
     return map;
   } catch (error) {
-    console.warn(`XNAT Overread: Error fetching scan types for ${experimentId}:`, error);
+    console.warn(`XNAT Overread: Error fetching scan metadata for ${experimentId}:`, error);
     return new Map();
   }
+}
+
+/** @deprecated Use getScanIdToMetadataMap. */
+export async function getScanIdToTypeMap(experimentId: string): Promise<Map<string, string>> {
+  const metadataMap = await getScanIdToMetadataMap(experimentId);
+  const typeMap = new Map<string, string>();
+
+  metadataMap.forEach((metadata, scanId) => {
+    if (metadata.type) {
+      typeMap.set(scanId, metadata.type);
+    }
+  });
+
+  return typeMap;
 }
 
 export function shouldSkipExcludedScanTypeInOverreadMode(
   xnatInstances: any[],
   series: any,
   excludedTypes: string[],
-  scanIdToTypeMap: Map<string, string> | undefined,
+  scanIdToMetadataMap: Map<string, ScanMetadata> | undefined,
   servicesManager?: { services?: { isOverreadMode?: boolean; excludedScanTypes?: string[] } }
 ): boolean {
   if (!isOverreadModeActive(servicesManager) || excludedTypes.length === 0) {
     return false;
   }
 
-  const scanType = getSeriesScanType(series, xnatInstances, scanIdToTypeMap);
-  if (!scanType) {
+  const matchValues = getSeriesMatchValues(series, xnatInstances, scanIdToMetadataMap);
+  if (!matchValues.length) {
     return false;
   }
 
-  return isScanTypeExcluded(scanType, excludedTypes);
+  return isSeriesMatchExcluded(matchValues, excludedTypes);
 }
 
 export function appendOverreadViewerQueryParams(params: string): string {

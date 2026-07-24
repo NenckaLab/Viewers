@@ -206,6 +206,10 @@ async function fetchJson(url: string): Promise<any> {
     },
   });
 
+  if (response.status === 404) {
+    return null;
+  }
+
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} while loading ${url}`);
   }
@@ -283,6 +287,9 @@ async function getManifestSources(manifestUrls: string[]): Promise<ExternalProto
   for (const manifestUrl of manifestUrls) {
     try {
       const payload = (await fetchJson(manifestUrl)) as ExternalHangingProtocolManifestPayload;
+      if (!payload) {
+        continue;
+      }
       const entries = normalizeManifestPayload(payload);
       entries.forEach(entry => {
         if (entry.url) {
@@ -310,6 +317,20 @@ async function fetchProtocols(url: string): Promise<HangingProtocolLike[]> {
   return normalizePayload(payload);
 }
 
+function getProjectIdFromQuery(query: URLSearchParams): string | null {
+  return query.get('projectId') || query.get('projectid');
+}
+
+function getUserProtocolManifestSources(query: URLSearchParams): string[] {
+  const projectId = getProjectIdFromQuery(query);
+  if (!projectId) {
+    return [];
+  }
+
+  const origin = window.location.origin;
+  return [`${origin}/xapi/viewer/users/me/projects/${encodeURIComponent(projectId)}/hanging-protocols/manifest.json`];
+}
+
 export async function loadExternalHangingProtocols({
   query,
   hangingProtocolService,
@@ -329,7 +350,7 @@ export async function loadExternalHangingProtocols({
     url,
     fromManifest: false,
   }));
-  const manifestUrls = getManifestUrls(query);
+  const manifestUrls = getManifestUrls(query).concat(getUserProtocolManifestSources(query));
   const manifestSources: ResolvedSource[] = (await getManifestSources(manifestUrls))
     .filter(source => source.url)
     .map(source => ({

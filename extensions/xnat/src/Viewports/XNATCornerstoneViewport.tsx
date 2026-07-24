@@ -79,6 +79,9 @@ class VolumeErrorBoundary extends React.Component<
   }
 
   render() {
+    if (this.state.hasError) {
+      return null;
+    }
     return this.props.children as React.ReactNode;
   }
 }
@@ -162,7 +165,7 @@ function XNATCornerstoneViewport(props: React.ComponentProps<typeof OHIFCornerst
 
   return (
     <VolumeErrorBoundary hangingProtocolService={hangingProtocolService}>
-      <OHIFCornerstoneViewport {...props} servicesManager={servicesManager} />
+      <OHIFCornerstoneViewport key={viewportId} {...props} servicesManager={servicesManager} />
     </VolumeErrorBoundary>
   );
 }

@@ -5,6 +5,7 @@ import { useViewportGrid } from '@ohif/ui-next';
 import { DicomMetadataStore } from '@ohif/core';
 import sessionMap from '../utils/sessionMap';
 import getImageSrcFromImageId from '../../../../extensions/default/src/Panels/getImageSrcFromImageId';
+import { normalizePatientName } from '../XNATDataSource/Utils/DataSourceUtils';
 
 // Declare the AppContext global variable for TypeScript
 declare global {
@@ -20,6 +21,9 @@ declare global {
 interface StudyData {
   StudyInstanceUID: string;
   StudyDescription: string;
+  PatientName?: string;
+  PatientID?: string;
+  StudyDate?: string;
   session?: {
     experimentId: string;
     projectId: string;
@@ -139,12 +143,39 @@ function WrappedXNATStudyBrowserPanel({ extensionManager, servicesManager, comma
 
         if (!studyDisplaySetsMap[StudyInstanceUID]) {
               const dicomStudy = dicomStudies.find(study => study?.StudyInstanceUID === StudyInstanceUID);
-          studyDisplaySetsMap[StudyInstanceUID] = {
+              const fromDisplaySet = normalizePatientName(
+                displaySet?.PatientName || displaySet?.instances?.[0]?.PatientName
+              );
+              const fromStore = normalizePatientName(dicomStudy?.PatientName);
+              studyDisplaySetsMap[StudyInstanceUID] = {
                 StudyInstanceUID,
-            StudyDescription: dicomStudy?.StudyDescription || 'No description',
-            // Potentially add wadoRoot here if needed, though usually handled by image loader
-            thumbnails: [],
-          };
+                StudyDescription:
+                  dicomStudy?.StudyDescription ||
+                  displaySet?.StudyDescription ||
+                  'No description',
+                PatientName: fromDisplaySet || fromStore || '',
+                PatientID: normalizePatientName(
+                  displaySet?.PatientID ||
+                    displaySet?.instances?.[0]?.PatientID ||
+                    dicomStudy?.PatientID
+                ),
+                StudyDate: dicomStudy?.StudyDate || displaySet?.StudyDate || '',
+                session: {
+                  experimentId:
+                    sessionMap.getExperimentID?.() ||
+                    sessionStorage.getItem('xnat_experimentId') ||
+                    '',
+                  projectId:
+                    sessionMap.getProject?.() ||
+                    sessionStorage.getItem('xnat_projectId') ||
+                    '',
+                  subjectId:
+                    sessionMap.getSubject?.() ||
+                    sessionStorage.getItem('xnat_subjectId') ||
+                    '',
+                },
+                thumbnails: [],
+              };
         }
 
         studyDisplaySetsMap[StudyInstanceUID].thumbnails.push({
@@ -299,6 +330,7 @@ function WrappedXNATStudyBrowserPanel({ extensionManager, servicesManager, comma
           studies={studyBrowserData} // Pass data with resolved imageSrc
           onThumbnailClick={onThumbnailClick}
           onThumbnailDoubleClick={onThumbnailDoubleClick}
+          supportsDrag
         />
       )}
     </div>

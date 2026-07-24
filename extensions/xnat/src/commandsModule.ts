@@ -5,6 +5,7 @@ import { createViewportCommands } from './commands/viewportCommands';
 import { createSegmentationCommands } from './commands/segmentationCommands';
 import { createXNATCommands } from './commands/xnatCommands';
 import { createMeasurementCommands } from './commands/measurementCommands';
+import { createSaveHangingProtocolCommands } from './commands/saveHangingProtocolCommands';
 
 export type HangingProtocolParams = {
   protocolId?: string;
@@ -39,6 +40,10 @@ const commandsModule = ({
   const segmentationCommands = createSegmentationCommands(servicesManager, commandsManager);
   const xnatCommands = createXNATCommands(servicesManager, commandsManager, extensionManager);
   const measurementCommands = createMeasurementCommands(servicesManager, commandsManager);
+  const saveHangingProtocolCommands = createSaveHangingProtocolCommands(
+    servicesManager,
+    commandsManager
+  );
 
   // Combine all command actions
   const actions = {
@@ -48,6 +53,7 @@ const commandsModule = ({
     ...segmentationCommands,
     ...xnatCommands,
     ...measurementCommands,
+    ...saveHangingProtocolCommands,
   };
 
   // Define command definitions with proper options
@@ -176,6 +182,9 @@ const commandsModule = ({
     },
     XNATCustomFormsApi: {
       commandFn: actions.XNATCustomFormsApi,
+    },
+    saveHangingProtocolToXnat: {
+      commandFn: actions.saveHangingProtocolToXnat,
     },
   };
 

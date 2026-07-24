@@ -36,7 +36,6 @@ export default function getToolbarModule({ commandsManager, servicesManager }: w
       name: 'ohif.toolBoxButton',
       defaultComponent: ToolBoxButtonWrapper,
     },
-    // others
     {
       name: 'ohif.layoutSelector',
       defaultComponent: props =>

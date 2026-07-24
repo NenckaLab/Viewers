@@ -52,6 +52,7 @@ export type XNATDataSourceConfig = {
         subjectId?: string;
         sessionId?: string;
         experimentId?: string;
+        scanId?: string;
         studyMappings?: Record<
             string,
             {

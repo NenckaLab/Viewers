@@ -53,7 +53,7 @@ export const createSegmentationCommands = (
         /**
          * Generates a DICOM SEG dataset from a segmentation
          */
-        generateSegmentation: ({ segmentationId, options = {} }) =>
+        generateSegmentation: async ({ segmentationId, options = {} }) =>
             generateSegmentation(
                 { segmentationId, options },
                 { segmentationService }
@@ -70,7 +70,7 @@ export const createSegmentationCommands = (
                 throw new Error('Segmentation not found');
             }
 
-            const dataset = generateSegmentation(
+            const dataset = await generateSegmentation(
                 { segmentationId },
                 { segmentationService }
             );

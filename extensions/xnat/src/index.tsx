@@ -11,6 +11,7 @@ import getStudiesForPatientByMRN from './Panels/getStudiesForPatientByMRN';
 import getCustomizationModule from './getCustomizationModule';
 import getViewportModule from './getViewportModule';
 import { preRegistration } from './init';
+import { registerLegacyWadoUriLoaders } from './registerLegacyWadoUriLoaders';
 import getLayoutTemplateModule from './getLayoutTemplateModule';
 import getSopClassHandlerModule from './getSopClassHandlerModule';
 import { useViewportsByPositionStore } from './stores/useViewportsByPositionStore';
@@ -59,6 +60,9 @@ const xnatExtension: Types.Extensions.Extension = {
   id: '@ohif/extension-xnat',
   preRegistration,
   onModeEnter: ({ servicesManager, extensionManager }) => {
+    // Ensure legacy loaders win if cornerstone init registered naturalized ones later.
+    registerLegacyWadoUriLoaders();
+
     const { toolGroupService } = servicesManager.services;
     // Patch the segmentation service when entering a mode
     setTimeout(() => patchSegmentationService(servicesManager), 100);

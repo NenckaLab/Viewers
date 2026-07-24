@@ -67,7 +67,7 @@ export async function exportSegmentationToXNAT(
   }
 
   // Generate the DICOM SEG dataset
-  const dataset = generateSegmentation(
+  const dataset = await generateSegmentation(
     { segmentationId },
     { segmentationService }
   );

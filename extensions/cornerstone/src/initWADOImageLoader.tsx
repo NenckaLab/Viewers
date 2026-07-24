@@ -21,6 +21,9 @@ export default function initWADOImageLoader(
     );
 
     dicomImageLoader.init({
+        // AsyncDicomReader naturalize fails on many XNAT Part 10 files
+        // ("Finding view is past end of input"). Use dicom-parser instead.
+        useLegacyMetadataProvider: true,
         maxWebWorkers: Math.min(
             Math.max(navigator.hardwareConcurrency - 1, 1),
             appConfig.maxNumberOfWebWorkers

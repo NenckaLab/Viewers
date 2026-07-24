@@ -1,0 +1,103 @@
+{
+  "timestamp": "2026-07-10T20:27:48.376Z",
+  "baseURL": "http://localhost",
+  "study": {
+    "projectId": "Sandbox",
+    "subjectId": "XNAT_S00003",
+    "experimentId": "XNAT_E00006",
+    "experimentLabel": "S003_MR_1"
+  },
+  "durationMs": 55873.124,
+  "totals": {
+    "passed": 14,
+    "failed": 0,
+    "skipped": 0,
+    "interrupted": 0
+  },
+  "tests": [
+    {
+      "file": "10-overread-activation.spec.ts",
+      "title": "overreadMode activates service flag and overread UI chrome",
+      "status": "passed",
+      "durationMs": 4985
+    },
+    {
+      "file": "10-overread-activation.spec.ts",
+      "title": "overread mode shows Custom Forms and Subject Navigation tabs",
+      "status": "passed",
+      "durationMs": 4254
+    },
+    {
+      "file": "10-overread-activation.spec.ts",
+      "title": "regular mode does not show Custom Forms or Overread Navigation tabs",
+      "status": "passed",
+      "durationMs": 4489
+    },
+    {
+      "file": "10-overread-activation.spec.ts",
+      "title": "Custom Forms panel shows OVERREAD MODE badge and study context",
+      "status": "passed",
+      "durationMs": 4388
+    },
+    {
+      "file": "10-overread-activation.spec.ts",
+      "title": "Overread Navigation panel lists This Subject",
+      "status": "passed",
+      "durationMs": 4644
+    },
+    {
+      "file": "10-overread-activation.spec.ts",
+      "title": "overread URL retains overreadMode after load",
+      "status": "passed",
+      "durationMs": 4147
+    },
+    {
+      "file": "11-overread-forms.spec.ts",
+      "title": "loads mocked overread form and renders fields",
+      "status": "passed",
+      "durationMs": 3063
+    },
+    {
+      "file": "11-overread-forms.spec.ts",
+      "title": "shows existing-data indicator when has-data API returns true",
+      "status": "passed",
+      "durationMs": 3048
+    },
+    {
+      "file": "11-overread-forms.spec.ts",
+      "title": "save PUTs overread custom-fields and shows success",
+      "status": "passed",
+      "durationMs": 3146
+    },
+    {
+      "file": "11-overread-forms.spec.ts",
+      "title": "save error surfaces Error section when PUT fails",
+      "status": "passed",
+      "durationMs": 3006
+    },
+    {
+      "file": "12-overread-comparison.spec.ts",
+      "title": "multi-experiment overread shows experiment selector",
+      "status": "passed",
+      "durationMs": 3225
+    },
+    {
+      "file": "13-overread-navigation.spec.ts",
+      "title": "overread mode still loads display sets for the study",
+      "status": "passed",
+      "durationMs": 4006
+    },
+    {
+      "file": "13-overread-navigation.spec.ts",
+      "title": "excludeScanTypes query is preserved on the overread URL",
+      "status": "passed",
+      "durationMs": 4031
+    },
+    {
+      "file": "13-overread-navigation.spec.ts",
+      "title": "Subject Navigation expands without console-breaking errors",
+      "status": "passed",
+      "durationMs": 4547
+    }
+  ]
+}
