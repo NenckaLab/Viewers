@@ -2,6 +2,7 @@ import { eventTarget, init as cornerstoneInit, imageLoader } from '@cornerstonej
 import { volumeLoader } from '@cornerstonejs/core';
 import { DicomMetadataStore, classes } from '@ohif/core';
 import * as cornerstone from '@cornerstonejs/core';
+import { wrapWadoUriLoadImage } from './registerLegacyWadoUriLoaders';
 
 // Define a type for cornerstoneWADOImageLoader since the module might not have type declarations
 declare const cornerstoneWADOImageLoader: any;
@@ -180,15 +181,20 @@ export function initXNATDicomLoader(xnatConfig: any): Promise<void> {
         // Register the dicomweb image loader (used by our modified imageId format)
         if (imageLoader && imageLoader.registerImageLoader) {
           console.info('XNAT: Attempting to register dicomweb image loader...');
-          // Prefer wadouri.loadImage if available, otherwise try wadors.loadImage
-          const loaderFn = wadoUriLoader?.loadImage || wadoRsLoader?.loadImage;
+          // Prefer wadouri.loadImage if available, otherwise try wadors.loadImage.
+          // The wadouri loader is wrapped to fix the upstream 1-based frame index
+          // bug on uncached multiframe loads ("frame exceeds size of pixelData").
+          const usingWadoUriLoader = typeof wadoUriLoader?.loadImage === 'function';
+          const loaderFn = usingWadoUriLoader
+            ? wrapWadoUriLoadImage(wadoUriLoader)
+            : wadoRsLoader?.loadImage;
 
           if (loaderFn) {
             try {
               // imageLoader.registerImageLoader('dicomweb', loaderFn);
               // console.info('XNAT: Successfully registered dicomweb image loader.');
               // Also register for wadouri scheme explicitly if using wadouri loader
-              if (wadoUriLoader?.loadImage === loaderFn) {
+              if (usingWadoUriLoader) {
                  imageLoader.registerImageLoader('wadouri', loaderFn);
                  console.info('XNAT: Successfully registered wadouri image loader.');
               }
@@ -213,7 +219,10 @@ export function initXNATDicomLoader(xnatConfig: any): Promise<void> {
           console.info('XNAT: Enabling direct file loading for DICOM files');
           if (typeof cornerstone !== 'undefined' && imageLoader && imageLoader.registerImageLoader) {
              try {
-                const loaderFn = wadoUriLoader?.loadImage || wadoRsLoader?.loadImage;
+                const loaderFn =
+                  typeof wadoUriLoader?.loadImage === 'function'
+                    ? wrapWadoUriLoadImage(wadoUriLoader)
+                    : wadoRsLoader?.loadImage;
                 if (loaderFn) {
                   imageLoader.registerImageLoader('http', loaderFn);
                   imageLoader.registerImageLoader('https', loaderFn);

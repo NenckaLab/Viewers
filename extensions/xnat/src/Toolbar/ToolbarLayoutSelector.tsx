@@ -191,13 +191,13 @@ function ToolbarLayoutSelectorWithServices({
               Hover to select <br />
               rows and columns <br /> Click to apply
             </LayoutSelector.HelpText>
-            {/* <Button
+            <Button
               variant="secondary"
               className="mt-2 w-full"
               onClick={handleSaveLayout}
             >
               Save layout to XNAT
-            </Button> */}
+            </Button>
           </div>
         </LayoutSelector.Content>
       </LayoutSelector>

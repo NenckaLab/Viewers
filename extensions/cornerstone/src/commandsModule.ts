@@ -2182,48 +2182,8 @@ function commandsModule({
       if (!viewport) {
         return;
       }
-<<<<<<< HEAD
-
-      const { viewport } = enabledElement;
-
-      if (isVolumeViewportType(viewport)) {
-        const camera = viewport.getCamera();
-        const rotAngle = (rotation * Math.PI) / 180;
-        const rotMat = mat4.identity(new Float32Array(16));
-        mat4.rotate(rotMat, rotMat, rotAngle, camera.viewPlaneNormal);
-        const rotatedViewUp = vec3.transformMat4(vec3.create(), camera.viewUp, rotMat);
-        viewport.setCamera({ viewUp: rotatedViewUp as CoreTypes.Point3 });
-        viewport.render();
-        return;
-      }
-
-      if (viewport.getRotation !== undefined) {
-        const { rotation: currentRotation } = viewport.getViewPresentation();
-        const newRotation =
-          rotationMode === 'apply'
-            ? (currentRotation + rotation + 360) % 360
-            : (() => {
-              // In 'set' mode, account for the effect horizontal/vertical flips
-              // have on the perceived rotation direction. A single flip mirrors
-              // the image and inverses rotation direction, while two flips
-              // restore the original parity. We therefore invert the rotation
-              // angle when an odd number of flips are applied so that the
-              // requested absolute rotation matches the user expectation.
-              const { flipHorizontal = false, flipVertical = false } =
-                viewport.getViewPresentation();
-
-              const flipsParity = (flipHorizontal ? 1 : 0) + (flipVertical ? 1 : 0);
-              const effectiveRotation = flipsParity % 2 === 1 ? -rotation : rotation;
-
-              return (effectiveRotation + 360) % 360;
-            })();
-        viewport.setViewPresentation({ rotation: newRotation });
-        viewport.render();
-      }
-=======
       ops.rotate(viewport, rotation, rotationMode);
       viewport.render();
->>>>>>> upstream/master
     },
     startRecordingForAnnotationGroup: () => {
       cornerstoneTools.AnnotationTool.startGroupRecording();

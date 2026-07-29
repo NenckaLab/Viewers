@@ -37,8 +37,12 @@ export default function getImageId({ instance, frame, config, thumbnail = false 
   // For single-frame only: instance.url can be used as shortcut. For multi-frame (Enhanced MR),
   // we must NOT return instance.url here - it's a raw http URL with no scheme prefix and no
   // frame parameter, which causes "No image loader found for scheme 'http'" and wrong frames.
+  // XNAT stores instance.url without a scheme prefix, so add dicomweb: for raw http(s) URLs -
+  // otherwise cornerstone has no registered loader for the 'http'/'https' scheme.
   if (instance.url && frame === undefined) {
-    return instance.url;
+    return instance.url.startsWith('http://') || instance.url.startsWith('https://')
+      ? `dicomweb:${instance.url}`
+      : instance.url;
   }
 
   // For multi-frame: use the instance's base URL (from imageId or url) and append the frame.
