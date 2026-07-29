@@ -13,6 +13,83 @@ import dicomImageLoader from '@cornerstonejs/dicom-image-loader';
 
 const SCHEMES = ['dicomweb', 'wadouri', 'dicomfile'] as const;
 
+type ParsedImageId = {
+  scheme: string;
+  url: string;
+  frame?: number;
+  pixelDataFrame?: number;
+};
+
+type WadoUriNamespace = {
+  loadImage: (imageId: string, options?: any) => any;
+  loadImageFromPromise?: (
+    dataSetPromise: any,
+    imageId: string,
+    frame?: number,
+    sharedCacheKey?: string,
+    options?: any,
+    callbacks?: any
+  ) => any;
+  parseImageId?: (imageId: string) => ParsedImageId;
+  dataSetCacheManager?: {
+    isLoaded: (uri: string) => boolean;
+    load: (uri: string, loader: any, imageId: string) => Promise<unknown>;
+    get: (uri: string, loader?: any, imageId?: string) => unknown;
+    unload: (uri: string) => void;
+  };
+  getLoaderForScheme?: (scheme: string) => any;
+};
+
+/**
+ * Work around an upstream bug in @cornerstonejs/dicom-image-loader (2.x):
+ * wadouri loadImage passes the raw 1-based `frame` from `&frame=N` to
+ * getPixelData (which expects a 0-based index) on the uncached path.
+ * The cached path correctly uses `pixelDataFrame`.
+ *
+ * Fix by mirroring stock loadImage but always passing the 0-based index —
+ * same network/parse cost as upstream, no extra pre-load hop.
+ */
+export function wrapWadoUriLoadImage(wadouri: WadoUriNamespace) {
+  const {
+    loadImage,
+    loadImageFromPromise,
+    parseImageId,
+    dataSetCacheManager,
+    getLoaderForScheme,
+  } = wadouri;
+
+  if (!parseImageId || !dataSetCacheManager || !getLoaderForScheme || !loadImageFromPromise) {
+    return loadImage;
+  }
+
+  return function frameSafeLoadImage(imageId: string, options: any = {}) {
+    let parsed: ParsedImageId;
+    try {
+      parsed = parseImageId(imageId);
+    } catch {
+      return loadImage(imageId, options);
+    }
+
+    const opts = { ...options };
+    delete opts.loader;
+
+    const schemeLoader = getLoaderForScheme(parsed.scheme);
+    // pixelDataFrame is already 0-based; single-frame imageIds leave it undefined.
+    const frameIndex =
+      typeof parsed.pixelDataFrame === 'number' && !Number.isNaN(parsed.pixelDataFrame)
+        ? parsed.pixelDataFrame
+        : 0;
+
+    if (dataSetCacheManager.isLoaded(parsed.url)) {
+      // Cached path in stock loadImage already uses pixelDataFrame.
+      return loadImage(imageId, options);
+    }
+
+    const dataSetPromise = dataSetCacheManager.load(parsed.url, schemeLoader, imageId);
+    return loadImageFromPromise(dataSetPromise, imageId, frameIndex, parsed.url, opts);
+  };
+}
+
 export function registerLegacyWadoUriLoaders(): void {
   const wadouri = dicomImageLoader?.wadouri;
   const loadImage = wadouri?.loadImage;
@@ -23,9 +100,20 @@ export function registerLegacyWadoUriLoaders(): void {
     return;
   }
 
+  const frameSafeLoadImage = wrapWadoUriLoadImage(wadouri as WadoUriNamespace);
+
   for (const scheme of SCHEMES) {
-    imageLoader.registerImageLoader(scheme, loadImage);
+    imageLoader.registerImageLoader(scheme, frameSafeLoadImage);
   }
+
+  // Safety net: some XNAT metadata paths store scheme-less http(s) URLs that can
+  // leak into imageIds (e.g. volume VOI computation loading the middle slice).
+  // Route bare http/https imageIds through the wadouri loader by prefixing
+  // dicomweb:, so they hit the same dataset cache and metadata keys.
+  const httpLoadImage = (imageId: string, options?: any) =>
+    frameSafeLoadImage(`dicomweb:${imageId}`, options);
+  imageLoader.registerImageLoader('http', httpLoadImage);
+  imageLoader.registerImageLoader('https', httpLoadImage);
 
   if (typeof metaDataProvider === 'function') {
     metaData.addProvider(metaDataProvider);

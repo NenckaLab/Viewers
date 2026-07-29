@@ -14,18 +14,17 @@ const DYNAMIC_VOLUME_LOADER_SCHEME = 'cornerstoneStreamingDynamicImageVolume';
 const sopClassHandlerName = 'stack';
 let appContext = {};
 
-const getDynamicVolumeInfo = instances => {
-    const { extensionManager } = appContext;
+const getDynamicVolumeInfo = imageIds => {
+  const { extensionManager } = appContext;
 
     if (!extensionManager) {
         throw new Error('extensionManager is not available');
     }
 
-    const imageIds = instances.map(({ imageId }) => imageId);
-    const volumeLoaderUtility = extensionManager.getModuleEntry(
-        '@ohif/extension-cornerstone.utilityModule.volumeLoader'
-    );
-    const { getDynamicVolumeInfo: csGetDynamicVolumeInfo } = volumeLoaderUtility.exports;
+  const volumeLoaderUtility = extensionManager.getModuleEntry(
+    '@ohif/extension-cornerstone.utilityModule.volumeLoader'
+  );
+  const { getDynamicVolumeInfo: csGetDynamicVolumeInfo } = volumeLoaderUtility.exports;
 
     return csGetDynamicVolumeInfo(imageIds);
 };
@@ -34,13 +33,39 @@ const isMultiFrame = instance => {
     return instance.NumberOfFrames > 1;
 };
 
-function getDisplaySetInfo(instances) {
-    const dynamicVolumeInfo = getDynamicVolumeInfo(instances);
-    const isDynamicVolume = dynamicVolumeInfo.isDynamicVolume;
+function getDisplaySetInfo(instances, imageIds) {
+  const dynamicVolumeInfo = getDynamicVolumeInfo(imageIds);
+  const { isDynamicVolume, timePoints } = dynamicVolumeInfo;
+  let displaySetInfo;
 
-    // NOTE: For dynamic volumes we still use the same reconstructability check,
-    // but we also return the dynamic volume metadata for downstream consumers.
-    const isReconstructableResult = isDisplaySetReconstructable(instances);
+  const { appConfig } = appContext;
+
+  if (isDynamicVolume) {
+    const timePoint = timePoints[0];
+    const instancesMap = new Map();
+
+    let firstTimePointInstances;
+
+    if (instances[0].NumberOfFrames > 1 && timePoints.length > 1) {
+      // Handle multiframe dynamic volumes. Local file frame imageIds do not
+      // always resolve to a frame-level instance object, so keep resolved
+      // entries and fall back to the source multiframe instance when needed.
+      firstTimePointInstances = timePoints[0]
+        .map(imageId => metaData.get('instance', imageId))
+        .filter(Boolean);
+
+      if (!firstTimePointInstances.length) {
+        firstTimePointInstances = [instances[0]];
+      }
+    } else {
+      // O(n) to convert it into a map and O(1) to find each instance
+      instances.forEach(instance => instancesMap.set(instance.imageId, instance));
+      firstTimePointInstances = timePoint.map(imageId => instancesMap.get(imageId)).filter(Boolean);
+    }
+    displaySetInfo = isDisplaySetReconstructable(firstTimePointInstances, appConfig);
+  } else {
+    displaySetInfo = isDisplaySetReconstructable(instances, appConfig);
+  }
 
     return {
         isDynamicVolume,
@@ -50,19 +75,20 @@ function getDisplaySetInfo(instances) {
     };
 }
 
-    const makeDisplaySet = (instances, index) => {
-        // Need to sort the instances in order to get a consistent instance/thumbnail
-        sortStudyInstances(instances);
-        const instance = instances[0];
-        const imageSet = new ImageSet(instances);
-        const { extensionManager } = appContext;
-        const dataSource = extensionManager.getActiveDataSource()[0];
-        const {
-            isDynamicVolume,
-            value: isReconstructable,
-            averageSpacingBetweenFrames,
-            dynamicVolumeInfo,
-        } = getDisplaySetInfo(instances);
+const makeDisplaySet = (instances, index) => {
+  // Need to sort the instances in order to get a consistent instance/thumbnail
+  sortStudyInstances(instances);
+  const instance = instances[0];
+  const imageSet = new ImageSet(instances);
+  const { extensionManager } = appContext;
+  const dataSource = extensionManager.getActiveDataSource()[0];
+  const imageIds = dataSource.getImageIdsForDisplaySet(imageSet);
+  const {
+    isDynamicVolume,
+    value: isReconstructable,
+    averageSpacingBetweenFrames,
+    dynamicVolumeInfo,
+  } = getDisplaySetInfo(instances, imageIds);
 
         const volumeLoaderSchema = isDynamicVolume ?
             DYNAMIC_VOLUME_LOADER_SCHEME :
@@ -98,15 +124,14 @@ function getDisplaySetInfo(instances) {
             FrameOfReferenceUID: instance.FrameOfReferenceUID,
         });
 
-        const imageIds = dataSource.getImageIdsForDisplaySet(imageSet);
-        let imageId = imageIds[Math.floor(imageIds.length / 2)];
-        let thumbnailInstance = instances[Math.floor(instances.length / 2)];
-        if (isDynamicVolume) {
-            const timePoints = dynamicVolumeInfo.timePoints;
-            const middleIndex = Math.floor(timePoints.length / 2);
-            const middleTimePointImageIds = timePoints[middleIndex];
-            imageId = middleTimePointImageIds[Math.floor(middleTimePointImageIds.length / 2)];
-        }
+  let imageId = imageIds[Math.floor(imageIds.length / 2)];
+  let thumbnailInstance = instances[Math.floor(instances.length / 2)];
+  if (isDynamicVolume) {
+    const timePoints = dynamicVolumeInfo.timePoints;
+    const middleIndex = Math.floor(timePoints.length / 2);
+    const middleTimePointImageIds = timePoints[middleIndex];
+    imageId = middleTimePointImageIds[Math.floor(middleTimePointImageIds.length / 2)];
+  }
 
         imageSet.setAttributes({
             getThumbnailSrc: dataSource.retrieve.getGetThumbnailSrc ?

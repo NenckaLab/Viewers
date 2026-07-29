@@ -130,7 +130,7 @@ const createRoutes = ({
     path: '/',
     children: DataSourceWrapper,
     private: true,
-    props: { children: WorkListComponent, servicesManager, extensionManager },
+    props: { children: WorkListComponent, servicesManager, extensionManager, commandsManager },
   };
   console.log('Worklist route', WorkListRoute);
   const customRoutes = customizationService.getCustomization('routes.customRoutes');

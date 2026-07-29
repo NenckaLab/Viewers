@@ -28,6 +28,12 @@ import {
   loadExternalHangingProtocols,
 } from './loadExternalHangingProtocols';
 import { fetchUserDefaultProtocolId } from '@ohif/extension-xnat/src/utils/hangingProtocol/hangingProtocolApi';
+import {
+  buildStudyMappingsForExperiments,
+  buildSyntheticStudyUIDs,
+  fetchSubjectExperiments,
+  isComparisonProtocolId,
+} from '@ohif/extension-xnat/src/utils/overread/loadSubjectExperiments';
 import viewportOverlayCustomization from '../../../extensions/cornerstone/src/customizations/viewportOverlayCustomization';
 
 /** Match `hangingProtocolId` regardless of query key casing (Mode uses lower-case keys). */
@@ -155,6 +161,8 @@ const xnatRoute = {
     let xnatProtocolIdFromQuery = getXnatHangingProtocolIdFromQuery(query);
     const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
     const experimentIdsFromURL = query.getAll('experimentIds');
+    const isOverreadMode =
+      servicesManager?.services?.isOverreadMode === true || query.get('overreadMode') === 'true';
 
     // Check if we're in a comparison view (either experiment-based or study-based)
     const isComparisonView = experimentIdsFromURL.length > 1 || studyUIDsFromURL.length > 1;
@@ -192,12 +200,60 @@ const xnatRoute = {
               `XNAT: Applying saved hanging protocol "${savedDefaultId}" for project ${projectId}`
             );
           } else if (savedDefaultId) {
+            // Still honor comparison defaults even if the protocol module has not registered yet.
+            if (isComparisonProtocolId(savedDefaultId)) {
+              xnatProtocolIdFromQuery = savedDefaultId;
+            }
             console.warn(
               `XNAT: Saved hanging protocol "${savedDefaultId}" was not loaded for project ${projectId}`
             );
           }
         } catch (error) {
           console.warn('XNAT: Could not load saved hanging protocol preference:', error);
+        }
+      }
+    }
+
+    // Overread: auto-load all subject experiments into the study panel.
+    // Viewport uses the most recent experiment unless the default HP is a comparison protocol.
+    let overreadExperimentIds: string[] = [];
+    let overreadPrimaryExperiment: { ID: string; label?: string } | null = null;
+
+    if (isOverreadMode && experimentIdsFromURL.length === 0) {
+      const projectId = query.get('projectId');
+      const subjectId = query.get('subjectId');
+      if (projectId && subjectId) {
+        try {
+          const experiments = await fetchSubjectExperiments(projectId, subjectId);
+          if (experiments.length > 0) {
+            overreadExperimentIds = experiments.map(exp => exp.ID);
+            overreadPrimaryExperiment = experiments[0];
+            studyInstanceUIDs = buildSyntheticStudyUIDs(overreadExperimentIds);
+
+            try {
+              sessionStorage.setItem('xnat_experimentId', overreadPrimaryExperiment.ID);
+              if (overreadPrimaryExperiment.label) {
+                sessionStorage.setItem('xnat_experimentLabel', String(overreadPrimaryExperiment.label));
+              }
+              sessionStorage.setItem(
+                'xnat_studyMappings',
+                JSON.stringify(buildStudyMappingsForExperiments(overreadExperimentIds, projectId))
+              );
+            } catch (storageError) {
+              console.warn('XNAT Overread: Unable to persist experiment selection:', storageError);
+            }
+
+            console.info(
+              `XNAT Overread: Loading ${overreadExperimentIds.length} subject experiment(s); ` +
+                `primary=${overreadPrimaryExperiment.ID}` +
+                (isComparisonProtocolId(xnatProtocolIdFromQuery) ||
+                isComparisonProtocolId(getHangingProtocolIdFromQuery(query))
+                  ? ' (comparison HP)'
+                  : ' (most recent)')
+            );
+          }
+        } catch (error) {
+          console.warn('XNAT Overread: Failed to load subject experiments for panel:', error);
         }
       }
     }
@@ -211,11 +267,12 @@ const xnatRoute = {
         // Extract XNAT parameters from query for data source initialization
         const params: Record<string, any> = {
           projectId: query.get('projectId'),
-          experimentId: query.get('experimentId'),
-          sessionId: query.get('experimentId'), // experimentId can be used as sessionId
+          experimentId: overreadPrimaryExperiment?.ID || query.get('experimentId'),
+          sessionId: overreadPrimaryExperiment?.ID || query.get('experimentId'), // experimentId can be used as sessionId
           subjectId: query.get('subjectId'),
           parentProjectId: query.get('parentProjectId'),
-          experimentLabel: query.get('experimentLabel'),
+          experimentLabel:
+            (overreadPrimaryExperiment?.label as string | undefined) || query.get('experimentLabel'),
           hangingProtocolId:
             xnatProtocolIdFromQuery ||
             (typeof hangingProtocolIdFromMode === 'string' && hangingProtocolIdFromMode) ||
@@ -227,7 +284,8 @@ const xnatRoute = {
         const studyUIDsFromURL = studyInstanceUIDs || [];
 
         // Check if we're using experiment IDs for comparison (XNAT native approach)
-        const experimentIdsParam = query.getAll('experimentIds');
+        const experimentIdsParam =
+          overreadExperimentIds.length > 0 ? overreadExperimentIds : query.getAll('experimentIds');
         const isExperimentBasedComparison = experimentIdsParam.length > 1;
 
         const buildStudyMappings = () => {
@@ -241,10 +299,10 @@ const xnatRoute = {
 
           // For comparison views with hangingProtocolId, allow cross-experiment studies
           const hpFromQuery = getHangingProtocolIdFromQuery(query);
-          const isComparisonView = ['@ohif/mrSubjectComparison', '@ohif/hpCompare'].includes(hpFromQuery);
+          const isComparisonView = isComparisonProtocolId(hpFromQuery);
 
           if (isExperimentBasedComparison) {
-            // Handle experiment ID based comparison (XNAT native)
+            // Handle experiment ID based comparison / overread multi-experiment load
             experimentIdsParam.forEach((experimentId, index) => {
               if (experimentId) {
                 // Create mapping key using the synthetic UID format that matches what we created above
@@ -321,9 +379,6 @@ const xnatRoute = {
       return;
     }
 
-    // Check if we're in overread mode
-    const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
-
     // Hanging protocol: Mode.tsx already resolved URL `hangingProtocolId` / mode default into
     // `hangingProtocolIdFromMode` (string = explicit choice, array = match among actives).
     // Multi-study / comparison still forces hpCompare unless we only rely on URL elsewhere.
@@ -333,19 +388,22 @@ const xnatRoute = {
     const urlHp = xnatProtocolIdFromQuery || (
       typeof hangingProtocolIdFromMode === 'string' ? hangingProtocolIdFromMode : null
     );
-    const comparisonProtocolIds = ['@ohif/mrSubjectComparison', '@ohif/hpCompare'];
     const explicitFromQuery = getHangingProtocolIdFromQuery(query);
     const wantsComparison =
-      (urlHp && comparisonProtocolIds.includes(urlHp)) ||
-      (explicitFromQuery && comparisonProtocolIds.includes(explicitFromQuery));
+      isComparisonProtocolId(urlHp) || isComparisonProtocolId(explicitFromQuery);
+
+    // Overread loads every subject experiment into the panel, so multi-study alone must not
+    // force a comparison layout there; only a comparison default/URL protocol should.
+    // Outside overread, keep the original behavior (multi-study forces comparison).
+    const shouldForceComparisonFromMultiStudy = isMultiStudy && !isOverreadMode;
 
     // Determine which specific comparison protocol was requested (if any).
     // Prefer the explicit URL query parameter over the mode/xnat protocol id.
     const requestedComparisonProtocol =
-      (explicitFromQuery && comparisonProtocolIds.includes(explicitFromQuery) ? explicitFromQuery : null) ||
-      (urlHp && comparisonProtocolIds.includes(urlHp) ? urlHp : null);
+      (isComparisonProtocolId(explicitFromQuery) ? explicitFromQuery : null) ||
+      (isComparisonProtocolId(urlHp) ? urlHp : null);
 
-    if (isMultiStudy || wantsComparison) {
+    if (shouldForceComparisonFromMultiStudy || wantsComparison) {
       if (requestedComparisonProtocol === '@ohif/mrSubjectComparison') {
         // MPR 3×2 side-by-side comparison was explicitly requested
         hangingProtocolId = '@ohif/mrSubjectComparison';

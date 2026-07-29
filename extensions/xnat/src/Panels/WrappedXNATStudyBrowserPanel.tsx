@@ -160,20 +160,33 @@ function WrappedXNATStudyBrowserPanel({ extensionManager, servicesManager, comma
                     dicomStudy?.PatientID
                 ),
                 StudyDate: dicomStudy?.StudyDate || displaySet?.StudyDate || '',
-                session: {
-                  experimentId:
-                    sessionMap.getExperimentID?.() ||
-                    sessionStorage.getItem('xnat_experimentId') ||
-                    '',
-                  projectId:
-                    sessionMap.getProject?.() ||
-                    sessionStorage.getItem('xnat_projectId') ||
-                    '',
-                  subjectId:
-                    sessionMap.getSubject?.() ||
-                    sessionStorage.getItem('xnat_subjectId') ||
-                    '',
-                },
+                session: (() => {
+                  let mappedExperimentId = '';
+                  try {
+                    const cachedMappings = sessionStorage.getItem('xnat_studyMappings');
+                    if (cachedMappings) {
+                      const mappings = JSON.parse(cachedMappings);
+                      mappedExperimentId = mappings?.[StudyInstanceUID]?.experimentId || '';
+                    }
+                  } catch (e) {
+                    // ignore invalid cached mappings
+                  }
+                  return {
+                    experimentId:
+                      mappedExperimentId ||
+                      sessionMap.getExperimentID?.() ||
+                      sessionStorage.getItem('xnat_experimentId') ||
+                      '',
+                    projectId:
+                      sessionMap.getProject?.() ||
+                      sessionStorage.getItem('xnat_projectId') ||
+                      '',
+                    subjectId:
+                      sessionMap.getSubject?.() ||
+                      sessionStorage.getItem('xnat_subjectId') ||
+                      '',
+                  };
+                })(),
                 thumbnails: [],
               };
         }
