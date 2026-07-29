@@ -131,15 +131,21 @@ function OHIFCornerstoneSEGViewport(props: withAppTypes) {
   }, [viewportGrid]);
 
   const getCornerstoneViewport = useCallback(() => {
+<<<<<<< HEAD
     const { component: Component } = extensionManager.getModuleEntry(
       '@ohif/extension-cornerstone.viewportModule.cornerstone'
     );
 
     // Todo: jump to the center of the first segment
+=======
+    // Stack uses the referenced series (data[0]); SEG is applied as an overlay (data[1]).
+    // Passing only the SEG display set leaves the stack with derived labelmap imageIds,
+    // which are not displayable without the underlying grayscale series.
+>>>>>>> upstream/master
     return (
       <Component
         {...props}
-        displaySets={[segDisplaySet]}
+        displaySets={[referencedDisplaySet, segDisplaySet]}
         viewportOptions={{
           viewportType: viewportOptions.viewportType,
           toolGroupId: toolGroupId,
@@ -154,6 +160,7 @@ function OHIFCornerstoneSEGViewport(props: withAppTypes) {
         onElementDisabled={onElementDisabled}
       ></Component>
     );
+<<<<<<< HEAD
   }, [viewportId, segDisplaySet, toolGroupId]);
 
   const onSegmentChange = useCallback(
@@ -191,6 +198,16 @@ function OHIFCornerstoneSEGViewport(props: withAppTypes) {
       displaySetInstanceUIDs: [referencedDisplaySet.displaySetInstanceUID],
     });
   }, [commandsManager, viewportId, referencedDisplaySet, segDisplaySet]);
+=======
+  }, [
+    viewportId,
+    segDisplaySet,
+    referencedDisplaySet,
+    toolGroupId,
+    props,
+    viewportOptions,
+  ]);
+>>>>>>> upstream/master
 
   useEffect(() => {
     if (segIsLoading) {
