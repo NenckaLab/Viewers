@@ -20,6 +20,30 @@ export function isOverreadModeActive(
   return false;
 }
 
+export function isAnatomicalModeActive(
+  servicesManager?: { services?: { isAnatomicalMode?: boolean } }
+): boolean {
+  if (servicesManager?.services?.isAnatomicalMode === true) {
+    return true;
+  }
+
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('anatomicalMode') === 'true';
+  }
+
+  return false;
+}
+
+/** Overread or anatomicals mode — both apply excluded-scan-type filtering. */
+export function isExcludedScanFilterModeActive(
+  servicesManager?: {
+    services?: { isOverreadMode?: boolean; isAnatomicalMode?: boolean };
+  }
+): boolean {
+  return isOverreadModeActive(servicesManager) || isAnatomicalModeActive(servicesManager);
+}
+
 export function countImagesInXnatSeries(
   xnatInstances: any[],
   seriesModality?: string

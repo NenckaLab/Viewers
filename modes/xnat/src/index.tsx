@@ -490,7 +490,7 @@ const modeInstance = {
   onModeInit: ({ servicesManager, extensionManager, commandsManager, appConfig, query }) => {
     // Get query parameters
     const queryParams = Object.fromEntries(query.entries());
-    const { projectId, parentProjectId, subjectId, experimentId, experimentLabel, overreadMode, excludeScanTypes, scanId } = queryParams;
+    const { projectId, parentProjectId, subjectId, experimentId, experimentLabel, overreadMode, anatomicalMode, excludeScanTypes, scanId } = queryParams;
 
     // Check if we have StudyInstanceUIDs in the URL (for comparison views)
     const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
@@ -505,12 +505,17 @@ const modeInstance = {
       servicesManager.services.isOverreadMode = true;
     }
 
+    // Anatomicals mode: same excluded-scan filtering as overread, without overread UI/workflow
+    if (anatomicalMode === 'true') {
+      servicesManager.services.isAnatomicalMode = true;
+    }
+
     const excludedScanTypesFromUrl = parseExcludedScanTypesParam(excludeScanTypes);
     if (excludedScanTypesFromUrl.length > 0) {
       servicesManager.services.excludedScanTypes = excludedScanTypesFromUrl;
     }
 
-    if (overreadMode === 'true' && projectId) {
+    if ((overreadMode === 'true' || anatomicalMode === 'true') && projectId) {
       fetchExcludedScanTypesForProject(projectId).then(fetchedExcludedScanTypes => {
         if (fetchedExcludedScanTypes.length > 0) {
           const merged = new Set([
