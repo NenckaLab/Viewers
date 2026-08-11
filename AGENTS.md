@@ -1,205 +1,288 @@
 # AGENTS.md
 
-This file provides guidance to AI coding agents (Claude, Codex, and other LLM tools) when working with code in this repository.
+This file provides guidance to AI coding agents (Claude, Codex, Cursor, and other LLM tools) when working with code in this repository.
 
-## Project Overview
+## Project overview
 
-This is **OHIF** v3  (Open Health Imaging Foundation) - a medical imaging viewer. It's an extensible web imaging platform.
-## Development Commands
+This is **OHIF v3** (Open Health Imaging Foundation), an extensible web-based medical imaging viewer.
 
-### Main Development
+OHIF is organized around:
+
+- **Extensions**: reusable functionality such as viewports, tools, panels, commands, data sources, and SOP Class handlers.
+- **Modes**: workflow- and route-specific viewer configurations that compose extensions.
+- **Platform packages**: shared application, service, and UI infrastructure.
+
+## Agent workflow
+
+Before editing:
+
+1. Read this file, the nearest relevant `README.md`, and the affected package’s `package.json`.
+2. Inspect one or two existing implementations of similar functionality before creating new files or abstractions.
+3. Confirm scripts, paths, and package conventions from the repository. Do not assume a command or path exists.
+4. Make the smallest focused change that fulfills the task. Avoid unrelated refactors.
+
+When implementing:
+
+- Prefer existing OHIF extension points and conventions.
+- Use an extension for reusable functionality.
+- Use a mode for route- or workflow-specific composition.
+- Use services, commands, and pub/sub for cross-feature communication; avoid importing internal components or state directly from another extension.
+- Reuse existing UI components, icons, hooks, providers, stores, and patterns before adding new ones.
+- Clean up subscriptions, timers, Cornerstone resources, tool groups, and viewport registrations.
+- Do not hard-code backend URLs, credentials, tokens, or environment-specific values.
+- Do not log PHI, raw DICOM metadata, authorization headers, or tokens.
+
+Before completing:
+
+1. Run the narrowest relevant validation command available in the affected package.
+2. Run lint, typecheck, tests, and build checks when relevant and practical.
+3. For viewer changes, manually verify the affected mode with representative imaging data when possible.
+4. Report files changed, checks run, and anything not verified.
+
+## Development commands
+
+### Main development
+
 ```bash
 # Start development server for all packages
 yarn dev
 ```
 
 ### Building
+
 ```bash
 # Build all packages for production
 yarn build
 
-# Build specific packages
-cd platform/app && yarn build    # Main viewer app
+# Build the main viewer app
+cd platform/app && yarn build
 ```
 
-## Architecture Overview
+Always confirm available scripts in the relevant `package.json` before running commands.
 
-### Monorepo Structure
-- **`platform/`** - Core OHIF infrastructure
-  - `app/` - Main viewer application (`@ohif/viewer`)
-  - `core/` - Core services and utilities
-  - `ui-next/` - Modern UI component library
-- **`extensions/`** - Modular functionality plugins
-- **`modes/`** - Application workflow configurations
+## Architecture overview
 
-### Key Extension Architecture
+### Monorepo structure
 
-**Extension System**: Each extension exports modules (viewports, tools, panels, commands) that the app dynamically loads. Extensions are self-contained with their own webpack builds.
+- `platform/` — core OHIF infrastructure
+  - `app/` — main viewer application (`@ohif/viewer`)
+  - `core/` — core services and utilities
+  - `ui-next/` — modern UI component library
+- `extensions/` — modular viewer functionality
+- `modes/` — application workflow configurations
 
+### Extension architecture
 
-**Core Extensions:**
-- `cornerstone/` - Medical image rendering engine
-- `cornerstone-dicom-pmp/` - DICOM PMP support
-- `cornerstone-dicom-seg/` - DICOM Segmentation support
-- `cornerstone-dicom-sr/` - DICOM SR support
-- `dicom-pdf/` - DICOM PDF support
-- `dicom-video/` - DICOM Video support
-- `measurement-tracking/` - Measurement tracking support
-- `default/` - Standard OHIF functionality
+Extensions expose modules that the app dynamically loads, including viewports, tools, panels, commands, data sources, and SOP Class handlers. Keep extensions self-contained and interact with other functionality through documented modules, services, and commands.
 
-### Service-Oriented Design (PUB-SUB)
+Core extensions include:
 
-The app uses a Services Manager pattern with these core services:
-- **Display Set Service**: Manages image series organization
-- **Measurement Service**: Handles annotations and measurements
-- **Hanging Protocol Service**: Controls image layout and display rules
-- **UI Service**: Manages panels, modals, and notifications
-- **Segmentation Service**: AI/ML powered image segmentation, loading segmentations, etc.
-- **Viewport Grid Service**: Manages viewport layout and display rules
-- **Viewport Display Set History Service**: Manages viewport display set history
-- **Viewport Dialog Service**: Manages viewport dialogs
-- **Notification Service**: Manages notifications
-- **Modal Service**: Manages modals
-- **Dialog Service**: Manages dialogs, more general not just viewport dialogs
-- **Customization Service**: Manages customization of the app
-- **Toolbar Service**: Manages the toolbar, viewport action corners, tool states
-- **User Authentication Service**: Manages user authentication, but used only for injecting tokens in dicomweb requests in our context
-- **Panel Service**: Manages side panels
-- **Cornerstone Viewport Service**: Manages the cornerstone viewport, rendering engines, presentation states, more tightly coupled to cornerstone than the other services
-- **Tool Group Service**: Manages tool groups, creating and managing tool groups, etc.
-- **Sync Group Service**: Manages sync groups, syncing zooming, panning, scrolling, etc.
-- **Cornerstone Cache Service**: Manages the cornerstone cache, caching images, etc.
+- `cornerstone/` — medical image rendering engine integration
+- `cornerstone-dicom-pmp/` — DICOM presentation state support
+- `cornerstone-dicom-seg/` — DICOM segmentation support
+- `cornerstone-dicom-sr/` — DICOM structured report support
+- `dicom-pdf/` — DICOM PDF support
+- `dicom-video/` — DICOM video support
+- `measurement-tracking/` — measurement tracking
+- `default/` — standard OHIF viewer functionality
 
-Most of the services utilize a pub sub architecture and extend the pub sub service interace at `pubSubServiceInterface.ts`
+### Modes
+
+Modes compose extensions into a specific viewer workflow and route.
+
+- Keep workflow-specific layout, toolbar, panels, display-set behavior, and route configuration in `modes/`.
+- Declare extension dependencies explicitly.
+- Reference extension modules by their registered IDs.
+- Do not place reusable business logic in a mode; move it into an extension when it can serve multiple workflows.
+- Preserve public mode IDs and routes unless the task explicitly requires a breaking change.
+
+### Service-oriented design
+
+OHIF uses a Services Manager and pub/sub pattern for non-UI state and cross-feature communication.
+
+Common services include:
+
+- Display Set Service
+- Measurement Service
+- Hanging Protocol Service
+- UI Service
+- Segmentation Service
+- Viewport Grid Service
+- Viewport Display Set History Service
+- Viewport Dialog Service
+- Notification Service
+- Modal Service
+- Dialog Service
+- Customization Service
+- Toolbar Service
+- User Authentication Service
+- Panel Service
+- Cornerstone Viewport Service
+- Tool Group Service
+- Sync Group Service
+- Cornerstone Cache Service
+
+Most services use pub/sub and extend the pub/sub service interface at `pubSubServiceInterface.ts`.
+
+Prefer OHIF service pub/sub for service events and cross-feature state. Use React effects for component lifecycle and local UI concerns. Always unsubscribe from service events during cleanup.
+
+```ts
+useEffect(() => {
+  const subscriptions = [
+    cornerstoneViewportService.subscribe(
+      EVENTS.VIEWPORT_DATA_CHANGED,
+      handleViewportDataChanged
+    ),
+    syncGroupService.subscribe(EVENTS.VIEWPORT_REMOVED, onHotKeyRemoval),
+    syncGroupService.subscribe(EVENTS.VIEWPORT_ADDED, onHotKeyAddition),
+  ];
+
+  return () => {
+    subscriptions.forEach(({ unsubscribe }) => unsubscribe());
+  };
+}, []);
+```
 
 ### Commands Manager
 
-The Commands Manager tracks named commands (or functions) that are scoped to
-a context. When we attempt to run a command with a given name, we look for it
-in our active contexts, in the order specified.
-If found, we run the command, passing in any application
-or call specific data specified in the command's definition.
+The Commands Manager tracks named commands scoped to active contexts. When a command is run, OHIF resolves it from the active contexts in order.
 
-You can call `commandsManager.runCommand` to run a command.
+Use:
+
+```ts
+commandsManager.runCommand(commandName, commandOptions);
+```
+
+Create commands in the extension’s commands module, such as `commandsModule.tsx` or `getCommandsModule.tsx`.
 
 ### Extension Manager
 
-Aggregates and exposes extension modules throughout the OHIF application, manages data sources, and provides a centralized registry for accessing extension functionality.
+The Extension Manager aggregates registered extension modules, manages data sources, and exposes extension functionality across the application.
 
-### Build System
+Use registered module IDs and public extension APIs rather than reaching into another extension’s implementation details.
 
-**Yarn Workspaces**: Optimized monorepo builds with dependency caching
-**Webpack 5**: Module federation for dynamic extension loading
-**Plugin Import System**: Extensions auto-register via `writePluginImportsFile.js`
+### Build system
 
-### Key Technologies
+- Yarn Workspaces manage the monorepo.
+- Webpack 5 provides module federation and dynamic extension loading.
+- Extensions are auto-registered through the plugin import system, including `writePluginImportsFile.js`.
+- Do not edit generated plugin-import artifacts unless the task explicitly requires it.
 
-- **React 18 + TypeScript**: UI framework
-- **Cornerstone.js**: Medical image rendering
-- **DICOM**: Medical imaging standard support
-- **ONNX Runtime**: AI model inference (SAM segmentation models)
-- **Zustand**: State management
-- **TailwindCSS**: Styling system
+## Development patterns
 
-## Development Patterns
+### Adding new tools
 
-### Adding New Tools
-1. Create tool class in `extensions/cornerstone/src/tools/`
-2. Register in tool module's `toolNames.ts`
-3. Add to toolbar via `getToolbarModule.tsx`
-4. Add measurement mapping if needed in `measurementServiceMappings/`
+1. Create the tool class in `extensions/cornerstone/src/tools/`.
+2. Register it in the tool module’s `toolNames.ts`.
+3. Add it to the toolbar through `getToolbarModule.tsx` when appropriate.
+4. Add measurement-service mapping when needed.
 
-### Creating Extensions
-Extensions must export:
-- `id.js` - Unique extension identifier
-- `index.tsx` - Extension registration
-- Module functions (`getToolbarModule`, `getViewportModule`, etc.)
+### Creating extensions
 
-### Viewport Customization
-Custom viewports extend base Cornerstone viewport:
-- Override render methods for custom overlays
-- Implement measurement tracking
-- Add viewport-specific tools and interactions
+Extensions typically include:
 
-### Service Integration
-Register services in extension's `servicesManager.registerService` and access via:
-```javascript
+- `id.js` — unique extension identifier
+- `index.tsx` — extension registration
+- Module functions such as `getToolbarModule`, `getViewportModule`, and `getCommandsModule`
+
+Follow the closest existing extension’s structure rather than introducing a new convention.
+
+### Viewport customization
+
+Custom viewports should extend the relevant Cornerstone viewport patterns.
+
+- Keep viewport setup and teardown symmetrical.
+- Avoid duplicate enabled elements, rendering engines, tool groups, event listeners, and viewport registrations.
+- Add overlays, tools, and measurement behavior through established extension APIs.
+- Verify the affected modality and viewport type after changes.
+
+### Service integration
+
+Register services through the extension’s `servicesManager.registerService` and access them through the services manager:
+
+```ts
 const { MeasurementService } = servicesManager.services;
 ```
 
-### Creating stores
-To create a store, you can make one in your extension's `stores/` directory, and you can follow the example of an existing store such as `useLutPresentationStore.ts` or `useSynchronizersStore.ts`.
+Use services and commands for communication between extensions rather than direct imports of internal state or components.
 
-### Creating hooks
-To create a hook, you can make one in your extension's `hooks/` directory, and you can follow the example of an existing hook such as `usePatientInfo.tsx`.
+### Stores, hooks, providers, and utilities
 
-### Creating providers
-To create a provider, you can make one in your extension's `providers/` or `contexts/` directory, and you can follow the example of an existing provider such as `ViewportGridProvider.tsx`.
+- Create extension-local stores in `stores/`; follow examples such as `useLutPresentationStore.ts` or `useSynchronizersStore.ts`.
+- Create hooks in `hooks/`; follow examples such as `usePatientInfo.tsx`.
+- Create providers in `providers/` or `contexts/`; follow examples such as `ViewportGridProvider.tsx`.
+- Add custom synchronizers to `synchronizers/`; follow examples such as `frameViewSynchronizer.ts`.
+- Add utilities to `utils/`; follow examples such as `formatPN.ts`.
+- Add icons in `icons/` and register them using the established icon-registration utility.
 
-### Adding new icons
-To add a new icon, you can add it to the `icons/` directory, then register the icon using `import { addIcon } from '@ohif/extension-default/src/utils'`
+### Overriding OHIF components
 
-### Creating synchronizers
-You can create custom synchronizers and place them in the `synchronizers/` directory, you can follow the example of `frameViewSynchronizer.ts`
-
-### Utilites
-Any new utilites should be placed in the `utils/` directory, and you can follow the example of `formatPN.ts`
-
-### Commands
-Commands are created in the commandsModule of the extension, for example the cornerstone extension has `commandsModule.tsx`, sometimes its also named `getCommandsModule.tsx.`
-
-### Overriding OHIF Components
-
-To override an OHIF component, you can create a new component in your extension's `components/` directory, then import it instead of the original ui-next component.
+To customize a component, create the replacement in the extension’s `components/` directory and compose or register it through an extension or mode. Do not modify shared UI or core components when an extension-level solution is viable.
 
 ### Mode layout
 
-The layoutTemplate is a function that returns a layout object, you can follow the example of `longitudinal/src/index.ts`. This would be helpful when you need to override a component as you can know where to look for the original component.
+A `layoutTemplate` returns a layout object. Follow an existing mode, such as `longitudinal/src/index.ts`, when changing a layout, side panels, toolbar configuration, or viewport arrangement.
 
-### Pub Sub
-Always prioritrize pub sub, by calling a services subscribe over useEffects as it's more reliable, for example
+## Change boundaries
 
-```ts
-  useEffect(() => {
-    const subscriptions = [
-      cornerstoneViewportService.subscribe(EVENTS.VIEWPORT_DATA_CHANGED, handleViewportDataChanged),
-      syncGroupService.subscribe(EVENTS.VIEWPORT_REMOVED, onHotKeyRemoval),
-      syncGroupService.subscribe(EVENTS.VIEWPORT_ADDED, onHotKeyAddition),
-    ];
+Prefer extensions and modes over changes to `platform/core`.
 
-    return () => {
-      subscriptions.forEach(({ unsubscribe }) => unsubscribe());
-    };
-  }, []);
-```
+Core changes are allowed only when all of the following are true:
 
-### Never modify core architecture
-Do not modify the core and always find a way to implement the solution via the extensions and modes, only modify core as a last resort if all other fail or there's an architectural constraint.
+- The requirement cannot be met through a documented extension, mode, service, command, or configuration point.
+- The change is broadly reusable rather than specific to one deployment.
+- Existing core patterns and tests are followed.
+- The change includes appropriate tests and documentation.
+
+Do not modify generated files, build output, dependency lockfiles, or vendored packages unless the task explicitly requires it.
+
+Avoid changing public extension IDs, module IDs, mode IDs, routes, configuration keys, or APIs unless the task explicitly calls for it. Document migration steps for intentional breaking changes.
+
+## Medical imaging and clinical safety
+
+### DICOM support
+
+OHIF supports medical imaging formats and workflows including CT, MR, X-Ray, Mammography, Ultrasound, RT, SEG, and SR.
+
+- Prefer the existing DICOMweb data source when the backend supports DICOMweb.
+- For custom backends, map data into OHIF’s naturalized DICOM JSON format through a data source.
+- Use correct DICOM keywords and metadata conventions.
+- Handle missing, malformed, and unsupported metadata gracefully.
+- Never expose patient data, full study metadata, tokens, or authorization headers in logs, test fixtures, screenshots, or error reports.
+
+### Hanging protocols
+
+Hanging protocols define how images are arranged and displayed.
+
+- They are commonly located in `hps/` directories.
+- They include viewport and display-set rules, prior comparisons, and multi-monitor layouts.
+- Treat hanging-protocol changes as workflow-impacting; verify initial viewport layout, series matching, and prior behavior.
+
+### Measurements, segmentations, and rendering
+
+Changes to measurement tools, segmentation, annotations, hanging protocols, display sets, or image rendering are high-impact.
+
+- Preserve established clinical terminology and measurement semantics unless explicitly changing them.
+- Test the affected modality, viewport type, interaction, persistence/export behavior, and relevant error states.
+- Avoid expensive metadata transformations or synchronous processing in React render paths.
 
 ## Skills
 
-The `ohif-test-agent` skill (Playwright E2E test guidance) lives at `.agents/skills/ohif-test-agent/`.
+The `ohif-test-agent` skill for Playwright E2E testing guidance is located at:
 
-## Configuration
+```text
+.agents/skills/ohif-test-agent/
+```
 
-### Plugin Configuration
-Extensions are auto-discovered via `pluginConfig.json` and dynamically imported during build.
+Use it when making or validating browser-based viewer changes.
 
-## Medical Imaging Specifics
+## Completion checklist
 
-### DICOM Support
-- Multi-format: CT, MRI, X-Ray, Mammography, Ultrasound
-- SOP Class handlers for specialized DICOM types (RT, SEG, SR)
-- DICOMweb protocol for web-based image retrieval
-
-### Hanging Protocols
-Define how images are arranged and displayed:
-- Located in `hps/` directories
-- JSON configuration with viewport rules
-- Support for priors comparison and multi-monitor layouts
-
-### Measurement Tools
-- Cornerstone Tools integration for annotations
-- Bidirectional measurements, polylines, annotations
-- Export capabilities (DICOM SR, CSV reports)
-- AI-assisted measurements via ONNX models
+- [ ] The change is implemented at the appropriate OHIF layer.
+- [ ] Existing patterns were followed.
+- [ ] Relevant subscriptions and resources are cleaned up.
+- [ ] No PHI, secrets, or unsafe logging was introduced.
+- [ ] Relevant lint, typecheck, tests, and/or build checks pass.
+- [ ] Viewer behavior was manually exercised where feasible.
+- [ ] No unrelated files were changed.
+- [ ] New configuration, extension points, or user-visible behavior is documented.

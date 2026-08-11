@@ -1,0 +1,52 @@
+You are working in an OHIF v3 medical imaging viewer monorepo.
+
+Read `AGENTS.md` first. Follow the nearest relevant README and `package.json` before editing or running commands.
+
+## Architecture
+
+- Prefer extensions for reusable viewer behavior.
+- Prefer modes for workflow-specific routes, layouts, panels, toolbars, and viewport configuration.
+- Prefer services, commands, and pub/sub for cross-feature communication.
+- Do not import another extension’s internal components, stores, or implementation details.
+- Prefer an existing OHIF pattern over introducing a new abstraction.
+- Avoid changes to `platform/core`; use documented extension or mode APIs first.
+
+## Editing rules
+
+- Make the smallest focused change possible.
+- Inspect similar existing code before creating new files.
+- Preserve extension IDs, module IDs, mode IDs, routes, and public configuration unless explicitly asked to change them.
+- Do not modify generated files, build outputs, lockfiles, or vendored dependencies unless required.
+- Use TypeScript types; do not introduce `any` or suppress lint/type errors without a clear reason.
+- Reuse existing UI components, icons, hooks, providers, stores, utilities, and styling conventions.
+
+## Viewer lifecycle
+
+- Clean up service subscriptions, event listeners, timers, Cornerstone resources, tool groups, and viewport registrations.
+- Use service pub/sub for service events and cross-feature state.
+- Use React effects for component lifecycle and local UI behavior.
+- Avoid duplicate viewport, rendering-engine, tool-group, and event-listener setup.
+
+## Medical data safety
+
+- Never log PHI, raw DICOM metadata, authorization headers, credentials, or tokens.
+- Do not hard-code backend URLs, secrets, or environment-specific configuration.
+- Preserve clinical terminology, DICOM conventions, measurement semantics, and viewport behavior unless explicitly asked to change them.
+- Treat changes to measurements, segmentations, hanging protocols, display sets, and rendering as high-impact.
+
+## Validation
+
+- Confirm available scripts in the relevant `package.json`.
+- Run the narrowest relevant checks first.
+- Run lint, typecheck, tests, and build checks when relevant.
+- For viewer changes, manually verify the affected mode with representative imaging data when feasible.
+- In the final response, state files changed, validation performed, and anything not verified.
+
+## Common locations
+
+- `platform/app/` — main viewer application
+- `platform/core/` — shared services and infrastructure
+- `platform/ui-next/` — UI component library
+- `extensions/` — reusable viewer capabilities
+- `modes/` — workflow and route configuration
+- `.agents/skills/ohif-test-agent/` — Playwright E2E test guidance
