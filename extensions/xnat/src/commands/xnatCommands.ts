@@ -2,6 +2,16 @@ import { Types } from '@ohif/core';
 import createReportDialogPrompt from '../Panels/createReportDialogPrompt';
 import PROMPT_RESPONSES from '../utils/_shared/PROMPT_RESPONSES';
 import { PromptResult } from './types';
+import { applyViewportLocks } from '../utils/viewportLocks';
+import {
+    VIEWPORT_LOCK_OPTION_IDS,
+    useViewportLockStore,
+    type ViewportLockOptionId,
+} from '../stores/useViewportLockStore';
+
+function isViewportLockOptionId(value: unknown): value is ViewportLockOptionId {
+    return typeof value === 'string' && (VIEWPORT_LOCK_OPTION_IDS as readonly string[]).includes(value);
+}
 
 export const createXNATCommands = (
     servicesManager: any,
@@ -13,6 +23,15 @@ export const createXNATCommands = (
     } = servicesManager.services;
 
     const actions = {
+        toggleViewportLock: ({ optionId }: { optionId?: unknown }) => {
+            if (!isViewportLockOptionId(optionId)) {
+                return;
+            }
+
+            useViewportLockStore.getState().toggle(optionId);
+            applyViewportLocks(servicesManager);
+        },
+
         XNATPromptSaveReport: async () => {
             const { UIModalService } = servicesManager.services;
 

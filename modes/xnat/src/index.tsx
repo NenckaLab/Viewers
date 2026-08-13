@@ -737,12 +737,43 @@ const modeInstance = {
       'MeasurementTools',
       'Zoom',
       'Pan',
-      'PanZoomSync',
+      'ViewportLock',
       'TrackballRotate',
       'WindowLevel',
       'Layout',
       'Crosshairs',
       'MoreTools',
+    ]);
+
+    // Per-viewport orientation (axial/sagittal/coronal/acquisition) lives in the
+    // viewport action corners, not the primary toolbar. Re-apply these sections
+    // after the primary rebuild so each viewport keeps its plane selector.
+    toolbarService.clearButtonSection(toolbarService.sections.viewportActionMenu.topLeft);
+    toolbarService.updateSection(toolbarService.sections.viewportActionMenu.topLeft, [
+      'orientationMenu',
+      'dataOverlayMenu',
+    ]);
+    toolbarService.clearButtonSection(toolbarService.sections.viewportActionMenu.bottomMiddle);
+    toolbarService.updateSection(toolbarService.sections.viewportActionMenu.bottomMiddle, [
+      'AdvancedRenderingControls',
+    ]);
+    toolbarService.clearButtonSection('AdvancedRenderingControls');
+    toolbarService.updateSection('AdvancedRenderingControls', [
+      'windowLevelMenuEmbedded',
+      'voiManualControlMenu',
+      'Colorbar',
+      'opacityMenu',
+      'thresholdMenu',
+    ]);
+    toolbarService.clearButtonSection(toolbarService.sections.viewportActionMenu.topRight);
+    toolbarService.updateSection(toolbarService.sections.viewportActionMenu.topRight, [
+      'modalityLoadBadge',
+      'trackingStatus',
+      'navigationComponent',
+    ]);
+    toolbarService.clearButtonSection(toolbarService.sections.viewportActionMenu.bottomLeft);
+    toolbarService.updateSection(toolbarService.sections.viewportActionMenu.bottomLeft, [
+      'windowLevelMenu',
     ]);
 
     // Set up segmentation toolbox sections

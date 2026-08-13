@@ -5,3 +5,4 @@ export { useToggleOneUpViewportGridStore } from './useToggleOneUpViewportGridSto
 export { useUIStateStore } from './useUIStateStore';
 export { useViewportGridStore } from './useViewportGridStore';
 export { useViewportsByPositionStore } from './useViewportsByPositionStore';
+export { useViewportLockStore } from './useViewportLockStore';

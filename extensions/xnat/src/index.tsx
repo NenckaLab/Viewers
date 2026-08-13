@@ -20,6 +20,7 @@ import { useUIStateStore } from './stores/useUIStateStore';
 import { useDisplaySetSelectorStore } from './stores/useDisplaySetSelectorStore';
 import { useHangingProtocolStageIndexStore } from './stores/useHangingProtocolStageIndexStore';
 import { useToggleHangingProtocolStore } from './stores/useToggleHangingProtocolStore';
+import { bindViewportLockListeners, unbindViewportLockListeners } from './utils/viewportLocks';
 import { version } from '../package.json';
 
 // Export the study browser components
@@ -89,8 +90,11 @@ const xnatExtension: Types.Extensions.Extension = {
         }
       });
     }
+
+    bindViewportLockListeners(servicesManager);
   },
-  onModeExit() {
+  onModeExit({ servicesManager }) {
+    unbindViewportLockListeners(servicesManager);
     useViewportGridStore.getState().clearViewportGridState();
     useUIStateStore.getState().clearUIState();
     useDisplaySetSelectorStore.getState().clearDisplaySetSelectorMap();
