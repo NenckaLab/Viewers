@@ -158,10 +158,7 @@ export async function saveExperimentCustomFormData(
     const route = `xapi/custom-fields/experiments/${experimentId}/fields`;
 
     // Use PUT method for adding/updating custom form data
-    const { xnatRootUrl } = sessionMap;
-    const cleanRoute = route.startsWith('/') ? route.substring(1) : route;
-    const baseUrl = xnatRootUrl.endsWith('/') ? xnatRootUrl : xnatRootUrl + '/';
-    const url = `${baseUrl}${cleanRoute}`;
+    const url = sessionMap.joinUrl(route);
 
     const response = await fetch(url, {
       method: 'PUT',
@@ -196,10 +193,7 @@ export async function deleteExperimentCustomFormData(
   try {
     const route = `xapi/custom-fields/experiments/${experimentId}/fields/${formUuid}`;
 
-    const { xnatRootUrl } = sessionMap;
-    const cleanRoute = route.startsWith('/') ? route.substring(1) : route;
-    const baseUrl = xnatRootUrl.endsWith('/') ? xnatRootUrl : xnatRootUrl + '/';
-    const url = `${baseUrl}${cleanRoute}`;
+    const url = sessionMap.joinUrl(route);
 
     const response = await fetch(url, {
       method: 'DELETE',
@@ -330,10 +324,7 @@ export async function saveOverreadFormData(
   try {
     const route = `xapi/overread/custom-fields?experimentId=${experimentId}&formUuid=${formUuid}`;
 
-    const { xnatRootUrl } = sessionMap;
-    const cleanRoute = route.startsWith('/') ? route.substring(1) : route;
-    const baseUrl = xnatRootUrl.endsWith('/') ? xnatRootUrl : xnatRootUrl + '/';
-    const url = `${baseUrl}${cleanRoute}`;
+    const url = sessionMap.joinUrl(route);
 
     const response = await fetch(url, {
       method: 'PUT',
@@ -438,10 +429,7 @@ export async function completeOverreadReread(experimentId: string): Promise<void
   try {
     const route = `xapi/overread/custom-fields/complete-reread?experimentId=${experimentId}`;
 
-    const { xnatRootUrl } = sessionMap;
-    const cleanRoute = route.startsWith('/') ? route.substring(1) : route;
-    const baseUrl = xnatRootUrl.endsWith('/') ? xnatRootUrl : xnatRootUrl + '/';
-    const url = `${baseUrl}${cleanRoute}`;
+    const url = sessionMap.joinUrl(route);
 
     const response = await fetch(url, {
       method: 'POST',

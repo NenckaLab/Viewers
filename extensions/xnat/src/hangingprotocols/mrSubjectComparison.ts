@@ -1,3 +1,5 @@
+import { HYDRATE_SEG_SYNC_GROUP } from './mpr';
+
 // Window/level sync is per study so comparison sessions stay independent.
 // Axial/sagittal/coronal within one row still share W/L.
 const CURRENT_VOI_SYNC_GROUP = {
@@ -17,16 +19,6 @@ const PRIOR_VOI_SYNC_GROUP = {
     target: true,
     options: {
         syncColormap: true,
-    },
-};
-
-const HYDRATE_SEG_SYNC_GROUP = {
-    type: 'hydrateseg',
-    id: 'sameFORId',
-    source: true,
-    target: true,
-    options: {
-        matchingRules: ['sameFOR'],
     },
 };
 

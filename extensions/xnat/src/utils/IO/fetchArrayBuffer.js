@@ -2,16 +2,10 @@ import makeCancelable from '../makeCancelable';
 import sessionMap from '../sessionMap';
 
 export default function fetchArrayBuffer(route, updateProgress) {
-    const { xnatRootUrl } = sessionMap;
-
     return makeCancelable(
         new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
-
-            // Ensure no double slashes in URL construction
-            const cleanRoute = route.startsWith('/') ? route.substring(1) : route;
-            const baseUrl = xnatRootUrl.endsWith('/') ? xnatRootUrl : xnatRootUrl + '/';
-            const url = `${baseUrl}${cleanRoute}`;
+            const url = sessionMap.joinUrl(route);
 
 
             xhr.onload = () => {

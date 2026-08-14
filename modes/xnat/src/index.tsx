@@ -36,24 +36,24 @@ import {
 } from '@ohif/extension-xnat/src/utils/overread/loadSubjectExperiments';
 import viewportOverlayCustomization from '../../../extensions/cornerstone/src/customizations/viewportOverlayCustomization';
 
-/** Match `hangingProtocolId` regardless of query key casing (Mode uses lower-case keys). */
-function getHangingProtocolIdFromQuery(searchParams: URLSearchParams): string | null {
+/** Match a query key regardless of casing (Mode uses lower-case keys). */
+function getQueryParamIgnoreCase(searchParams: URLSearchParams, keyName: string): string | null {
+  const target = keyName.toLowerCase();
   for (const [key, value] of searchParams) {
-    if (key.toLowerCase() === 'hangingprotocolid') {
+    if (key.toLowerCase() === target) {
       return value;
     }
   }
   return null;
 }
 
+function getHangingProtocolIdFromQuery(searchParams: URLSearchParams): string | null {
+  return getQueryParamIgnoreCase(searchParams, 'hangingprotocolid');
+}
+
 /** XNAT-contained override for external protocols (avoids core pre-resolution). */
 function getXnatHangingProtocolIdFromQuery(searchParams: URLSearchParams): string | null {
-  for (const [key, value] of searchParams) {
-    if (key.toLowerCase() === 'xnathangingprotocolid') {
-      return value;
-    }
-  }
-  return null;
+  return getQueryParamIgnoreCase(searchParams, 'xnathangingprotocolid');
 }
 
 const xnat = {

@@ -30,6 +30,19 @@ const _map = {
 
 const sessionMap = {
   xnatRootUrl: undefined,
+
+  /**
+   * Joins an XNAT REST route onto xnatRootUrl without introducing double slashes.
+   *
+   * @param {string} route Relative XNAT path, with or without a leading slash.
+   * @returns {string}
+   */
+  joinUrl: route => {
+    const { xnatRootUrl } = sessionMap;
+    const cleanRoute = route.startsWith('/') ? route.substring(1) : route;
+    const baseUrl = xnatRootUrl.endsWith('/') ? xnatRootUrl : `${xnatRootUrl}/`;
+    return `${baseUrl}${cleanRoute}`;
+  },
   /**
    * Returns the metadata for a scan, or just one property, if specified.
    *

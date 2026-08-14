@@ -47,7 +47,7 @@ The mode already composes `modes/basic`. Follow that pattern. Do not copy more `
 1. Read this file and the affected XNAT `README.md` / `package.json`.
 2. Inspect the nearest existing XNAT code before adding files or abstractions.
 3. Make the smallest focused change. No unrelated refactors.
-4. Keep public IDs stable: `@ohif/extension-xnat`, `@ohif/mode-xnat`, panel/command/module IDs, and routes.
+4. Keep public IDs stable: `@ohif/extension-xnat`, `@ohif/mode-xnat`, panel/command/module IDs, routes, and hanging protocol IDs.
 5. Use precise types in TypeScript files. Do not introduce `any` or suppress errors without a reason.
 
 ## Validation
