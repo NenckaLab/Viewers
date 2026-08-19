@@ -68,7 +68,7 @@ function CreateReportDialogContent({
 
 export default function CreateReportDialogPrompt(uiDialogService, { extensionManager }) {
   return new Promise(function (resolve, reject) {
-    let dialogId = undefined;
+    const dialogId = 'create-report-dialog';
 
     const _handleClose = () => {
       // Dismiss dialog
@@ -120,12 +120,13 @@ export default function CreateReportDialogPrompt(uiDialogService, { extensionMan
         };
       });
 
-    dialogId = uiDialogService.create({
-      centralize: true,
+    uiDialogService.show({
+      id: dialogId,
       isDraggable: false,
-      content: CreateReportDialogContent,
-      useLastPosition: false,
       showOverlay: true,
+      shouldCloseOnEsc: true,
+      shouldCloseOnOverlayClick: true,
+      content: CreateReportDialogContent,
       contentProps: {
         title: 'Create Report',
         initialValue: {

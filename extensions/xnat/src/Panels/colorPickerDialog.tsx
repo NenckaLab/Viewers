@@ -45,11 +45,12 @@ function callColorPickerDialog(uiDialogService, rgbaColor, callback) {
   };
 
   if (uiDialogService) {
-    uiDialogService.create({
+    uiDialogService.show({
       id: dialogId,
-      centralize: true,
       isDraggable: false,
       showOverlay: true,
+      shouldCloseOnEsc: true,
+      shouldCloseOnOverlayClick: true,
       content: ColorPickerContent,
       contentProps: {
         onClose: () => uiDialogService.hide(dialogId),

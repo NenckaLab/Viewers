@@ -190,23 +190,24 @@ const xnatRoute = {
     servicesManager.services.xnatExternalHangingProtocols = getExternalHangingProtocolRegistry();
 
     if (!xnatProtocolIdFromQuery) {
-      const projectId = query.get('projectId');
+      const projectId = getQueryParamIgnoreCase(query, 'projectId');
       if (projectId) {
         try {
           const savedDefaultId = await fetchUserDefaultProtocolId(projectId);
-          if (savedDefaultId && hangingProtocolService.getProtocolById(savedDefaultId)) {
+          if (savedDefaultId) {
+            // Honor the saved default even if the protocol module has not registered yet.
+            // Actions-list launches pass xnathangingprotocolId in the URL; worklist popups
+            // often omit it, and overread would otherwise fall back to the MPR default.
             xnatProtocolIdFromQuery = savedDefaultId;
-            console.info(
-              `XNAT: Applying saved hanging protocol "${savedDefaultId}" for project ${projectId}`
-            );
-          } else if (savedDefaultId) {
-            // Still honor comparison defaults even if the protocol module has not registered yet.
-            if (isComparisonProtocolId(savedDefaultId)) {
-              xnatProtocolIdFromQuery = savedDefaultId;
+            if (hangingProtocolService.getProtocolById(savedDefaultId)) {
+              console.info(
+                `XNAT: Applying saved hanging protocol "${savedDefaultId}" for project ${projectId}`
+              );
+            } else {
+              console.warn(
+                `XNAT: Saved hanging protocol "${savedDefaultId}" was not loaded for project ${projectId}`
+              );
             }
-            console.warn(
-              `XNAT: Saved hanging protocol "${savedDefaultId}" was not loaded for project ${projectId}`
-            );
           }
         } catch (error) {
           console.warn('XNAT: Could not load saved hanging protocol preference:', error);
@@ -220,8 +221,8 @@ const xnatRoute = {
     let overreadPrimaryExperiment: { ID: string; label?: string } | null = null;
 
     if (isOverreadMode && experimentIdsFromURL.length === 0) {
-      const projectId = query.get('projectId');
-      const subjectId = query.get('subjectId');
+      const projectId = getQueryParamIgnoreCase(query, 'projectId');
+      const subjectId = getQueryParamIgnoreCase(query, 'subjectId');
       if (projectId && subjectId) {
         try {
           const experiments = await fetchSubjectExperiments(projectId, subjectId);

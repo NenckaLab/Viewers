@@ -23,19 +23,28 @@ const _getDefaultPosition = event => ({
 function handleContourContextMenu(event, callbackData) {
   const eventData = event.detail;
   const module = modules.freehand3D;
-  const { UIDialogService } = servicesManager.services;
+  const { uiDialogService, UIDialogService } = servicesManager.services;
+  const dialogService = uiDialogService || UIDialogService;
 
-  UIDialogService.create({
+  if (!dialogService?.show) {
+    return;
+  }
+
+  dialogService.hide('context-menu');
+  dialogService.show({
     id: 'context-menu',
     isDraggable: false,
-    preservePosition: false,
+    showOverlay: false,
+    unstyled: true,
+    shouldCloseOnEsc: true,
+    shouldCloseOnOverlayClick: true,
     defaultPosition: _getDefaultPosition(event.detail),
     content: ContourContextMenu,
     contentProps: {
       eventData: eventData,
       callbackData: callbackData,
       onClose: () => {
-        UIDialogService.dismiss({ id: 'context-menu' });
+        dialogService.hide('context-menu');
       },
       onDelete: () => {
         const element = eventData.element;

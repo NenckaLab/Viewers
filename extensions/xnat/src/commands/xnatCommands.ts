@@ -33,9 +33,9 @@ export const createXNATCommands = (
         },
 
         XNATPromptSaveReport: async () => {
-            const { UIModalService } = servicesManager.services;
+            const { uiDialogService } = servicesManager.services;
 
-            const result = (await createReportDialogPrompt(UIModalService, {
+            const result = (await createReportDialogPrompt(uiDialogService, {
                 extensionManager,
             })) as PromptResult;
 

@@ -7,9 +7,20 @@
  * fails every thumbnail/image load.
  *
  * The legacy loadImage path uses dicom-parser and is what worked previously.
+ *
+ * Do not register this module's wadouri.loadImage onto the viewer's
+ * imageLoader. XNAT depends on @cornerstonejs/core 5.1.3 while the app uses
+ * 5.6.12; that loadImage decodes via getWebWorkerManager() from the 5.1 copy,
+ * where the 'dicomImageLoader' worker was never registered. The viewer already
+ * inits its own dicom-image-loader with useLegacyMetadataProvider.
  */
 import { imageLoader, metaData } from '@cornerstonejs/core';
 import dicomImageLoader from '@cornerstonejs/dicom-image-loader';
+import {
+  wrapLoadImageNormalizeVoiLut,
+  wrapVoiLutMetaDataProvider,
+  type CornerstoneCoreLike,
+} from './registerVoiLutModuleHandler';
 
 const SCHEMES = ['dicomweb', 'wadouri', 'dicomfile'] as const;
 
@@ -90,33 +101,71 @@ export function wrapWadoUriLoadImage(wadouri: WadoUriNamespace) {
   };
 }
 
-export function registerLegacyWadoUriLoaders(): void {
+export function registerLegacyWadoUriLoaders(cs?: CornerstoneCoreLike): void {
   const wadouri = dicomImageLoader?.wadouri;
   const loadImage = wadouri?.loadImage;
   const metaDataProvider = wadouri?.metaData?.metaDataProvider;
-
   if (typeof loadImage !== 'function') {
     console.warn('XNAT: legacy wadouri.loadImage unavailable; cannot leave naturalized loader');
     return;
   }
 
-  const frameSafeLoadImage = wrapWadoUriLoadImage(wadouri as WadoUriNamespace);
+  const frameSafeLoadImage = wrapLoadImageNormalizeVoiLut(
+    wrapWadoUriLoadImage(wadouri as WadoUriNamespace)
+  );
 
-  for (const scheme of SCHEMES) {
-    imageLoader.registerImageLoader(scheme, frameSafeLoadImage);
-  }
-
-  // Safety net: some XNAT metadata paths store scheme-less http(s) URLs that can
-  // leak into imageIds (e.g. volume VOI computation loading the middle slice).
-  // Route bare http/https imageIds through the wadouri loader by prefixing
-  // dicomweb:, so they hit the same dataset cache and metadata keys.
   const httpLoadImage = (imageId: string, options?: any) =>
     frameSafeLoadImage(`dicomweb:${imageId}`, options);
-  imageLoader.registerImageLoader('http', httpLoadImage);
-  imageLoader.registerImageLoader('https', httpLoadImage);
 
-  if (typeof metaDataProvider === 'function') {
-    metaData.addProvider(metaDataProvider);
+  const voiSafeMetaDataProvider =
+    typeof metaDataProvider === 'function'
+      ? wrapVoiLutMetaDataProvider(metaDataProvider)
+      : undefined;
+
+  const targets: Array<{
+    imageLoaderNs: { registerImageLoader: (scheme: string, loader: typeof frameSafeLoadImage) => void };
+    metaDataNs: {
+      addProvider: (provider: typeof voiSafeMetaDataProvider, priority?: number) => void;
+      removeProvider?: (provider: typeof voiSafeMetaDataProvider) => void;
+    };
+  }> = [
+    {
+      imageLoaderNs: imageLoader as { registerImageLoader: (scheme: string, loader: typeof frameSafeLoadImage) => void },
+      metaDataNs: metaData as {
+        addProvider: (provider: typeof voiSafeMetaDataProvider, priority?: number) => void;
+        removeProvider?: (provider: typeof voiSafeMetaDataProvider) => void;
+      },
+    },
+  ];
+
+  // Same-module only. Installing this wadouri.loadImage on the viewer's
+  // imageLoader makes createImage/decodeImageFrame use a worker manager that
+  // never registered 'dicomImageLoader' (executeTask requestFn throws).
+  if (cs?.imageLoader && cs.imageLoader === imageLoader) {
+    targets.push({
+      imageLoaderNs: cs.imageLoader as (typeof targets)[number]['imageLoaderNs'],
+      metaDataNs: (cs.metaData ?? metaData) as (typeof targets)[number]['metaDataNs'],
+    });
+  } else if (cs?.metaData && voiSafeMetaDataProvider && typeof metaDataProvider === 'function') {
+    cs.metaData.removeProvider?.(voiSafeMetaDataProvider);
+    cs.metaData.addProvider(voiSafeMetaDataProvider, 10003);
+  }
+
+  for (const { imageLoaderNs, metaDataNs } of targets) {
+    for (const scheme of SCHEMES) {
+      imageLoaderNs.registerImageLoader(scheme, frameSafeLoadImage);
+    }
+    // Safety net: some XNAT metadata paths store scheme-less http(s) URLs that can
+    // leak into imageIds (e.g. volume VOI computation loading the middle slice).
+    imageLoaderNs.registerImageLoader('http', httpLoadImage);
+    imageLoaderNs.registerImageLoader('https', httpLoadImage);
+
+    if (voiSafeMetaDataProvider && typeof metaDataProvider === 'function') {
+      metaDataNs.removeProvider?.(voiSafeMetaDataProvider);
+      // voiLutModule only — do not shadow imagePlaneModule / frame providers.
+      metaDataNs.addProvider(voiSafeMetaDataProvider, 10003);
+      metaDataNs.addProvider(metaDataProvider);
+    }
   }
 
   console.info(

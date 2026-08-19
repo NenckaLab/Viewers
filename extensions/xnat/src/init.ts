@@ -3,7 +3,7 @@ import { calculateSUVScalingFactors } from '@cornerstonejs/calculate-suv';
 import { initXNATDicomLoader } from './XNATDicomLoader';
 import { registerXnatMetadataFallback } from './metadataProviderFallback';
 import { registerXnatImageGeometryCalibration } from './xnatImageGeometryCalibration';
-import { registerVoiLutModuleHandler } from './registerVoiLutModuleHandler';
+import { getAppCornerstone, registerVoiLutModuleHandler } from './registerVoiLutModuleHandler';
 import { registerLegacyWadoUriLoaders } from './registerLegacyWadoUriLoaders';
 
 import getPTImageIdInstanceMetadata from './getPTImageIdInstanceMetadata';
@@ -154,12 +154,14 @@ export function preRegistration({
   servicesManager,
   commandsManager,
   configuration = {},
+  extensionManager,
 }) {
+  const cs = getAppCornerstone(extensionManager);
   registerXnatMetadataFallback();
   registerXnatImageGeometryCalibration();
-  registerVoiLutModuleHandler();
+  registerVoiLutModuleHandler(cs);
   // After cornerstone registers naturalized loaders; onModeEnter re-applies if needed.
-  registerLegacyWadoUriLoaders();
+  registerLegacyWadoUriLoaders(cs);
 
   // Global safety net: if volume rendering (VTK) hits a hard error (e.g. shader compile),
   // reload the viewer with the stack protocol in the URL so the error boundary is cleared.

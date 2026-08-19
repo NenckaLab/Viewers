@@ -11,10 +11,11 @@ async function createReportAsync({
   reportType = 'measurement',
 }: withAppTypes) {
   const { displaySetService, uiNotificationService, uiDialogService } = servicesManager.services;
-  const loadingDialogId = uiDialogService.create({
+  const loadingDialogId = 'loading-dialog';
+  uiDialogService.show({
+    id: loadingDialogId,
     showOverlay: true,
     isDraggable: false,
-    centralize: true,
     content: Loading,
   });
 
