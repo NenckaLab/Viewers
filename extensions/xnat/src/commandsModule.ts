@@ -186,6 +186,9 @@ const commandsModule = ({
     saveHangingProtocolToXnat: {
       commandFn: actions.saveHangingProtocolToXnat,
     },
+    toggleViewportLock: {
+      commandFn: actions.toggleViewportLock,
+    },
   };
 
   return {

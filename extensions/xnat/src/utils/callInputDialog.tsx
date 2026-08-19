@@ -76,11 +76,12 @@ export function callInputDialog(
   };
 
   if (uiDialogService) {
-    uiDialogService.create({
+    uiDialogService.show({
       id: dialogId,
-      centralize: true,
       isDraggable: false,
       showOverlay: true,
+      shouldCloseOnEsc: true,
+      shouldCloseOnOverlayClick: true,
       content: InputDialogContent,
       contentProps: {
         onClose: () => uiDialogService.hide(dialogId),
@@ -113,11 +114,12 @@ export function callLabelAutocompleteDialog(
     uiDialogService.hide('select-annotation');
   };
 
-  uiDialogService.create({
+  uiDialogService.show({
     id: 'select-annotation',
-    centralize: true,
     isDraggable: false,
     showOverlay: true,
+    shouldCloseOnEsc: true,
+    shouldCloseOnOverlayClick: true,
     content: renderContent,
     contentProps: {
       labellingDoneCallback: labellingDoneCallback,
@@ -146,15 +148,13 @@ export function showLabelAnnotationPopup(
       resolve(measurement);
     };
 
-    uiDialogService.create({
+    uiDialogService.show({
       id: 'select-annotation',
       isDraggable: false,
       showOverlay: true,
+      shouldCloseOnEsc: true,
+      shouldCloseOnOverlayClick: true,
       content: renderContent,
-      defaultPosition: {
-        x: window.innerWidth / 2,
-        y: window.innerHeight / 2,
-      },
       contentProps: {
         labellingDoneCallback: labellingDoneCallback,
         measurementData: measurement,

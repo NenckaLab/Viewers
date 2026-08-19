@@ -42,27 +42,16 @@ export const utilityButtons: Button[] = [
     },
   },
   {
-    id: 'PanZoomSync',
-    uiType: 'ohif.toolButton',
+    id: 'ViewportLock',
+    uiType: 'xnat.viewportLockMenu',
     props: {
-      icon: 'link',
-      label: 'Pan/Zoom Sync',
-      tooltip: 'Synchronize pan and zoom across viewports',
-      commands: {
-        commandName: 'toggleSynchronizer',
-        commandOptions: {
-          type: 'zoompan',
-          syncId: 'mpr-zoompan',
-        },
-      },
+      icon: 'Lock',
+      label: 'Viewport Lock',
+      tooltip: 'Lock zoom, pan, and window level',
       evaluate: [
         {
-          name: 'evaluate.cornerstone.synchronizerById',
-          syncId: 'mpr-zoompan',
-        },
-        {
           name: 'evaluate.viewport.supported',
-          unsupportedViewportTypes: ['video', 'volume3d'],
+          unsupportedViewportTypes: ['video', 'volume3d', 'wholeSlide'],
         },
       ],
     },

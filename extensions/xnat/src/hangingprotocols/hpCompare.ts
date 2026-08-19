@@ -1,68 +1,41 @@
 import { Types } from '@ohif/core';
 
-const defaultDisplaySetSelector = {
-  studyMatchingRules: [
-    {
-      // The priorInstance is a study counter that indicates what position this study is in
-      // and the value comes from the options parameter.
-      attribute: 'studyInstanceUIDsIndex',
-      from: 'options',
-      required: true,
-      constraint: {
-        equals: { value: 0 },
+function compareDisplaySetSelector(studyInstanceUIDsIndex: number) {
+  return {
+    studyMatchingRules: [
+      {
+        // The priorInstance is a study counter that indicates what position this study is in
+        // and the value comes from the options parameter.
+        attribute: 'studyInstanceUIDsIndex',
+        from: 'options',
+        required: true,
+        constraint: {
+          equals: { value: studyInstanceUIDsIndex },
+        },
       },
-    },
-  ],
-  seriesMatchingRules: [
-    {
-      attribute: 'numImageFrames',
-      constraint: {
-        greaterThan: { value: 0 },
+    ],
+    seriesMatchingRules: [
+      {
+        attribute: 'numImageFrames',
+        constraint: {
+          greaterThan: { value: 0 },
+        },
       },
-    },
-    // This display set will select the specified items by preference
-    // It has no affect if nothing is specified in the URL.
-    {
-      attribute: 'isDisplaySetFromUrl',
-      weight: 20,
-      constraint: {
-        equals: true,
+      // This display set will select the specified items by preference
+      // It has no affect if nothing is specified in the URL.
+      {
+        attribute: 'isDisplaySetFromUrl',
+        weight: 20,
+        constraint: {
+          equals: true,
+        },
       },
-    },
-  ],
-};
+    ],
+  };
+}
 
-const priorDisplaySetSelector = {
-  studyMatchingRules: [
-    {
-      // The priorInstance is a study counter that indicates what position this study is in
-      // and the value comes from the options parameter.
-      attribute: 'studyInstanceUIDsIndex',
-      from: 'options',
-      required: true,
-      constraint: {
-        equals: { value: 1 },
-      },
-    },
-  ],
-  seriesMatchingRules: [
-    {
-      attribute: 'numImageFrames',
-      constraint: {
-        greaterThan: { value: 0 },
-      },
-    },
-    // This display set will select the specified items by preference
-    // It has no affect if nothing is specified in the URL.
-    {
-      attribute: 'isDisplaySetFromUrl',
-      weight: 20,
-      constraint: {
-        equals: true,
-      },
-    },
-  ],
-};
+const defaultDisplaySetSelector = compareDisplaySetSelector(0);
+const priorDisplaySetSelector = compareDisplaySetSelector(1);
 
 const currentDisplaySet = {
   id: 'defaultDisplaySetId',

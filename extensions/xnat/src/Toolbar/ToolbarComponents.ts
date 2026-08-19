@@ -15,6 +15,7 @@ import { ProgressDropdownWithService } from '../Components/ProgressDropdownWithS
 import ToolButtonListWrapper from './ToolButtonListWrapper';
 import { ToolBoxButtonGroupWrapper, ToolBoxButtonWrapper } from './ToolBoxWrapper';
 import ReturnToXNATButton from './ReturnToXNATButton';
+import ViewportLockMenu from './ViewportLockMenu';
 import ToolbarLayoutSelectorWithServices from './ToolbarLayoutSelector';
 
 import type { ToolbarModuleItem, withAppTypes } from './ToolbarTypes';
@@ -74,6 +75,10 @@ export function getToolbarComponents(commandsManager: any, servicesManager: any)
         {
             name: 'ohif.returnToXNAT',
             defaultComponent: ReturnToXNATButton,
+        },
+        {
+            name: 'xnat.viewportLockMenu',
+            defaultComponent: ViewportLockMenu,
         },
     ];
 }

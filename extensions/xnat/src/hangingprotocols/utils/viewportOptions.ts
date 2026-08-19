@@ -14,5 +14,3 @@ export const viewportOptions = {
     },
   ],
 };
-
-export const hydrateSegDefault = viewportOptions;

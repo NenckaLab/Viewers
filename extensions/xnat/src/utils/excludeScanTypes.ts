@@ -1,4 +1,4 @@
-import { isOverreadModeActive } from './acquisitionImageLimit';
+import { isExcludedScanFilterModeActive } from './acquisitionImageLimit';
 
 export type ScanMetadata = {
   type?: string;
@@ -239,7 +239,13 @@ export async function fetchExcludedScanTypesForProject(projectId: string): Promi
 }
 
 export async function resolveExcludedScanTypes(
-  servicesManager?: { services?: { excludedScanTypes?: string[]; isOverreadMode?: boolean } },
+  servicesManager?: {
+    services?: {
+      excludedScanTypes?: string[];
+      isOverreadMode?: boolean;
+      isAnatomicalMode?: boolean;
+    };
+  },
   projectId?: string
 ): Promise<string[]> {
   const merged = new Set<string>();
@@ -261,7 +267,7 @@ export async function resolveExcludedScanTypes(
     );
   }
 
-  if (isOverreadModeActive(servicesManager) && projectId) {
+  if (isExcludedScanFilterModeActive(servicesManager) && projectId) {
     addValues(await fetchExcludedScanTypesForProject(projectId));
   }
 
@@ -482,9 +488,15 @@ export function shouldSkipExcludedScanTypeInOverreadMode(
   series: any,
   excludedTypes: string[],
   scanIdToMetadataMap: Map<string, ScanMetadata> | undefined,
-  servicesManager?: { services?: { isOverreadMode?: boolean; excludedScanTypes?: string[] } }
+  servicesManager?: {
+    services?: {
+      isOverreadMode?: boolean;
+      isAnatomicalMode?: boolean;
+      excludedScanTypes?: string[];
+    };
+  }
 ): boolean {
-  if (!isOverreadModeActive(servicesManager) || excludedTypes.length === 0) {
+  if (!isExcludedScanFilterModeActive(servicesManager) || excludedTypes.length === 0) {
     return false;
   }
 
@@ -503,14 +515,19 @@ export function appendOverreadViewerQueryParams(params: string): string {
 
   try {
     const currentSearchParams = new URLSearchParams(window.location.search || '');
-    const isOverreadModeActive =
+    const overreadModeActive =
       currentSearchParams.get('overreadMode') === 'true' ||
       window.location.pathname.includes('/overreads');
+    const anatomicalModeActive = currentSearchParams.get('anatomicalMode') === 'true';
 
     let updatedParams = params;
 
-    if (isOverreadModeActive && !updatedParams.includes('overreadMode')) {
+    if (overreadModeActive && !updatedParams.includes('overreadMode')) {
       updatedParams += '&overreadMode=true';
+    }
+
+    if (anatomicalModeActive && !updatedParams.includes('anatomicalMode')) {
+      updatedParams += '&anatomicalMode=true';
     }
 
     const excludeScanTypes = currentSearchParams.get('excludeScanTypes');

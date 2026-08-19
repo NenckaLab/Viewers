@@ -12,6 +12,7 @@ import getCustomizationModule from './getCustomizationModule';
 import getViewportModule from './getViewportModule';
 import { preRegistration } from './init';
 import { registerLegacyWadoUriLoaders } from './registerLegacyWadoUriLoaders';
+import { getAppCornerstone, registerVoiLutModuleHandler } from './registerVoiLutModuleHandler';
 import getLayoutTemplateModule from './getLayoutTemplateModule';
 import getSopClassHandlerModule from './getSopClassHandlerModule';
 import { useViewportsByPositionStore } from './stores/useViewportsByPositionStore';
@@ -20,6 +21,7 @@ import { useUIStateStore } from './stores/useUIStateStore';
 import { useDisplaySetSelectorStore } from './stores/useDisplaySetSelectorStore';
 import { useHangingProtocolStageIndexStore } from './stores/useHangingProtocolStageIndexStore';
 import { useToggleHangingProtocolStore } from './stores/useToggleHangingProtocolStore';
+import { bindViewportLockListeners, unbindViewportLockListeners } from './utils/viewportLocks';
 import { version } from '../package.json';
 
 // Export the study browser components
@@ -60,8 +62,10 @@ const xnatExtension: Types.Extensions.Extension = {
   id: '@ohif/extension-xnat',
   preRegistration,
   onModeEnter: ({ servicesManager, extensionManager }) => {
-    // Ensure legacy loaders win if cornerstone init registered naturalized ones later.
-    registerLegacyWadoUriLoaders();
+    // Patch the viewer's @cornerstonejs/core (5.6.x in app.bundle), not XNAT's 5.1.3 copy.
+    const cs = getAppCornerstone(extensionManager);
+    registerVoiLutModuleHandler(cs);
+    registerLegacyWadoUriLoaders(cs);
 
     const { toolGroupService } = servicesManager.services;
     // Patch the segmentation service when entering a mode
@@ -89,8 +93,11 @@ const xnatExtension: Types.Extensions.Extension = {
         }
       });
     }
+
+    bindViewportLockListeners(servicesManager);
   },
-  onModeExit() {
+  onModeExit({ servicesManager }) {
+    unbindViewportLockListeners(servicesManager);
     useViewportGridStore.getState().clearViewportGridState();
     useUIStateStore.getState().clearUIState();
     useDisplaySetSelectorStore.getState().clearDisplaySetSelectorMap();

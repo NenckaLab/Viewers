@@ -24,7 +24,7 @@ function showEnhancedMrFrameLimitDialog(appContext: AppContextType, numberOfFram
   const uiDialogService = appContext?.servicesManager?.services?.uiDialogService;
   const uiNotificationService = appContext?.servicesManager?.services?.uiNotificationService;
 
-  if (!uiDialogService?.create || typeof uiDialogService.hide !== 'function') {
+  if (!uiDialogService?.show || typeof uiDialogService.hide !== 'function') {
     // Fallback: show a notification (no popup) if dialog service isn't available.
     uiNotificationService?.show?.({
       title: 'The Viewer has failed to load',
@@ -62,11 +62,12 @@ function showEnhancedMrFrameLimitDialog(appContext: AppContextType, numberOfFram
       )
     );
 
-  uiDialogService.create({
+  uiDialogService.show({
     id: dialogId,
-    centralize: true,
     isDraggable: false,
     showOverlay: true,
+    shouldCloseOnEsc: true,
+    shouldCloseOnOverlayClick: true,
     content: EnhancedMrDialog,
     contentProps: {
       onClose: () => uiDialogService.hide(dialogId),

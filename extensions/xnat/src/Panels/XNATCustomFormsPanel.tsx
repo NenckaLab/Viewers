@@ -13,10 +13,28 @@ import {
   CustomFormField,
   fetchCustomForms,
 } from '../utils/IO/customFormsApi';
+import { SubjectExperiment } from '../utils/overread/loadSubjectExperiments';
+import {
+  CLINICALLY_MEANINGFUL_CHANGE_KEY,
+  CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY,
+  CLINICALLY_MEANINGFUL_CHANGE_OPTIONS,
+  PriorOverreadFinding,
+  extractFormFieldData,
+  formatPriorFieldValue,
+  resolveNearestPriorOverread,
+} from '../utils/overread/priorOverread';
 
 interface XNATCustomFormsPanelProps {
   servicesManager: any;
 }
+
+const META_FORM_KEYS = new Set([
+  'completedByUserId',
+  'completedByUsername',
+  'completedAt',
+  CLINICALLY_MEANINGFUL_CHANGE_KEY,
+  CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY,
+]);
 
 const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesManager }) => {
   const [customForms, setCustomForms] = useState<ParsedCustomForm[]>([]);
@@ -34,6 +52,10 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
   const [currentUser, setCurrentUser] = useState<{ userId: number; username: string } | null>(null);
   const [availableExperiments, setAvailableExperiments] = useState<any[]>([]);
   const [selectedExperimentId, setSelectedExperimentId] = useState<string>('');
+  const [subjectExperiments, setSubjectExperiments] = useState<SubjectExperiment[]>([]);
+  const [nearestPrior, setNearestPrior] = useState<PriorOverreadFinding | null>(null);
+  const [loadingPrior, setLoadingPrior] = useState(false);
+  const [isFollowUpOverread, setIsFollowUpOverread] = useState(false);
 
   const { uiNotificationService } = servicesManager.services;
 
@@ -144,7 +166,8 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     return isOverreadUrl || isOverreadService;
   }, [servicesManager]);
 
-  // Detect multiple experiments on component mount
+  // Detect multiple experiments on component mount (URL / session map).
+  // Overread mode also resolves subject experiments below.
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
 
@@ -173,13 +196,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         subjectId: urlParams.get('subjectId') || 'Unknown Subject'
       }));
 
-      // Also update the subjectId state for form loading
-      const subjectIdFromUrl = urlParams.get('subjectId');
-      if (subjectIdFromUrl) {
-        // We can't directly set subjectId state here since it's computed
-        // But this will help with debugging
-        console.log('SubjectId from URL:', subjectIdFromUrl);
-      }
       setAvailableExperiments(experiments);
     } else {
       // Check session map for multiple sessions
@@ -190,6 +206,105 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
       }
     }
   }, []); // Only run once on mount
+
+  // Overread: associate this subject's prior scans and load nearest prior findings
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSubjectPriors = async () => {
+      if (!isOverreadMode || !projectId || !subjectId) {
+        if (!cancelled) {
+          setSubjectExperiments([]);
+          setNearestPrior(null);
+          setIsFollowUpOverread(false);
+        }
+        return;
+      }
+
+      const currentExpId =
+        selectedExperimentId ||
+        new URLSearchParams(window.location.search).get('experimentId') ||
+        experimentId;
+
+      if (!currentExpId || !selectedFormUuid) {
+        return;
+      }
+
+      try {
+        setLoadingPrior(true);
+        const selectedForm = customForms.find(f => f.uuid === selectedFormUuid);
+        const result = await resolveNearestPriorOverread({
+          projectId,
+          subjectId,
+          currentExperimentId: currentExpId,
+          formUuid: selectedFormUuid,
+          currentUserId: currentUser?.userId,
+          formFields: selectedForm?.fields,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        setSubjectExperiments(result.subjectExperiments);
+        setIsFollowUpOverread(result.priorExperiments.length > 0);
+        setNearestPrior(result.nearestPrior);
+
+        // Expose all subject sessions in the experiment selector so the radiologist
+        // can choose which scan's overread they are completing.
+        if (result.subjectExperiments.length > 1) {
+          setAvailableExperiments(
+            result.subjectExperiments.map(exp => ({
+              experimentId: exp.ID,
+              experimentLabel: exp.label || exp.ID,
+              projectId,
+              subjectId,
+              date: exp.date || exp.insert_date,
+            }))
+          );
+
+          if (!selectedExperimentId) {
+            const urlExperimentId = new URLSearchParams(window.location.search).get(
+              'experimentId'
+            );
+            const defaultId =
+              (urlExperimentId &&
+                result.subjectExperiments.some(exp => exp.ID === urlExperimentId) &&
+                urlExperimentId) ||
+              result.subjectExperiments[0]?.ID;
+            if (defaultId) {
+              setSelectedExperimentId(defaultId);
+            }
+          }
+        }
+      } catch (priorError) {
+        console.warn('Failed to resolve prior overread findings:', priorError);
+        if (!cancelled) {
+          setNearestPrior(null);
+          setIsFollowUpOverread(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingPrior(false);
+        }
+      }
+    };
+
+    loadSubjectPriors();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOverreadMode,
+    projectId,
+    subjectId,
+    experimentId,
+    selectedExperimentId,
+    selectedFormUuid,
+    currentUser?.userId,
+    customForms,
+  ]);
 
   // Debug logging
   useEffect(() => {
@@ -264,66 +379,22 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
 
       // If we have a selected form, load its data for editing
       if (selectedFormUuid) {
-        let formData = null;
+        const selectedForm = customForms.find(f => f.uuid === selectedFormUuid);
+        const parsedFormData = extractFormFieldData(data, selectedFormUuid, {
+          currentUserId: currentUser?.userId,
+          formFields: selectedForm?.fields,
+        });
 
-        // Check for different data structures
-        if (data[selectedFormUuid]) {
-          const formDataObj = data[selectedFormUuid];
-          // Check if it's nested under "1" key
-          if (formDataObj["1"]) {
-            formData = formDataObj["1"];
-          } else if (typeof formDataObj === 'object' && !Array.isArray(formDataObj)) {
-            // Check if it's direct field data
-            formData = formDataObj;
-          }
-        }
-
-        // Check for user-specific data structure (current API response)
-        // Look for data under a key that matches the current user's ID
-        if (!formData) {
-          const currentUserId = currentUser?.userId?.toString();
-          if (currentUserId && data[currentUserId]) {
-            formData = data[currentUserId];
-          } else if (data["1"]) {
-            // Fallback to "1" for backward compatibility
-            formData = data["1"];
-          }
-        }
-
-        // Also check for flattened fields (formUuid_fieldName format)
-        if (!formData) {
-          const selectedForm = customForms.find(f => f.uuid === selectedFormUuid);
-          if (selectedForm) {
-            const flattenedData: { [fieldName: string]: any } = {};
-            let hasFlattenedData = false;
-
-            selectedForm.fields.forEach(field => {
-              const flattenedKey = `${selectedFormUuid}_${field.key}`;
-              if (data[flattenedKey] !== undefined) {
-                flattenedData[field.key] = data[flattenedKey];
-                hasFlattenedData = true;
-              }
-            });
-
-            if (hasFlattenedData) {
-              formData = flattenedData;
-            }
-          }
-        }
-
-        if (formData) {
-          // Use existing data
-          setEditingData(formData);
+        if (parsedFormData) {
+          setEditingData(parsedFormData);
+        } else if (selectedForm) {
+          const initialData: { [fieldName: string]: any } = {};
+          selectedForm.fields.forEach(field => {
+            initialData[field.key] = '';
+          });
+          setEditingData(initialData);
         } else {
-          // Initialize form with field definitions from the selected form
-          const selectedForm = customForms.find(f => f.uuid === selectedFormUuid);
-          if (selectedForm) {
-            const initialData: { [fieldName: string]: any } = {};
-            selectedForm.fields.forEach(field => {
-              initialData[field.key] = '';
-            });
-            setEditingData(initialData);
-          }
+          setEditingData({});
         }
       }
 
@@ -348,7 +419,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     } finally {
       setLoading(false);
     }
-  }, [experimentId, selectedFormUuid, uiNotificationService, isOverreadMode]);
+  }, [experimentId, selectedFormUuid, uiNotificationService, isOverreadMode, currentUser?.userId, customForms, subjectId, projectId]);
 
   // Handle form selection
   const handleFormSelect = useCallback((formUuid: string) => {
@@ -468,6 +539,23 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
       return;
     }
 
+    // Follow-up overreads require an explicit clinically meaningful change assessment
+    if (
+      isOverreadMode &&
+      isFollowUpOverread &&
+      !editingData[CLINICALLY_MEANINGFUL_CHANGE_KEY]
+    ) {
+      const message =
+        'Please indicate whether there was a clinically meaningful change since the prior scan before saving.';
+      setError(message);
+      uiNotificationService.show({
+        title: 'Change assessment required',
+        message,
+        type: 'warning',
+      });
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -482,9 +570,14 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         }
       }
 
-      // Prepare form data with user information
+      // Prepare form data with user information (and prior-link metadata when applicable)
       const formDataWithUser = {
         ...editingData,
+        ...(isFollowUpOverread &&
+          nearestPrior && {
+            priorExperimentId: nearestPrior.experimentId,
+            priorExperimentLabel: nearestPrior.experimentLabel,
+          }),
         ...(userInfo && {
           completedByUserId: userInfo.userId,
           completedByUsername: userInfo.username,
@@ -567,7 +660,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     } finally {
       setLoading(false);
     }
-  }, [experimentId, selectedFormUuid, editingData, uiNotificationService, projectId, sendOverreadCompletionNotification, isOverreadMode, currentUser, getCurrentUser]);
+  }, [experimentId, selectedFormUuid, editingData, uiNotificationService, projectId, sendOverreadCompletionNotification, isOverreadMode, currentUser, getCurrentUser, isFollowUpOverread, nearestPrior]);
 
 
 
@@ -865,24 +958,37 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                     ✓ You have existing overread data for this experiment.
                   </p>
                 )}
+                {subjectExperiments.length > 1 && (
+                  <p
+                    className="text-orange-800 dark:text-orange-200 text-sm mt-1"
+                    data-cy="overread-subject-scan-count"
+                  >
+                    This subject has {subjectExperiments.length} scans. Prior findings are linked
+                    automatically for follow-up reads.
+                  </p>
+                )}
               </div>
             )}
           </div>
         </PanelSection.Content>
       </PanelSection>
 
-      {/* Experiment Selection for Comparison Mode */}
+      {/* Experiment Selection for Comparison / Subject Pairing */}
       {availableExperiments.length > 1 && (
         <PanelSection>
           <PanelSection.Header>
             <div className="flex items-center space-x-2 text-aqua-pale">
               <Icons.Clipboard className="w-4 h-4" />
-              <span>Select Experiment</span>
+              <span>Select Scan (Experiment)</span>
             </div>
           </PanelSection.Header>
           <PanelSection.Content>
             <div className="text-sm space-y-3 text-aqua-pale">
-              <p>Multiple experiments are loaded. Select which experiment's custom forms you want to view:</p>
+              <p>
+                {isOverreadMode
+                  ? 'This subject has multiple scans. Select the scan you are reading now. Prior-scan findings will appear below when available.'
+                  : "Multiple experiments are loaded. Select which experiment's custom forms you want to view:"}
+              </p>
               <div className="space-y-2">
                 <select
                   data-cy="overread-experiment-select"
@@ -893,6 +999,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                     // Clear form data when switching experiments (but keep form selection)
                     setFormData({});
                     setEditingData({});
+                    setNearestPrior(null);
                   }}
                   className="w-full p-2 border border-input rounded text-sm bg-background text-foreground"
                 >
@@ -900,6 +1007,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                   {availableExperiments.map(experiment => (
                     <option key={experiment.experimentId} value={experiment.experimentId}>
                       {experiment.experimentLabel || experiment.experimentId}
+                      {experiment.date ? ` (${experiment.date})` : ''}
                     </option>
                   ))}
                 </select>
@@ -908,6 +1016,130 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                     ✓ Selected: {availableExperiments.find(exp => exp.experimentId === selectedExperimentId)?.experimentLabel || selectedExperimentId}
                   </p>
                 )}
+              </div>
+            </div>
+          </PanelSection.Content>
+        </PanelSection>
+      )}
+
+      {/* Prior scan findings (overread follow-up) */}
+      {isOverreadMode && isFollowUpOverread && (
+        <PanelSection>
+          <PanelSection.Header>
+            <div className="flex items-center space-x-2 text-aqua-pale">
+              <Icons.Clipboard className="w-4 h-4" />
+              <span>Prior Scan Findings</span>
+            </div>
+          </PanelSection.Header>
+          <PanelSection.Content>
+            <div className="text-sm space-y-3 text-aqua-pale" data-cy="overread-prior-findings">
+              {loadingPrior ? (
+                <p className="text-muted-foreground">Loading prior scan findings...</p>
+              ) : nearestPrior ? (
+                <>
+                  <div className="rounded border border-border bg-muted/40 p-3 space-y-1">
+                    <p data-cy="overread-prior-experiment">
+                      <strong>Prior scan:</strong> {nearestPrior.experimentLabel}
+                    </p>
+                    {nearestPrior.date && (
+                      <p>
+                        <strong>Date:</strong> {nearestPrior.date}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Read-only — your findings from this subject&apos;s earlier scan.
+                    </p>
+                  </div>
+                  {nearestPrior.hasData && nearestPrior.formData ? (
+                    <div className="space-y-2" data-cy="overread-prior-fields">
+                      {Object.entries(nearestPrior.formData)
+                        .filter(([key]) => !META_FORM_KEYS.has(key) && !key.startsWith('priorExperiment'))
+                        .map(([key, value]) => {
+                          const selectedForm = customForms.find(f => f.uuid === selectedFormUuid);
+                          const fieldDef = selectedForm?.fields.find(f => f.key === key);
+                          return (
+                            <div
+                              key={key}
+                              className="border border-border rounded p-2 bg-card"
+                            >
+                              <div className="text-xs font-medium text-muted-foreground mb-1">
+                                {fieldDef?.label || key}
+                              </div>
+                              <div className="text-sm text-foreground whitespace-pre-wrap">
+                                {formatPriorFieldValue(value)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ) : (
+                    <p className="text-amber-700 dark:text-amber-300" data-cy="overread-prior-empty">
+                      No prior overread findings were found for your account on{' '}
+                      {nearestPrior.experimentLabel}. You can still record whether there was a
+                      clinically meaningful change.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-muted-foreground">
+                  A prior scan exists for this subject, but prior findings could not be loaded.
+                </p>
+              )}
+            </div>
+          </PanelSection.Content>
+        </PanelSection>
+      )}
+
+      {/* Clinically meaningful change assessment (required on follow-up) */}
+      {isOverreadMode && isFollowUpOverread && (
+        <PanelSection>
+          <PanelSection.Header>
+            <div className="flex items-center space-x-2 text-aqua-pale">
+              <Icons.Clipboard className="w-4 h-4" />
+              <span>Change Since Prior Scan</span>
+            </div>
+          </PanelSection.Header>
+          <PanelSection.Content>
+            <div className="space-y-3 text-sm text-aqua-pale" data-cy="overread-change-assessment">
+              <p>
+                Adjust this second read to indicate whether there was a clinically meaningful
+                change since the prior scan
+                {nearestPrior ? ` (${nearestPrior.experimentLabel})` : ''}.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Clinically meaningful change? <span className="text-destructive">*</span>
+                </label>
+                <select
+                  data-cy="overread-clinically-meaningful-change"
+                  value={editingData[CLINICALLY_MEANINGFUL_CHANGE_KEY] || ''}
+                  onChange={e =>
+                    handleFieldChange(CLINICALLY_MEANINGFUL_CHANGE_KEY, e.target.value)
+                  }
+                  className="w-full p-2 border border-input rounded text-sm bg-background text-foreground"
+                >
+                  <option value="">Select...</option>
+                  {CLINICALLY_MEANINGFUL_CHANGE_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Change notes (optional)
+                </label>
+                <textarea
+                  data-cy="overread-clinically-meaningful-change-notes"
+                  value={editingData[CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY] || ''}
+                  onChange={e =>
+                    handleFieldChange(CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY, e.target.value)
+                  }
+                  rows={3}
+                  placeholder="Describe the clinically meaningful change, if any"
+                  className="w-full p-2 border border-input rounded text-sm bg-background text-foreground font-inherit"
+                />
               </div>
             </div>
           </PanelSection.Content>
@@ -1037,6 +1269,15 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
 
                     return selectedForm.fields.map(fieldDef => {
                       const fieldName = fieldDef.key;
+                      // Dedicated "Change Since Prior Scan" section owns these fields on follow-ups
+                      if (
+                        isFollowUpOverread &&
+                        (fieldName === CLINICALLY_MEANINGFUL_CHANGE_KEY ||
+                          fieldName === CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY)
+                      ) {
+                        return null;
+                      }
+
                       const value = editingData[fieldName] || '';
 
                       // Check conditional logic

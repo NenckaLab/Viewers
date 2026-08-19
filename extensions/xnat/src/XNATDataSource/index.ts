@@ -45,7 +45,7 @@ import { XNATStoreMethods } from './store';
 import { XNATApi } from './xnat-api';
 import {
   MAX_OVERREAD_ACQUISITION_IMAGES,
-  isOverreadModeActive,
+  isExcludedScanFilterModeActive,
   shouldSkipAcquisitionInOverreadMode,
 } from '../utils/acquisitionImageLimit';
 import {
@@ -428,9 +428,9 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                 ? await getScanIdToMetadataMap(resolvedExperimentId)
                 : undefined;
 
-            if (isOverreadModeActive(servicesManager) && excludedScanTypes.length > 0) {
+            if (isExcludedScanFilterModeActive(servicesManager) && excludedScanTypes.length > 0) {
               log.debug(
-                `XNAT Overread: Applying ${excludedScanTypes.length} excluded scan type/description filters`
+                `XNAT: Applying ${excludedScanTypes.length} excluded scan type/description filters`
               );
             }
 
@@ -468,7 +468,7 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                 )
               ) {
                 log.warn(
-                  `XNAT Overread: Skipping scan/series ${series.SeriesInstanceUID} (${series.SeriesDescription || 'no description'}) — ` +
+                  `XNAT: Skipping scan/series ${series.SeriesInstanceUID} (${series.SeriesDescription || 'no description'}) — ` +
                     `scan type or series description is excluded in overread preferences`
                 );
                 continue;
