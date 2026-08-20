@@ -4,6 +4,7 @@ import XNATSubject from './XNATNavigation/XNATSubject';
 import fetchJSON from '../utils/IO/fetchJSON';
 import compareOnProperty from './XNATNavigation/helpers/compareOnProperty';
 import sessionMap from '../utils/sessionMap';
+import './XNATNavigationPanel.css';
 
 interface Subject {
   ID: string;
@@ -110,7 +111,7 @@ const OverreadNavigationPanel: React.FC<OverreadNavigationPanelProps> = ({ servi
   // Display loading state
   if (loading) {
     return (
-      <div className="h-full overflow-y-auto overflow-x-hidden p-4">
+      <div className="xnat-navigation-tree text-foreground h-full overflow-y-auto overflow-x-hidden p-4">
         <PanelSection>
           <PanelSection.Header>Loading</PanelSection.Header>
           <PanelSection.Content>
@@ -124,7 +125,7 @@ const OverreadNavigationPanel: React.FC<OverreadNavigationPanelProps> = ({ servi
   // Display error state
   if (error) {
     return (
-      <div className="h-full overflow-y-auto overflow-x-hidden p-4">
+      <div className="xnat-navigation-tree text-foreground h-full overflow-y-auto overflow-x-hidden p-4">
         <PanelSection>
           <PanelSection.Header className="text-destructive">Error</PanelSection.Header>
           <PanelSection.Content>
@@ -137,7 +138,7 @@ const OverreadNavigationPanel: React.FC<OverreadNavigationPanelProps> = ({ servi
 
   return (
     <div
-      className="h-full overflow-y-auto overflow-x-hidden p-4 space-y-4"
+      className="xnat-navigation-tree text-foreground h-full overflow-y-auto overflow-x-hidden p-4 space-y-4"
       data-cy="overread-navigation-panel"
     >
       {/* Active Subject Section */}

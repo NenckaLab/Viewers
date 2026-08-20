@@ -19,9 +19,9 @@ export default class XNATProjectLabel extends React.Component<XNATProjectLabelPr
     return (
       <div>
         {active ? (
-          <h5 className="text-sm font-bold text-primary">{name}</h5>
+          <div className="text-sm font-bold text-primary">{name}</div>
         ) : (
-          <h5 className="text-sm text-foreground">{name}</h5>
+          <div className="text-sm text-foreground">{name}</div>
         )}
       </div>
     );

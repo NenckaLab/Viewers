@@ -4,9 +4,17 @@
   width: 100%;
   height: 100%;
   overflow-y: auto;
-  padding: 10px;
-  color: white;
-  background-color: var(--ohif-background-color, #151515);
+  color: var(--ohif-text-primary-color, hsl(var(--foreground, 0 0% 98%)));
+}
+
+/* XNAT host CSS styles headings as black; keep navigator text readable. */
+.xnat-navigation-tree h1,
+.xnat-navigation-tree h2,
+.xnat-navigation-tree h3,
+.xnat-navigation-tree h4,
+.xnat-navigation-tree h5,
+.xnat-navigation-tree h6 {
+  color: inherit;
 }
 
 .xnat-navigation-tree ul {

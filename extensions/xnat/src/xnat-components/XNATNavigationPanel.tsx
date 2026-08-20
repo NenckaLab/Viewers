@@ -5,6 +5,7 @@ import XNATProject from './XNATNavigation/XNATProject';
 import fetchJSON from '../utils/IO/fetchJSON';
 import compareOnProperty from './XNATNavigation/helpers/compareOnProperty';
 import sessionMap from '../utils/sessionMap';
+import './XNATNavigationPanel.css';
 
 interface Project {
   ID: string;
@@ -99,7 +100,7 @@ const XNATNavigationPanel: React.FC<XNATNavigationPanelProps> = ({ servicesManag
   // Display loading state
   if (loading) {
     return (
-      <div className="h-full overflow-y-auto overflow-x-hidden p-4">
+      <div className="xnat-navigation-tree text-foreground h-full overflow-y-auto overflow-x-hidden p-4">
         <PanelSection>
           <PanelSection.Header>Loading</PanelSection.Header>
           <PanelSection.Content>
@@ -113,7 +114,7 @@ const XNATNavigationPanel: React.FC<XNATNavigationPanelProps> = ({ servicesManag
   // Display error state
   if (error) {
     return (
-      <div className="h-full overflow-y-auto overflow-x-hidden p-4">
+      <div className="xnat-navigation-tree text-foreground h-full overflow-y-auto overflow-x-hidden p-4">
         <PanelSection>
           <PanelSection.Header className="text-destructive">Error</PanelSection.Header>
           <PanelSection.Content>
@@ -125,7 +126,7 @@ const XNATNavigationPanel: React.FC<XNATNavigationPanelProps> = ({ servicesManag
   }
 
   return (
-    <div className="h-full overflow-y-auto overflow-x-hidden p-4 space-y-4">
+    <div className="xnat-navigation-tree text-foreground h-full overflow-y-auto overflow-x-hidden p-4 space-y-4">
       {/* Active Project Section */}
       <PanelSection>
         <PanelSection.Header>This Project</PanelSection.Header>
