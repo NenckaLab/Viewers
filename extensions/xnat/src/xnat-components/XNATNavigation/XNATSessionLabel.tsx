@@ -29,14 +29,14 @@ export default class XNATSessionLabel extends React.Component<XNATSessionLabelPr
     if (active) {
       return (
         <React.Fragment>
-          <h5 className="text-sm font-bold text-primary">{label}</h5>
+          <div className="text-sm font-bold text-primary">{label}</div>
         </React.Fragment>
       );
     }
 
     return (
       <React.Fragment>
-        <h5 className="text-sm text-foreground">{label}</h5>
+        <div className="text-sm text-foreground">{label}</div>
       </React.Fragment>
       );
   }
@@ -60,7 +60,7 @@ export default class XNATSessionLabel extends React.Component<XNATSessionLabelPr
 
     return (
       <React.Fragment>
-        <h6 className="flex items-center text-xs text-muted-foreground">
+        <div className="flex items-center text-xs text-muted-foreground">
           {contourCount ? (
             <React.Fragment>
               <Icon name="circle" className="mr-1" />
@@ -73,7 +73,7 @@ export default class XNATSessionLabel extends React.Component<XNATSessionLabelPr
               {` ${maskCount} `}
             </React.Fragment>
           ) : null}
-        </h6>
+        </div>
       </React.Fragment>
     );
   }
@@ -83,7 +83,7 @@ export default class XNATSessionLabel extends React.Component<XNATSessionLabelPr
 
     const sharedLabel = shared ? (
       <React.Fragment>
-        <h6 className="text-xs text-muted-foreground italic">{`Shared from ${parentProjectId}`}</h6>
+        <div className="text-xs text-muted-foreground italic">{`Shared from ${parentProjectId}`}</div>
       </React.Fragment>
     ) : null;
 

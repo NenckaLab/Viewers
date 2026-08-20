@@ -118,9 +118,9 @@ export default class XNATProject extends React.Component<XNATProjectProps, XNATP
           </button>
           <div className="flex-1">
             {active ? (
-              <h5 className="text-sm font-medium text-primary">{name}</h5>
+              <div className="text-sm font-medium text-primary">{name}</div>
             ) : (
-              <h5 className="text-sm">{name}</h5>
+              <div className="text-sm text-foreground">{name}</div>
             )}
           </div>
         </div>
