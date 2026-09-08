@@ -445,17 +445,8 @@ const xnatRoute = {
       const activeIds = Array.from(new Set([...protocolIds, ...externalProtocolIds]));
       hangingProtocolService.setActiveProtocolIds(activeIds);
 
-      if (isOverreadMode) {
-        const mprProtocol = hangingProtocolService.getProtocolById('mpr');
-        if (mprProtocol) {
-          const overreadDefaultProtocol = {
-            ...mprProtocol,
-            id: 'default',
-            name: 'Overread Default (MPR)',
-          };
-          hangingProtocolService.addProtocol('default', overreadDefaultProtocol);
-        }
-      }
+      // Keep stack `default` intact so volume/MPR failures can fall back to it.
+      // Overread still prefers MPR via protocolIds order above.
 
       // Let HangingProtocolService.run() match among active protocols (same as stock route)
       hangingProtocolId = undefined;

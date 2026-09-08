@@ -15,12 +15,14 @@ import {
 } from '../utils/IO/customFormsApi';
 import { SubjectExperiment } from '../utils/overread/loadSubjectExperiments';
 import {
-  CLINICALLY_MEANINGFUL_CHANGE_KEY,
-  CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY,
-  CLINICALLY_MEANINGFUL_CHANGE_OPTIONS,
+  NOTABLE_CHANGE_KEY,
+  NOTABLE_CHANGE_NOTES_KEY,
+  NOTABLE_CHANGE_OPTIONS,
+  NOTABLE_CHANGE_META_KEYS,
   PriorOverreadFinding,
   extractFormFieldData,
   formatPriorFieldValue,
+  migrateNotableChangeFields,
   resolveNearestPriorOverread,
 } from '../utils/overread/priorOverread';
 
@@ -32,8 +34,7 @@ const META_FORM_KEYS = new Set([
   'completedByUserId',
   'completedByUsername',
   'completedAt',
-  CLINICALLY_MEANINGFUL_CHANGE_KEY,
-  CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY,
+  ...NOTABLE_CHANGE_META_KEYS,
 ]);
 
 const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesManager }) => {
@@ -386,7 +387,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         });
 
         if (parsedFormData) {
-          setEditingData(parsedFormData);
+          setEditingData(migrateNotableChangeFields(parsedFormData) || {});
         } else if (selectedForm) {
           const initialData: { [fieldName: string]: any } = {};
           selectedForm.fields.forEach(field => {
@@ -430,7 +431,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
 
     if (formData[formUuid]) {
       // Use existing data
-      setEditingData(formData[formUuid]);
+      setEditingData(migrateNotableChangeFields(formData[formUuid]) || {});
     } else if (selectedForm) {
       // Initialize form with field definitions
       const initialData: { [fieldName: string]: any } = {};
@@ -539,14 +540,14 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
       return;
     }
 
-    // Follow-up overreads require an explicit clinically meaningful change assessment
+    // Follow-up overreads require an explicit notable change from prior scan assessment
     if (
       isOverreadMode &&
       isFollowUpOverread &&
-      !editingData[CLINICALLY_MEANINGFUL_CHANGE_KEY]
+      !editingData[NOTABLE_CHANGE_KEY]
     ) {
       const message =
-        'Please indicate whether there was a clinically meaningful change since the prior scan before saving.';
+        'Please indicate whether there was a notable change from prior scan before saving.';
       setError(message);
       uiNotificationService.show({
         title: 'Change assessment required',
@@ -575,9 +576,9 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         ...editingData,
         ...(isFollowUpOverread &&
           nearestPrior && {
-            priorExperimentId: nearestPrior.experimentId,
-            priorExperimentLabel: nearestPrior.experimentLabel,
-          }),
+          priorExperimentId: nearestPrior.experimentId,
+          priorExperimentLabel: nearestPrior.experimentLabel,
+        }),
         ...(userInfo && {
           completedByUserId: userInfo.userId,
           completedByUsername: userInfo.username,
@@ -1076,7 +1077,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                     <p className="text-amber-700 dark:text-amber-300" data-cy="overread-prior-empty">
                       No prior overread findings were found for your account on{' '}
                       {nearestPrior.experimentLabel}. You can still record whether there was a
-                      clinically meaningful change.
+                      notable change from prior scan.
                     </p>
                   )}
                 </>
@@ -1090,36 +1091,36 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         </PanelSection>
       )}
 
-      {/* Clinically meaningful change assessment (required on follow-up) */}
+      {/* Notable change from prior scan assessment (required on follow-up) */}
       {isOverreadMode && isFollowUpOverread && (
         <PanelSection>
           <PanelSection.Header>
             <div className="flex items-center space-x-2 text-aqua-pale">
               <Icons.Clipboard className="w-4 h-4" />
-              <span>Change Since Prior Scan</span>
+              <span>Notable Change from prior scan</span>
             </div>
           </PanelSection.Header>
           <PanelSection.Content>
             <div className="space-y-3 text-sm text-aqua-pale" data-cy="overread-change-assessment">
               <p>
-                Adjust this second read to indicate whether there was a clinically meaningful
-                change since the prior scan
+                Adjust this second read to indicate whether there was a Notable
+                Change from prior scan
                 {nearestPrior ? ` (${nearestPrior.experimentLabel})` : ''}.
               </p>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Clinically meaningful change? <span className="text-destructive">*</span>
+                  Notable Change from prior scan? <span className="text-destructive">*</span>
                 </label>
                 <select
-                  data-cy="overread-clinically-meaningful-change"
-                  value={editingData[CLINICALLY_MEANINGFUL_CHANGE_KEY] || ''}
+                  data-cy="overread-notable-change-from-prior-scan"
+                  value={editingData[NOTABLE_CHANGE_KEY] || ''}
                   onChange={e =>
-                    handleFieldChange(CLINICALLY_MEANINGFUL_CHANGE_KEY, e.target.value)
+                    handleFieldChange(NOTABLE_CHANGE_KEY, e.target.value)
                   }
                   className="w-full p-2 border border-input rounded text-sm bg-background text-foreground"
                 >
                   <option value="">Select...</option>
-                  {CLINICALLY_MEANINGFUL_CHANGE_OPTIONS.map(option => (
+                  {NOTABLE_CHANGE_OPTIONS.map(option => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -1128,16 +1129,16 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Change notes (optional)
+                  Change notes from prior scan (optional)
                 </label>
                 <textarea
-                  data-cy="overread-clinically-meaningful-change-notes"
-                  value={editingData[CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY] || ''}
+                  data-cy="overread-notable-change-from-prior-scan-notes"
+                  value={editingData[NOTABLE_CHANGE_NOTES_KEY] || ''}
                   onChange={e =>
-                    handleFieldChange(CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY, e.target.value)
+                    handleFieldChange(NOTABLE_CHANGE_NOTES_KEY, e.target.value)
                   }
                   rows={3}
-                  placeholder="Describe the clinically meaningful change, if any"
+                  placeholder="Describe the notable change from prior scan, if any"
                   className="w-full p-2 border border-input rounded text-sm bg-background text-foreground font-inherit"
                 />
               </div>
@@ -1269,11 +1270,11 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
 
                     return selectedForm.fields.map(fieldDef => {
                       const fieldName = fieldDef.key;
-                      // Dedicated "Change Since Prior Scan" section owns these fields on follow-ups
+                      // Dedicated "Notable Change from prior scan" section owns these fields on follow-ups
                       if (
                         isFollowUpOverread &&
-                        (fieldName === CLINICALLY_MEANINGFUL_CHANGE_KEY ||
-                          fieldName === CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY)
+                        (fieldName === NOTABLE_CHANGE_KEY ||
+                          fieldName === NOTABLE_CHANGE_NOTES_KEY)
                       ) {
                         return null;
                       }
