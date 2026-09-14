@@ -1,10 +1,21 @@
 import { hotkeys } from '@ohif/core';
 import toolbarButtons from './toolbarButtons';
 import { id } from './id';
-import SessionRouter from '@ohif/extension-xnat/src/xnat-components/XNATNavigation/helpers/SessionRouter.js';
 import { defaultRouteInit } from '../../../platform/app/src/routes/Mode/defaultRouteInit';
-import sessionMap from '@ohif/extension-xnat/src/utils/sessionMap.js';
-import { parseExcludedScanTypesParam, fetchExcludedScanTypesForProject } from '@ohif/extension-xnat/src/utils/excludeScanTypes';
+import {
+  SessionRouter,
+  sessionMap,
+  parseExcludedScanTypesParam,
+  fetchExcludedScanTypesForProject,
+  getExternalHangingProtocolRegistry,
+  loadExternalHangingProtocols,
+  fetchUserDefaultProtocolId,
+  buildStudyMappingsForExperiments,
+  buildSyntheticStudyUIDs,
+  fetchSubjectExperiments,
+  isComparisonProtocolId,
+  viewportOverlayCustomization,
+} from '@ohif/extension-xnat';
 import {
   mode as basicMode,
   modeInstance as basicModeInstance,
@@ -21,20 +32,7 @@ import {
   dicomRT,
 } from '../../basic/src/index';
 
-// Import segmentation tools initialization
 import { createTools } from '../../segmentation/src/initToolGroups';
-import {
-  getExternalHangingProtocolRegistry,
-  loadExternalHangingProtocols,
-} from './loadExternalHangingProtocols';
-import { fetchUserDefaultProtocolId } from '@ohif/extension-xnat/src/utils/hangingProtocol/hangingProtocolApi';
-import {
-  buildStudyMappingsForExperiments,
-  buildSyntheticStudyUIDs,
-  fetchSubjectExperiments,
-  isComparisonProtocolId,
-} from '@ohif/extension-xnat/src/utils/overread/loadSubjectExperiments';
-import viewportOverlayCustomization from '../../../extensions/cornerstone/src/customizations/viewportOverlayCustomization';
 
 /** Match a query key regardless of casing (Mode uses lower-case keys). */
 function getQueryParamIgnoreCase(searchParams: URLSearchParams, keyName: string): string | null {
@@ -164,9 +162,6 @@ const xnatRoute = {
     const isOverreadMode =
       servicesManager?.services?.isOverreadMode === true || query.get('overreadMode') === 'true';
 
-    // Check if we're in a comparison view (either experiment-based or study-based)
-    const isComparisonView = experimentIdsFromURL.length > 1 || studyUIDsFromURL.length > 1;
-
     if (experimentIdsFromURL.length > 1) {
       // XNAT native approach: use experiment IDs for comparison
       // Create synthetic study UIDs based on experiment IDs with index for OHIF framework compatibility
@@ -174,9 +169,6 @@ const xnatRoute = {
     } else if (studyUIDsFromURL.length > 0) {
       // Traditional approach: use parsed study UIDs
       studyInstanceUIDs = studyUIDsFromURL;
-    } else if (!isComparisonView) {
-      // For single study views, keep the original studyInstanceUIDs from SessionRouter
-      console.log('XNAT Route Init: Using original studyInstanceUIDs from SessionRouter:', studyInstanceUIDs);
     }
 
     const hangingProtocolService = servicesManager.services.hangingProtocolService;
@@ -200,13 +192,9 @@ const xnatRoute = {
             // often omit it, and overread would otherwise fall back to the MPR default.
             xnatProtocolIdFromQuery = savedDefaultId;
             if (hangingProtocolService.getProtocolById(savedDefaultId)) {
-              console.info(
-                `XNAT: Applying saved hanging protocol "${savedDefaultId}" for project ${projectId}`
-              );
+              console.info('XNAT: Applying saved hanging protocol default for this project');
             } else {
-              console.warn(
-                `XNAT: Saved hanging protocol "${savedDefaultId}" was not loaded for project ${projectId}`
-              );
+              console.warn('XNAT: Saved hanging protocol default was not loaded for this project');
             }
           }
         } catch (error) {
@@ -245,8 +233,7 @@ const xnatRoute = {
             }
 
             console.info(
-              `XNAT Overread: Loading ${overreadExperimentIds.length} subject experiment(s); ` +
-                `primary=${overreadPrimaryExperiment.ID}` +
+              `XNAT Overread: Loading ${overreadExperimentIds.length} subject experiment(s)` +
                 (isComparisonProtocolId(xnatProtocolIdFromQuery) ||
                 isComparisonProtocolId(getHangingProtocolIdFromQuery(query))
                   ? ' (comparison HP)'

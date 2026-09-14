@@ -44,6 +44,22 @@ const sessionMap = {
     return `${baseUrl}${cleanRoute}`;
   },
   /**
+   * Same-origin XNAT REST URL. Uses xnatRootUrl when SessionRouter has set it;
+   * otherwise window.location.origin so early HP/config fetches still work.
+   *
+   * @param {string} route Relative XNAT path, with or without a leading slash.
+   * @returns {string}
+   */
+  resolveUrl: route => {
+    if (sessionMap.xnatRootUrl) {
+      return sessionMap.joinUrl(route);
+    }
+    const origin =
+      typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+    const cleanRoute = route.startsWith('/') ? route : `/${route}`;
+    return `${origin}${cleanRoute}`;
+  },
+  /**
    * Returns the metadata for a scan, or just one property, if specified.
    *
    * @param {string} seriesInstanceUid  The seriesInstanceUid of the scan.
@@ -109,9 +125,17 @@ const sessionMap = {
   },
 
   /**
-   * Returns the metadata for a session, or just one property, if specified.
+   * Returns every session currently in the map.
    *
-   * @param {string} experimentId The experimentId of the session.
+   * @returns {Object[]}
+   */
+  getAllSessions: () => _map.sessions,
+
+  /**
+   * Returns the metadata for a session, or just one property, if specified.
+   * With no arguments, returns the same list as `getAllSessions()`.
+   *
+   * @param {string} [experimentId] The experimentId of the session.
    * @param {string} [property] A particular property to return.
    *
    * @returns {Object||string} An object if no property is specified, or the

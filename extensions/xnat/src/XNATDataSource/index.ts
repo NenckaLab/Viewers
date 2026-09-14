@@ -374,7 +374,6 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
                   StudyInstanceUID: StudyInstanceUID, // Replace with synthetic UID
                   studyInstanceUIDsIndex: studyIndex, // Add the index for hanging protocol matching
                 };
-                console.log(`XNATDataSource: Modified study for synthetic UID ${StudyInstanceUID}, original was ${seriesAndInstances.studies[0].StudyInstanceUID}, index: ${studyIndex}`);
               }
             } else {
               // For regular DICOM UIDs, find the matching study
@@ -383,7 +382,9 @@ function createDataSource(xnatConfig: XNATDataSourceConfig, servicesManager) {
 
             if (!study || !study.series || study.series.length === 0) {
               const logLevel = isComparisonView ? 'debug' : 'warn';
-              log[logLevel](`XNAT: No series found for StudyInstanceUID ${StudyInstanceUID} within the experiment data.${isComparisonView ? ' (Comparison view - this is expected for cross-experiment studies)' : ''}`);
+              log[logLevel](
+                `XNAT: No series found for this study within the experiment data.${isComparisonView ? ' (Comparison view - this is expected for cross-experiment studies)' : ''}`
+              );
               return [];
             }
 

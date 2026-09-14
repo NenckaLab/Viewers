@@ -1,5 +1,11 @@
 import fetchJSON from './fetchJSON';
 import sessionMap from '../sessionMap';
+import {
+  flattenFormioFields,
+  getFormioComponents,
+  getFormioFormTitle,
+  parseCustomFormContents,
+} from './flattenFormioFields';
 
 /**
  * XNAT Custom Forms API implementation
@@ -14,23 +20,32 @@ export interface CustomFormField {
   label: string;
   input: boolean;
   tableView: boolean;
+  /** Form.io radio / selectboxes store choices here, not on data.values. */
+  values?: Array<{ label: string; value: string }>;
   data?: {
     values?: Array<{ label: string; value: string }>;
   };
   conditional?: {
-    eq: string;
-    show: boolean;
-    when: string;
+    eq?: string;
+    show?: boolean | null;
+    when?: string | null;
   };
   autoExpand?: boolean;
-  widget?: string;
+  widget?: string | Record<string, unknown>;
   dataType?: string;
+  inputType?: string;
+  questions?: Array<{ label: string; value: string }>;
+  fields?: {
+    day?: { hide?: boolean };
+    month?: { hide?: boolean };
+    year?: { hide?: boolean };
+  };
 }
 
 export interface CustomForm {
   formId: string;
   formUUID: string;
-  contents: string;
+  contents: string | Record<string, unknown>;
   scope: string;
   path: string;
   formDisplayOrder: number;
@@ -82,7 +97,7 @@ export async function fetchCustomForms(projectId: string): Promise<ParsedCustomF
     forms.forEach(form => {
       try {
         // Parse the contents JSON string
-        const contents = JSON.parse(form.contents);
+        const contents = parseCustomFormContents(form.contents);
 
         // Check if this form applies to the project (direct match) or is site-wide (applies to all projects)
         const appliesToProject = form.appliesToList.some(
@@ -95,8 +110,8 @@ export async function fetchCustomForms(projectId: string): Promise<ParsedCustomF
           const parsedForm: ParsedCustomForm = {
             id: form.formId,
             uuid: form.formUUID,
-            title: contents.title || `Form ${form.formId}`,
-            fields: contents.components || [],
+            title: getFormioFormTitle(contents, `Form ${form.formId}`),
+            fields: flattenFormioFields(getFormioComponents(contents)) as CustomFormField[],
             scope: form.scope,
             appliesToProjects: form.appliesToList.map(item => item.entityId)
           };

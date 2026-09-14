@@ -128,11 +128,16 @@ import {
 import {
   sessionMap,
   fetchCSRFToken,
+  SessionRouter,
+  loadExternalHangingProtocols,
+  fetchUserDefaultProtocolId,
   isLoggedIn,
   xnatAuthenticate,
   userManagement
 } from '@ohif/extension-xnat';
 ```
+
+The mode (`@ohif/mode-xnat`) must import these from the package root. Do not deep-import `@ohif/extension-xnat/src/...`.
 
 ## Dependencies
 

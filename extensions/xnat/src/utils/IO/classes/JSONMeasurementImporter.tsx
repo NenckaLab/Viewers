@@ -1008,8 +1008,6 @@ export async function importMeasurementCollection({
                 isVisible: annotation?.isVisible,
                 invalidated: annotation?.invalidated,
                 highlighted: annotation?.highlighted,
-                data: annotation?.data,
-                metadata: annotation?.metadata
               });
 
               const { toolGroupService } = servicesManager.services;

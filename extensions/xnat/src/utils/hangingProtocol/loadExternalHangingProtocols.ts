@@ -1,4 +1,6 @@
-type HangingProtocolLike = Record<string, any>;
+import sessionMap from '../sessionMap.js';
+
+type HangingProtocolLike = Record<string, unknown>;
 
 type HangingProtocolModuleLike = {
   id?: string;
@@ -57,7 +59,8 @@ const fileRegistryByUrl = new Map<string, ExternalProtocolFileRegistryEntry>();
 
 function updateRegistry(
   sourceUrl: string,
-  update: Partial<ExternalProtocolFileRegistryEntry> & Pick<ExternalProtocolFileRegistryEntry, 'fromManifest'>
+  update: Partial<ExternalProtocolFileRegistryEntry> &
+    Pick<ExternalProtocolFileRegistryEntry, 'fromManifest'>
 ): void {
   const existing = fileRegistryByUrl.get(sourceUrl) || {
     sourceUrl,
@@ -84,7 +87,8 @@ function publishRegistry(): void {
     files: Array.from(fileRegistryByUrl.values()),
   };
 
-  (window as any).__xnatExternalHangingProtocols = registry;
+  (window as Window & { __xnatExternalHangingProtocols?: ExternalHangingProtocolRegistry }).__xnatExternalHangingProtocols =
+    registry;
   window.dispatchEvent(
     new CustomEvent('xnat:external-hanging-protocols-updated', {
       detail: registry,
@@ -93,10 +97,15 @@ function publishRegistry(): void {
 }
 
 export function getExternalHangingProtocolRegistry(): ExternalHangingProtocolRegistry | null {
-  return (window as any).__xnatExternalHangingProtocols ?? null;
+  return (
+    (window as Window & { __xnatExternalHangingProtocols?: ExternalHangingProtocolRegistry })
+      .__xnatExternalHangingProtocols ?? null
+  );
 }
 
-function normalizeProtocolItem(item: HangingProtocolLike | HangingProtocolModuleLike): HangingProtocolLike | null {
+function normalizeProtocolItem(
+  item: HangingProtocolLike | HangingProtocolModuleLike
+): HangingProtocolLike | null {
   if (!item || typeof item !== 'object') {
     return null;
   }
@@ -106,7 +115,8 @@ function normalizeProtocolItem(item: HangingProtocolLike | HangingProtocolModule
     return null;
   }
 
-  const protocolId = candidate.id || ('id' in item ? item.id : undefined) || ('name' in item ? item.name : undefined);
+  const protocolId =
+    candidate.id || ('id' in item ? item.id : undefined) || ('name' in item ? item.name : undefined);
   if (!protocolId || typeof protocolId !== 'string') {
     return null;
   }
@@ -126,10 +136,10 @@ function normalizePayload(payload: ExternalHangingProtocolsPayload): HangingProt
 
   const items = Array.isArray(payload)
     ? payload
-    : (wrappedPayload.protocols ||
-        wrappedPayload.hangingProtocols ||
-        wrappedPayload.items ||
-        [payload]);
+    : wrappedPayload.protocols ||
+      wrappedPayload.hangingProtocols ||
+      wrappedPayload.items ||
+      [payload];
 
   if (!Array.isArray(items)) {
     return [];
@@ -140,14 +150,21 @@ function normalizePayload(payload: ExternalHangingProtocolsPayload): HangingProt
     .filter((item): item is HangingProtocolLike => Boolean(item));
 }
 
+function getWindowConfig(): Record<string, unknown> {
+  return ((window as Window & { config?: Record<string, unknown> }).config ?? {}) as Record<
+    string,
+    unknown
+  >;
+}
+
 function getExternalProtocolSources(query: URLSearchParams): string[] {
   const queryUrls = query
     .getAll('xnatHangingProtocolsUrl')
     .concat(query.getAll('hangingProtocolsUrl'))
     .concat(query.getAll('hangingProtocolUrl'));
 
-  const globalConfig = (window as any).config ?? {};
-  const xnatConfig = globalConfig?.xnat ?? {};
+  const globalConfig = getWindowConfig();
+  const xnatConfig = (globalConfig?.xnat ?? {}) as Record<string, unknown>;
 
   const configUrls = [
     xnatConfig.externalHangingProtocolsUrl,
@@ -161,7 +178,7 @@ function getExternalProtocolSources(query: URLSearchParams): string[] {
   ];
 
   const normalized = queryUrls
-    .concat(configUrls)
+    .concat(configUrls as string[])
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     .map(value => value.trim());
 
@@ -174,8 +191,8 @@ function getManifestUrls(query: URLSearchParams): string[] {
     .concat(query.getAll('hangingProtocolManifestUrl'))
     .concat(query.getAll('hangingProtocolsManifestUrl'));
 
-  const globalConfig = (window as any).config ?? {};
-  const xnatConfig = globalConfig?.xnat ?? {};
+  const globalConfig = getWindowConfig();
+  const xnatConfig = (globalConfig?.xnat ?? {}) as Record<string, unknown>;
 
   const configUrls = [
     xnatConfig.externalHangingProtocolsManifestUrl,
@@ -191,14 +208,14 @@ function getManifestUrls(query: URLSearchParams): string[] {
   return Array.from(
     new Set(
       queryUrls
-        .concat(configUrls)
+        .concat(configUrls as string[])
         .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
         .map(value => value.trim())
     )
   );
 }
 
-async function fetchJson(url: string): Promise<any> {
+async function fetchJson(url: string): Promise<unknown> {
   const response = await fetch(url, {
     credentials: 'include',
     headers: {
@@ -211,13 +228,15 @@ async function fetchJson(url: string): Promise<any> {
   }
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status} while loading ${url}`);
+    throw new Error(`HTTP ${response.status} while loading hanging protocol source`);
   }
 
   return response.json();
 }
 
-function normalizeManifestEntry(entry: string | ExternalProtocolFileEntry): ExternalProtocolFileEntry | null {
+function normalizeManifestEntry(
+  entry: string | ExternalProtocolFileEntry
+): ExternalProtocolFileEntry | null {
   if (typeof entry === 'string') {
     return { url: entry };
   }
@@ -256,12 +275,10 @@ function resolveProtocolUrl(rawUrl: string): string {
 
   const replacedPlaceholder = trimmed.replace(/<xnat>/gi, originWithoutProtocol);
 
-  // Keep absolute URLs untouched after placeholder replacement.
   if (/^https?:\/\//i.test(replacedPlaceholder)) {
     return replacedPlaceholder;
   }
 
-  // Convert root-relative and path-relative URLs to absolute same-origin URLs.
   return new URL(replacedPlaceholder, `${currentOrigin}/`).toString();
 }
 
@@ -305,7 +322,7 @@ async function getManifestSources(manifestUrls: string[]): Promise<ExternalProto
         }
       });
     } catch (error) {
-      console.warn(`XNAT: Failed to load external hanging protocol manifest ${manifestUrl}:`, error);
+      console.warn('XNAT: Failed to load an external hanging protocol manifest', error);
     }
   }
 
@@ -327,8 +344,11 @@ function getUserProtocolManifestSources(query: URLSearchParams): string[] {
     return [];
   }
 
-  const origin = window.location.origin;
-  return [`${origin}/xapi/viewer/users/me/projects/${encodeURIComponent(projectId)}/hanging-protocols/manifest.json`];
+  return [
+    sessionMap.resolveUrl(
+      `xapi/viewer/users/me/projects/${encodeURIComponent(projectId)}/hanging-protocols/manifest.json`
+    ),
+  ];
 }
 
 export async function loadExternalHangingProtocols({
@@ -336,7 +356,9 @@ export async function loadExternalHangingProtocols({
   hangingProtocolService,
 }: {
   query: URLSearchParams;
-  hangingProtocolService: any;
+  hangingProtocolService: {
+    addProtocol?: (id: string, protocol: HangingProtocolLike) => void;
+  };
 }): Promise<string[]> {
   type ResolvedSource = {
     id?: string;
@@ -392,18 +414,18 @@ export async function loadExternalHangingProtocols({
       const protocols = await fetchProtocols(source.url);
       const sourceSpecificIds: string[] = [];
       protocols.forEach(protocol => {
-        if (!protocol?.id || loadedProtocolIds.has(protocol.id)) {
+        if (!protocol?.id || loadedProtocolIds.has(protocol.id as string)) {
           if (protocol?.id) {
-            sourceSpecificIds.push(protocol.id);
-            sourceIds.add(protocol.id);
+            sourceSpecificIds.push(protocol.id as string);
+            sourceIds.add(protocol.id as string);
           }
           return;
         }
 
-        hangingProtocolService.addProtocol(protocol.id, protocol);
-        loadedProtocolIds.add(protocol.id);
-        sourceSpecificIds.push(protocol.id);
-        sourceIds.add(protocol.id);
+        hangingProtocolService.addProtocol(protocol.id as string, protocol);
+        loadedProtocolIds.add(protocol.id as string);
+        sourceSpecificIds.push(protocol.id as string);
+        sourceIds.add(protocol.id as string);
       });
 
       const dedupedIds = Array.from(new Set(sourceSpecificIds));
@@ -416,9 +438,7 @@ export async function loadExternalHangingProtocols({
         loaded: true,
         protocolIds: dedupedIds,
       });
-      console.info(
-        `XNAT: Loaded ${protocols.length} external hanging protocol(s) from ${source.url}.`
-      );
+      console.info(`XNAT: Loaded ${protocols.length} external hanging protocol(s).`);
     } catch (error) {
       updateRegistry(source.url, {
         fromManifest: Boolean(source.fromManifest),
@@ -428,7 +448,7 @@ export async function loadExternalHangingProtocols({
         protocolIds: [],
         error: error instanceof Error ? error.message : String(error),
       });
-      console.warn(`XNAT: Failed to load external hanging protocols from ${source.url}:`, error);
+      console.warn('XNAT: Failed to load external hanging protocols from a source', error);
     }
   }
 

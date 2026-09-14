@@ -128,6 +128,24 @@ export {
 
 export { sessionMap, fetchCSRFToken };
 
+export { default as SessionRouter } from './xnat-components/XNATNavigation/helpers/SessionRouter.js';
+export {
+  parseExcludedScanTypesParam,
+  fetchExcludedScanTypesForProject,
+} from './utils/excludeScanTypes';
+export { fetchUserDefaultProtocolId } from './utils/hangingProtocol/hangingProtocolApi';
+export {
+  getExternalHangingProtocolRegistry,
+  loadExternalHangingProtocols,
+} from './utils/hangingProtocol/loadExternalHangingProtocols';
+export {
+  buildStudyMappingsForExperiments,
+  buildSyntheticStudyUIDs,
+  fetchSubjectExperiments,
+  isComparisonProtocolId,
+} from './utils/overread/loadSubjectExperiments';
+export { viewportOverlayCustomization } from './getCustomizationModule';
+
 // Export the study browser components
 export { XNATStudyBrowser, XNATStudyItem, XNATThumbnail };
 
