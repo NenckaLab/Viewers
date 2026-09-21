@@ -157,6 +157,7 @@ const xnatRoute = {
     // Parse identifiers from URL query parameters for comparison views
     const query = new URLSearchParams(window.location.search);
     let xnatProtocolIdFromQuery = getXnatHangingProtocolIdFromQuery(query);
+    const scanIdFromQuery = getQueryParamIgnoreCase(query, 'scanId');
     const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
     const experimentIdsFromURL = query.getAll('experimentIds');
     const isOverreadMode =
@@ -181,7 +182,7 @@ const xnatRoute = {
     });
     servicesManager.services.xnatExternalHangingProtocols = getExternalHangingProtocolRegistry();
 
-    if (!xnatProtocolIdFromQuery) {
+    if (!xnatProtocolIdFromQuery && !scanIdFromQuery) {
       const projectId = getQueryParamIgnoreCase(query, 'projectId');
       if (projectId) {
         try {
@@ -261,6 +262,7 @@ const xnatRoute = {
           parentProjectId: query.get('parentProjectId'),
           experimentLabel:
             (overreadPrimaryExperiment?.label as string | undefined) || query.get('experimentLabel'),
+          scanId: getQueryParamIgnoreCase(query, 'scanId'),
           hangingProtocolId:
             xnatProtocolIdFromQuery ||
             (typeof hangingProtocolIdFromMode === 'string' && hangingProtocolIdFromMode) ||

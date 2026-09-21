@@ -10,7 +10,7 @@ This extension enables the OHIF Viewer to work seamlessly with XNAT by providing
 - **XNAT Navigation**: Study and session navigation panels for browsing XNAT projects, subjects, and experiments
 - **Measurement Tools**: Enhanced measurement capabilities with XNAT-specific workflows
 - **Segmentation Support**: Advanced segmentation tools with ROI management
-- **Custom Forms**: Overread mode support with customizable forms
+- **Custom Forms**: Overread panel for XNAT Form.io schemas. Field types and REST: [docs/custom-forms.md](../../docs/custom-forms.md).
 - **Hanging Protocols**: XNAT-optimized display protocols for different imaging scenarios
 - **Toolbar Integration**: XNAT-specific toolbar buttons and controls
 

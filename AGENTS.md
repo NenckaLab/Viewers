@@ -24,6 +24,7 @@ Put reusable viewer behavior in the extension. Put route, layout, toolbar, and w
 | Public mode imports | `@ohif/extension-xnat` (`sessionMap`, `SessionRouter`, HP loaders, overread helpers) — not `@ohif/extension-xnat/src/...` |
 | Commands | `extensions/xnat/src/commands/` wired by `commandsModule.ts` |
 | Panels | `extensions/xnat/src/Panels/`, `getPanelModule.tsx` |
+| Custom Forms | `extensions/xnat/src/Panels/XNATCustomFormsPanel.tsx`, `utils/IO/customFormsApi.ts`, `utils/IO/flattenFormioFields.ts` — [docs/custom-forms.md](../docs/custom-forms.md) |
 | XNAT UI | `extensions/xnat/src/xnat-components/` |
 | Viewport | `extensions/xnat/src/Viewports/XNATCornerstoneViewport.tsx` |
 | Hanging protocols | `extensions/xnat/src/hangingprotocols/`, `utils/hangingProtocol/` |
