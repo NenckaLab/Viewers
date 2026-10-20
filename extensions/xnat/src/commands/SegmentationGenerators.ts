@@ -3,14 +3,47 @@
  * Extracted from segmentationCommands.ts
  */
 
-import { cache, metaData } from '@cornerstonejs/core';
-import { segmentation as cornerstoneToolsSegmentation } from '@cornerstonejs/tools';
+import { metaData } from '@cornerstonejs/core';
 import { adaptersSEG } from '@cornerstonejs/adapters';
 import dicomImageLoader from '@cornerstonejs/dicom-image-loader';
 import dcmjs from 'dcmjs';
+import { getAppCornerstone } from '../registerVoiLutModuleHandler';
 
 export interface SegmentationGeneratorParams {
   segmentationService: any;
+  extensionManager?: any;
+}
+
+type ImageCache = {
+  getImage: (imageId: string) => any;
+  getVolume?: (volumeId: string) => any;
+};
+
+/**
+ * The segmentation panel id is stored in the viewer's Cornerstone Tools state.
+ * This extension depends on an older Tools package, so its own
+ * `segmentation.state` is a different singleton and will not see that segmentation.
+ */
+export function resolveSegmentationForExport(
+  segmentationService: {
+    getSegmentation?: (segmentationId: string) => any;
+    getActiveSegmentation?: (viewportId: string) => any;
+  },
+  segmentationId?: string,
+  viewportId?: string
+) {
+  if (segmentationId) {
+    const found = segmentationService.getSegmentation?.(segmentationId);
+    if (found) {
+      return found;
+    }
+  }
+
+  if (viewportId) {
+    return segmentationService.getActiveSegmentation?.(viewportId);
+  }
+
+  return undefined;
 }
 
 const DEFAULT_RGBA = [255, 0, 0, 255];
@@ -214,9 +247,15 @@ export function enrichSegDataset(
   }
 }
 
-function enrichSegDatasetFromImageId(dataset: Record<string, any>, imageId: string) {
-  const instance = metaData.get('instance', imageId) as Record<string, unknown> | undefined;
-  const plane = metaData.get('imagePlaneModule', imageId) as Record<string, unknown> | undefined;
+function enrichSegDatasetFromImageId(
+  dataset: Record<string, any>,
+  imageId: string,
+  metaDataProvider: { get: (type: string, imageId: string) => unknown } = metaData
+) {
+  const instance = metaDataProvider.get('instance', imageId) as Record<string, unknown> | undefined;
+  const plane = metaDataProvider.get('imagePlaneModule', imageId) as
+    | Record<string, unknown>
+    | undefined;
   enrichSegDataset(dataset, {
     PixelSpacing: plane?.pixelSpacing ?? instance?.PixelSpacing,
     SliceThickness: plane?.sliceThickness ?? instance?.SliceThickness,
@@ -234,7 +273,8 @@ function enrichSegDatasetFromImageId(dataset: Record<string, any>, imageId: stri
  * from the first multiframe source image instead.
  */
 async function prepareReferenceImagesForSegExport(
-  referencedImages: any[]
+  referencedImages: any[],
+  metaDataProvider: { get: (type: string, imageId: string) => unknown } = metaData
 ): Promise<any[]> {
   const valid = referencedImages.filter(image => image?.imageId);
   if (!valid.length) {
@@ -242,7 +282,7 @@ async function prepareReferenceImagesForSegExport(
   }
 
   const firstCached = valid[0];
-  const instance = metaData.get('instance', firstCached.imageId) as
+  const instance = metaDataProvider.get('instance', firstCached.imageId) as
     | Record<string, unknown>
     | undefined;
   const numberOfFrames = Number(
@@ -278,29 +318,55 @@ async function prepareReferenceImagesForSegExport(
 /**
  * Generates a DICOM SEG dataset from a segmentation
  */
+function labelmapPixelData(image: any): ArrayLike<number> | undefined {
+  if (typeof image?.getPixelData === 'function') {
+    return image.getPixelData();
+  }
+  if (typeof image?.voxelManager?.getScalarData === 'function') {
+    return image.voxelManager.getScalarData();
+  }
+  return undefined;
+}
+
+function viewerImageAccess(extensionManager?: any): {
+  imageCache: ImageCache;
+  metaDataProvider: { get: (type: string, imageId: string) => unknown };
+} {
+  const appCornerstone = getAppCornerstone(extensionManager);
+  const imageCache = appCornerstone?.cache;
+  if (!imageCache?.getImage) {
+    throw new Error('Viewer image cache is unavailable for SEG export');
+  }
+
+  return {
+    imageCache,
+    metaDataProvider: appCornerstone?.metaData ?? metaData,
+  };
+}
+
 export async function generateSegmentation(
   { segmentationId, options = {} }: { segmentationId: string; options?: any },
-  { segmentationService }: SegmentationGeneratorParams
+  { segmentationService, extensionManager }: SegmentationGeneratorParams
 ) {
   const segmentationInOHIF = segmentationService.getSegmentation(segmentationId);
-  const cornerstoneSegmentation = cornerstoneToolsSegmentation.state.getSegmentation(segmentationId);
 
-  if (!segmentationInOHIF || !cornerstoneSegmentation) {
+  if (!segmentationInOHIF) {
     throw new Error('Segmentation not found');
   }
 
-  const { representationData } = cornerstoneSegmentation;
-  const labelmapData = representationData.Labelmap;
+  const { imageCache, metaDataProvider } = viewerImageAccess(extensionManager);
+  const { representationData } = segmentationInOHIF;
+  const labelmapData = representationData?.Labelmap ?? representationData?.LABELMAP;
 
   if (!labelmapData) {
     throw new Error('No labelmap data found in segmentation');
   }
 
   let imageIds: string[] = [];
-  if ('imageIds' in labelmapData && labelmapData.imageIds) {
+  if (Array.isArray(labelmapData.imageIds) && labelmapData.imageIds.length) {
     imageIds = labelmapData.imageIds;
-  } else if ('volumeId' in labelmapData && labelmapData.volumeId) {
-    const volume = cache.getVolume(labelmapData.volumeId);
+  } else if (labelmapData.volumeId && imageCache.getVolume) {
+    const volume = imageCache.getVolume(labelmapData.volumeId);
     if (volume?.imageIds) {
       imageIds = volume.imageIds;
     }
@@ -310,18 +376,24 @@ export async function generateSegmentation(
     throw new Error('No image IDs found for segmentation');
   }
 
-  const segImages = imageIds.map(imageId => cache.getImage(imageId));
-  const referencedImages = segImages.map(image => cache.getImage(image.referencedImageId));
+  const referencedImageIds: string[] = Array.isArray(labelmapData.referencedImageIds)
+    ? labelmapData.referencedImageIds
+    : [];
+  const segImages = imageIds.map(imageId => imageCache.getImage(imageId));
+  const referencedImages = segImages.map((image, index) => {
+    const referencedImageId = image?.referencedImageId ?? referencedImageIds[index];
+    return referencedImageId ? imageCache.getImage(referencedImageId) : undefined;
+  });
 
   const labelmaps2D: Labelmap2D[] = [];
 
   for (const segImage of segImages) {
-    if (!segImage?.getPixelData) {
+    const pixelData = labelmapPixelData(segImage);
+    if (!pixelData || segImage?.rows == null || segImage?.columns == null) {
       throw new Error('Missing labelmap image data for SEG export');
     }
 
     const segmentsOnLabelmap = new Set<number>();
-    const pixelData = segImage.getPixelData();
     const { rows, columns } = segImage;
 
     for (let i = 0; i < pixelData.length; i++) {
@@ -383,8 +455,10 @@ export async function generateSegmentation(
     },
   } = adaptersSEG;
 
-  const exportReferenceImages =
-    await prepareReferenceImagesForSegExport(referencedImages);
+  const exportReferenceImages = await prepareReferenceImagesForSegExport(
+    referencedImages,
+    metaDataProvider
+  );
 
   const segResult = cornerstoneGenerateSegmentation(
     exportReferenceImages,
@@ -407,7 +481,11 @@ export async function generateSegmentation(
     throw new Error('Failed to generate DICOM SEG dataset');
   }
 
-  enrichSegDatasetFromImageId(dataset, exportReferenceImages[0].imageId);
+  enrichSegDatasetFromImageId(
+    dataset,
+    exportReferenceImages[0].imageId,
+    metaDataProvider
+  );
 
   return dataset;
 }

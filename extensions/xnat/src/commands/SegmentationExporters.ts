@@ -35,8 +35,13 @@ export async function exportSegmentationToXNAT(
     uiNotificationService,
     servicesManager,
     displaySet,
-    segmentationService
-  }: SegmentationExporterParams & { displaySet: any; segmentationService: any }
+    segmentationService,
+    extensionManager,
+  }: SegmentationExporterParams & {
+    displaySet: any;
+    segmentationService: any;
+    extensionManager?: any;
+  }
 ) {
   // Get segmentation data for the default label
   const segmentationData = segmentationService.getSegmentation(segmentationId);
@@ -69,7 +74,7 @@ export async function exportSegmentationToXNAT(
   // Generate the DICOM SEG dataset
   const dataset = await generateSegmentation(
     { segmentationId },
-    { segmentationService }
+    { segmentationService, extensionManager }
   );
 
   if (!dataset) {

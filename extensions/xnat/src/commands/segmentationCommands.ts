@@ -30,7 +30,8 @@ import {
 
 export const createSegmentationCommands = (
     servicesManager: any,
-    commandsManager?: any
+    commandsManager?: any,
+    extensionManager?: any
 ) => {
     const {
         segmentationService,
@@ -56,7 +57,7 @@ export const createSegmentationCommands = (
         generateSegmentation: async ({ segmentationId, options = {} }) =>
             generateSegmentation(
                 { segmentationId, options },
-                { segmentationService }
+                { segmentationService, extensionManager }
             ),
 
         /**
@@ -72,7 +73,7 @@ export const createSegmentationCommands = (
 
             const dataset = await generateSegmentation(
                 { segmentationId },
-                { segmentationService }
+                { segmentationService, extensionManager }
             );
 
             const reportBlob = dcmjs.data.datasetToBlob(dataset);
@@ -102,7 +103,8 @@ export const createSegmentationCommands = (
                     displaySet: displaySetService.getDisplaySets().find(ds =>
                         ds.SeriesInstanceUID === seriesInstanceUID
                     ),
-                    segmentationService
+                    segmentationService,
+                    extensionManager,
                 }
             ),
 

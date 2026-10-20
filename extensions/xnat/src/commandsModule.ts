@@ -37,7 +37,11 @@ const commandsModule = ({
   const basicCommands = createBasicCommands(servicesManager, commandsManager, extensionManager);
   const hangingProtocolCommands = createHangingProtocolCommands(servicesManager, commandsManager);
   const viewportCommands = createViewportCommands(servicesManager, commandsManager);
-  const segmentationCommands = createSegmentationCommands(servicesManager, commandsManager);
+  const segmentationCommands = createSegmentationCommands(
+    servicesManager,
+    commandsManager,
+    extensionManager
+  );
   const xnatCommands = createXNATCommands(servicesManager, commandsManager, extensionManager);
   const measurementCommands = createMeasurementCommands(servicesManager, commandsManager);
   const saveHangingProtocolCommands = createSaveHangingProtocolCommands(
