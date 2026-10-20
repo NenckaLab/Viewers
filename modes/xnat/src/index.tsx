@@ -96,6 +96,8 @@ const xnatLayout = {
   props: {
     ...basicLayout.props,
     leftPanels: [xnat.studyBrowser, xnat.xnatNavList], // Default panels, will be overridden in route
+    // One thumbnail column (135px) plus the study-browser padding. 282px fits two.
+    leftPanelInitialExpandedWidth: 155,
     rightPanels: [xnat.segmentation, xnat.measurements], // Default panels, will be overridden in route
   },
 };
@@ -263,11 +265,11 @@ const xnatRoute = {
               getXnatHangingProtocolIdFromQuery(query) || getHangingProtocolIdFromQuery(query);
             console.info(
               `${sessionLabel}: Loading ${overreadExperimentIds.length} subject experiment(s)` +
-                (overreadExperimentIds.length > 1 && !explicitHp && !scanIdFromQuery
-                  ? ' (comparison MPR)'
-                  : isComparisonProtocolId(explicitHp)
-                    ? ' (comparison HP)'
-                    : ' (most recent)')
+              (overreadExperimentIds.length > 1 && !explicitHp && !scanIdFromQuery
+                ? ' (comparison MPR)'
+                : isComparisonProtocolId(explicitHp)
+                  ? ' (comparison HP)'
+                  : ' (most recent)')
             );
           }
         } catch (error) {

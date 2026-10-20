@@ -162,11 +162,13 @@ function WrappedXNATStudyBrowserPanel({ extensionManager, servicesManager, comma
                 StudyDate: dicomStudy?.StudyDate || displaySet?.StudyDate || '',
                 session: (() => {
                   let mappedExperimentId = '';
+                  let mappedProjectId = '';
                   try {
                     const cachedMappings = sessionStorage.getItem('xnat_studyMappings');
                     if (cachedMappings) {
-                      const mappings = JSON.parse(cachedMappings);
-                      mappedExperimentId = mappings?.[StudyInstanceUID]?.experimentId || '';
+                      const mapped = JSON.parse(cachedMappings)?.[StudyInstanceUID];
+                      mappedExperimentId = mapped?.experimentId || '';
+                      mappedProjectId = mapped?.projectId || '';
                     }
                   } catch (e) {
                     // ignore invalid cached mappings
@@ -178,6 +180,7 @@ function WrappedXNATStudyBrowserPanel({ extensionManager, servicesManager, comma
                       sessionStorage.getItem('xnat_experimentId') ||
                       '',
                     projectId:
+                      mappedProjectId ||
                       sessionMap.getProject?.() ||
                       sessionStorage.getItem('xnat_projectId') ||
                       '',

@@ -28,15 +28,23 @@ interface XNATStudyBrowserProps {
   supportsDrag?: boolean;
 }
 
+function formatSessionDate(value?: string): string {
+  if (!value) {
+    return '';
+  }
+  const digits = String(value).replace(/\D/g, '');
+  if (digits.length >= 8) {
+    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+  }
+  return String(value);
+}
+
 function resolveStudyLabel(study: XNATStudyBrowserProps['studies'][number]): string {
   if (study.PatientName) {
     return study.PatientName;
   }
   if (study.session?.experimentId) {
     return study.session.experimentId;
-  }
-  if (study.StudyDate) {
-    return study.StudyDate;
   }
   return study.PatientID || '';
 }
@@ -62,17 +70,10 @@ export default function XNATStudyBrowser({
         label: 'XNAT Studies',
         studies: studies.map(study => ({
           studyInstanceUid: study.StudyInstanceUID,
-          // StudyBrowser primary line is `date` — show DICOM patient name when available.
+          // Study row: patient, project, and session date. Modality stays off this header.
           date: resolveStudyLabel(study),
-          description: study.StudyDescription || study.StudyDate || '',
-          numInstances: study.thumbnails.reduce(
-            (total, thumb) => total + (thumb.numImageFrames || 0),
-            0
-          ),
-          modalities: study.thumbnails
-            .map(thumb => thumb.modality)
-            .filter(Boolean)
-            .join(', '),
+          description: study.session?.projectId || '',
+          modalities: formatSessionDate(study.StudyDate),
           displaySets: study.thumbnails.map(thumb => ({
             displaySetInstanceUID: thumb.displaySetInstanceUID,
             imageSrc: thumb.imageSrc,
