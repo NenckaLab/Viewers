@@ -10,6 +10,13 @@ type ManifestFileEntry = {
 type HangingProtocolManifest = {
   files: ManifestFileEntry[];
   defaultProtocolId?: string;
+  /** When true, a prior study opens comparison MPR instead of the saved layout. */
+  ignoreSavedProtocolForComparison?: boolean;
+};
+
+export type UserHangingProtocolOptions = {
+  defaultProtocolId: string | null;
+  ignoreSavedProtocolForComparison: boolean;
 };
 
 function appendCsrfToken(url: string, csrfToken: string): string {
@@ -111,10 +118,12 @@ export async function saveUserHangingProtocol({
   projectId,
   protocol,
   setAsDefault = true,
+  ignoreSavedProtocolForComparison,
 }: {
   projectId: string;
   protocol: Record<string, any>;
   setAsDefault?: boolean;
+  ignoreSavedProtocolForComparison?: boolean;
 }): Promise<void> {
   if (!projectId) {
     throw new Error('A project ID is required to save a hanging protocol.');
@@ -143,7 +152,11 @@ export async function saveUserHangingProtocol({
 
   await putJson(getUserManifestUrl(projectId), {
     files,
-    defaultProtocolId: protocolId,
+    defaultProtocolId: setAsDefault ? protocolId : existingManifest.defaultProtocolId,
+    ignoreSavedProtocolForComparison:
+      ignoreSavedProtocolForComparison ??
+      existingManifest.ignoreSavedProtocolForComparison ??
+      false,
   });
 
   if (setAsDefault) {
@@ -177,6 +190,23 @@ export function getUserHangingProtocolSources(projectId: string): string[] {
   }
 
   return [getUserManifestUrl(projectId)];
+}
+
+export async function fetchUserHangingProtocolOptions(
+  projectId: string
+): Promise<UserHangingProtocolOptions> {
+  const empty = { defaultProtocolId: null, ignoreSavedProtocolForComparison: false };
+  if (!projectId) {
+    return empty;
+  }
+
+  const manifest = await fetchUserHangingProtocolManifest(projectId);
+  const defaultProtocolId = await fetchUserDefaultProtocolId(projectId);
+
+  return {
+    defaultProtocolId,
+    ignoreSavedProtocolForComparison: manifest?.ignoreSavedProtocolForComparison === true,
+  };
 }
 
 export async function fetchUserDefaultProtocolId(projectId: string): Promise<string | null> {

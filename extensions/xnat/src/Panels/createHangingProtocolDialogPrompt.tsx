@@ -2,8 +2,17 @@ import React, { useState } from 'react';
 import { Button, Input } from '@ohif/ui-next';
 import PROMPT_RESPONSES from '../utils/_shared/PROMPT_RESPONSES';
 
-function SaveHangingProtocolDialogContent({ title, initialValue, onCancel, onSave }: any) {
+function SaveHangingProtocolDialogContent({
+  title,
+  initialValue,
+  initialIgnoreSavedProtocolForComparison,
+  onCancel,
+  onSave,
+}: any) {
   const [value, setValue] = useState(initialValue);
+  const [ignoreSavedProtocolForComparison, setIgnoreSavedProtocolForComparison] = useState(
+    initialIgnoreSavedProtocolForComparison === true
+  );
 
   return (
     <div className="max-w-[520px] p-4 text-white">
@@ -24,18 +33,33 @@ function SaveHangingProtocolDialogContent({ title, initialValue, onCancel, onSav
             onChange={(e: any) => setValue(e.target.value)}
             onKeyDown={(e: any) => {
               if (e.key === 'Enter' && value.trim()) {
-                onSave(value.trim());
+                onSave(value.trim(), ignoreSavedProtocolForComparison);
               }
             }}
           />
         </div>
       </div>
 
+      <label className="mt-4 flex items-start gap-2 text-sm text-white">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={ignoreSavedProtocolForComparison}
+          onChange={(e: any) => setIgnoreSavedProtocolForComparison(e.target.checked)}
+        />
+        <span>
+          When a prior study is available, open comparison MPR instead of this saved layout.
+        </span>
+      </label>
+
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
-        <Button disabled={!value.trim()} onClick={() => onSave(value.trim())}>
+        <Button
+          disabled={!value.trim()}
+          onClick={() => onSave(value.trim(), ignoreSavedProtocolForComparison)}
+        >
           Save
         </Button>
       </div>
@@ -43,8 +67,15 @@ function SaveHangingProtocolDialogContent({ title, initialValue, onCancel, onSav
   );
 }
 
-export default function createHangingProtocolDialogPrompt(uiDialogService) {
-  return new Promise<{ action: string; value?: string }>(resolve => {
+export default function createHangingProtocolDialogPrompt(
+  uiDialogService,
+  options: { ignoreSavedProtocolForComparison?: boolean } = {}
+) {
+  return new Promise<{
+    action: string;
+    value?: string;
+    ignoreSavedProtocolForComparison?: boolean;
+  }>(resolve => {
     const dialogId = 'save-hanging-protocol-dialog';
 
     uiDialogService.show({
@@ -55,13 +86,18 @@ export default function createHangingProtocolDialogPrompt(uiDialogService) {
       contentProps: {
         title: 'Save Hanging Protocol',
         initialValue: '',
+        initialIgnoreSavedProtocolForComparison: options.ignoreSavedProtocolForComparison === true,
         onCancel: () => {
           uiDialogService.hide(dialogId);
           resolve({ action: PROMPT_RESPONSES.CANCEL });
         },
-        onSave: (value: string) => {
+        onSave: (value: string, ignoreSavedProtocolForComparison: boolean) => {
           uiDialogService.hide(dialogId);
-          resolve({ action: PROMPT_RESPONSES.CREATE_REPORT, value });
+          resolve({
+            action: PROMPT_RESPONSES.CREATE_REPORT,
+            value,
+            ignoreSavedProtocolForComparison,
+          });
         },
       },
     });

@@ -133,7 +133,10 @@ export {
   parseExcludedScanTypesParam,
   fetchExcludedScanTypesForProject,
 } from './utils/excludeScanTypes';
-export { fetchUserDefaultProtocolId } from './utils/hangingProtocol/hangingProtocolApi';
+export {
+  fetchUserDefaultProtocolId,
+  fetchUserHangingProtocolOptions,
+} from './utils/hangingProtocol/hangingProtocolApi';
 export {
   getExternalHangingProtocolRegistry,
   loadExternalHangingProtocols,
