@@ -72,169 +72,194 @@ module.exports = (env, argv, { SRC_DIR, ENTRY }) => {
     const isProdBuild = NODE_ENV === 'production';
     const isQuickBuild = QUICK_BUILD === 'true';
 
-    const config = {
-        mode: isProdBuild ? 'production' : 'development',
-        devtool: isProdBuild ? 'source-map' : 'cheap-module-source-map',
-        // `rspack serve` (@rspack/cli) auto-enables lazyCompilation for web-only
-        // apps unless the config defines it explicitly. The on-demand proxy chunks
-        // it produces fail to load in the headless cypress/electron e2e run
-        // (ChunkLoadError on cornerstone vendor chunks), so disable it here to match
-        // the rsbuild build (see rsbuild.config.ts `dev.lazyCompilation: false`).
-        lazyCompilation: false,
-        entry: ENTRY,
-        optimization: {
-            // splitChunks: {
-            //   // include all types of chunks
-            //   chunks: 'all',
-            // },
-            //runtimeChunk: 'single',
-            minimize: isProdBuild,
-            sideEffects: false,
-        },
-        output: {
-            // clean: true,
-            publicPath: '/',
-        },
-        context: SRC_DIR,
-        stats: {
-            colors: true,
-            hash: true,
-            timings: true,
-            assets: true,
-            chunks: false,
-            chunkModules: false,
-            modules: false,
-            children: false,
-            warnings: true,
-        },
-        cache: isProdBuild ? false : { type: 'filesystem' },
-        module: {
-            noParse: [/(dicomicc)/],
-            rules: [
-                ...(isProdBuild ?
-                    [] :
-                    [
-                        ...(IS_COVERAGE ?
-                            [{
-                                test: /\.[jt]sx?$/,
-                                exclude: /node_modules/,
-                                use: {
-                                    loader: 'babel-loader',
-                                    options: {
-                                        presets: ['@babel/preset-typescript', '@babel/preset-react'],
-                                        plugins: ['istanbul'],
-                                    },
-                                },
-                            }, ] :
-                            [{
-                                test: /\.[jt]sx?$/,
-                                exclude: /node_modules/,
-                                loader: 'babel-loader',
-                                options: {
-                                    plugins: isProdBuild ? [] : ['react-refresh/babel'],
-                                },
-                            }, ]),
-                    ]),
-                {
-                    test: /\.svg?$/,
-                    oneOf: [{
-                        use: [{
-                            loader: '@svgr/webpack',
-                            options: {
-                                svgoConfig: {
-                                    plugins: [{
-                                        name: 'preset-default',
-                                        params: {
-                                            overrides: {
-                                                removeViewBox: false,
-                                            },
-                                        },
-                                    }, ],
-                                },
-                                prettier: false,
-                                svgo: true,
-                                titleProp: true,
-                            },
-                        }, ],
-                        issuer: {
-                            and: [/\.(ts|tsx|js|jsx|md|mdx)$/],
-                        },
-                    }, ],
-                },
-                transpileJavaScriptRule(mode),
-                loadWebWorkersRule,
-                // loadShadersRule,
-                {
-                    test: /\.m?js/,
-                    resolve: {
-                        fullySpecified: false,
+  const config = {
+    mode: isProdBuild ? 'production' : 'development',
+    // Full source maps in development as well as production. The React
+    // Compiler restructures function bodies, so the line-only maps a
+    // 'cheap-*' devtool produces can no longer place a breakpoint on the
+    // statement you clicked. Measured on this repo: no rebuild cost, and the
+    // .map files are fetched only when DevTools is open, so the payload the
+    // browser downloads is unchanged.
+    devtool: 'source-map',
+    // `rspack serve` (@rspack/cli) auto-enables lazyCompilation for web-only
+    // apps unless the config defines it explicitly. The on-demand proxy chunks
+    // it produces fail to load in the headless cypress/electron e2e run
+    // (ChunkLoadError on cornerstone vendor chunks), so disable it here to match
+    // the rsbuild build (see rsbuild.config.ts `dev.lazyCompilation: false`).
+    lazyCompilation: false,
+    entry: ENTRY,
+    optimization: {
+      // splitChunks: {
+      //   // include all types of chunks
+      //   chunks: 'all',
+      // },
+      //runtimeChunk: 'single',
+      minimize: isProdBuild,
+      sideEffects: false,
+    },
+    output: {
+      // clean: true,
+      publicPath: '/',
+    },
+    context: SRC_DIR,
+    stats: {
+      colors: true,
+      hash: true,
+      timings: true,
+      assets: true,
+      chunks: false,
+      chunkModules: false,
+      modules: false,
+      children: false,
+      warnings: true,
+    },
+    cache: isProdBuild ? false : { type: 'filesystem' },
+    module: {
+      noParse: [/(dicomicc)/],
+      rules: [
+        ...(isProdBuild
+          ? []
+          : [
+              ...(IS_COVERAGE
+                ? [
+                    {
+                      test: /\.[jt]sx?$/,
+                      exclude: /node_modules/,
+                      loader: 'babel-loader',
+                      options: {
+                        // Rely on the root babel.config.js (preset-env,
+                        // preset-react automatic runtime, preset-typescript, and
+                        // babel-plugin-react-compiler) and only add coverage
+                        // instrumentation. Supplying inline presets here
+                        // re-added a classic-runtime preset-react that shadowed
+                        // the compiler, so the coverage/e2e builds shipped the
+                        // cleanup-era components without the memoization the
+                        // compiler is meant to restore - breaking behavior (e.g.
+                        // orientation markers after rotate/flip) that works in
+                        // the production and dev builds.
+                        plugins: ['istanbul'],
+                      },
                     },
-                },
-                cssToJavaScript,
+                  ]
+                : [
+                    {
+                      test: /\.[jt]sx?$/,
+                      exclude: /node_modules/,
+                      loader: 'babel-loader',
+                      options: {
+                        plugins: isProdBuild ? [] : ['react-refresh/babel'],
+                      },
+                    },
+                  ]),
+            ]),
+        {
+          test: /\.svg?$/,
+          oneOf: [
+            {
+              use: [
                 {
-                    test: /\.wasm/,
-                    type: 'asset/resource',
-                },
-                {
-                    test: /\.(png|jpe?g|gif|svg)$/i,
-                    use: [{
-                        loader: 'file-loader',
-                        options: {
-                            name: 'assets/images/[name].[ext]',
+                  loader: '@svgr/webpack',
+                  options: {
+                    svgoConfig: {
+                      plugins: [
+                        {
+                          name: 'preset-default',
+                          params: {
+                            overrides: {
+                              removeViewBox: false,
+                            },
+                          },
                         },
-                    }, ],
+                      ],
+                    },
+                    prettier: false,
+                    svgo: true,
+                    titleProp: true,
+                  },
                 },
-                {
-                    test: /\.(woff|woff2|eot|ttf|otf)$/i,
-                    type: 'asset/resource',
-                },
-            ], //.concat(vtkRules),
-        },
-        resolve: {
-            mainFields: ['module', 'browser', 'main'],
-            // alias and modules are shared with the rsbuild build via ./resolveConfig
-            // so the two pipelines resolve identically.
-            alias: {
-                ...resolveConfig.alias,
+              ],
+              issuer: {
+                and: [/\.(ts|tsx|js|jsx|md|mdx)$/],
+              },
             },
-            modules: resolveConfig.getModules(SRC_DIR),
-            // Attempt to resolve these extensions in order.
-            extensions: ['.js', '.jsx', '.json', '.ts', '.tsx', '*'],
-            // Workspace packages use relative imports between sibling packages.
-            // Resolve symlinks to keep those imports anchored at the real package paths.
-            symlinks: true,
-            fallback: {
-                fs: false,
-                path: false,
-                zlib: false,
-                buffer: require.resolve('buffer'),
+          ],
+        },
+        transpileJavaScriptRule(mode),
+        loadWebWorkersRule,
+        // loadShadersRule,
+        {
+          test: /\.m?js/,
+          resolve: {
+            fullySpecified: false,
+          },
+        },
+        cssToJavaScript,
+        {
+          test: /\.wasm/,
+          type: 'asset/resource',
+        },
+        {
+          test: /\.(png|jpe?g|gif|svg)$/i,
+          use: [
+            {
+              loader: 'file-loader',
+              options: {
+                name: 'assets/images/[name].[ext]',
+              },
             },
+          ],
         },
-        node: {
-            // Leave __filename / __dirname references alone. The previous 'mock'
-            // value triggers an rspack warning whenever bundled deps reference
-            // __dirname (e.g. Emscripten-compiled cornerstone codecs). Those refs
-            // sit inside `if (ENVIRONMENT_IS_NODE)` branches that never execute in
-            // the browser, so leaving them un-substituted is harmless at runtime.
-            __filename: false,
-            __dirname: false,
+        {
+          test: /\.(woff|woff2|eot|ttf|otf)$/i,
+          type: 'asset/resource',
         },
-        plugins: [
-            new webpack.DefinePlugin(defineValues),
-            new webpack.ProvidePlugin({
-                Buffer: ['buffer', 'Buffer'],
-            }),
-            new webpack.IgnorePlugin({
-                resourceRegExp: /^(fs|path)$/,
-                contextRegExp: /@cornerstonejs[\\/]codec-/,
-            }),
-            ...(isProdBuild || IS_COVERAGE || !ReactRefreshWebpackPlugin ?
-                [] :
-                [new ReactRefreshWebpackPlugin({ overlay: false })]),
-            // Uncomment to generate bundle analyzer
-            // new BundleAnalyzerPlugin(),
-        ],
-    };
+      ], //.concat(vtkRules),
+    },
+    resolve: {
+      mainFields: ['module', 'browser', 'main'],
+      // alias and modules are shared with the rsbuild build via ./resolveConfig
+      // so the two pipelines resolve identically.
+      alias: {
+        ...resolveConfig.alias,
+      },
+      modules: resolveConfig.getModules(SRC_DIR),
+      // Attempt to resolve these extensions in order.
+      extensions: ['.js', '.jsx', '.json', '.ts', '.tsx', '*'],
+      // Workspace packages use relative imports between sibling packages.
+      // Resolve symlinks to keep those imports anchored at the real package paths.
+      symlinks: true,
+      fallback: {
+        fs: false,
+        path: false,
+        zlib: false,
+        buffer: require.resolve('buffer'),
+      },
+    },
+    node: {
+      // Leave __filename / __dirname references alone. The previous 'mock'
+      // value triggers an rspack warning whenever bundled deps reference
+      // __dirname (e.g. Emscripten-compiled cornerstone codecs). Those refs
+      // sit inside `if (ENVIRONMENT_IS_NODE)` branches that never execute in
+      // the browser, so leaving them un-substituted is harmless at runtime.
+      __filename: false,
+      __dirname: false,
+    },
+    plugins: [
+      new webpack.DefinePlugin(defineValues),
+      new webpack.ProvidePlugin({
+        Buffer: ['buffer', 'Buffer'],
+      }),
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^(fs|path)$/,
+        contextRegExp: /@cornerstonejs[\\/]codec-/,
+      }),
+      ...(isProdBuild || IS_COVERAGE || !ReactRefreshWebpackPlugin
+        ? []
+        : [new ReactRefreshWebpackPlugin({ overlay: false })]),
+      // Uncomment to generate bundle analyzer
+      // new BundleAnalyzerPlugin(),
+    ],
+  };
 
     if (isProdBuild) {
         config.optimization.minimizer = [new webpack.SwcJsMinimizerRspackPlugin()];
