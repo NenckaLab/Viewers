@@ -46,9 +46,60 @@ export function withGeneralImageModule(provider: MetadataProvider): MetadataProv
   };
 }
 
+function positiveDimension(...values: unknown[]): number | undefined {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number) && number > 0) {
+      return number;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The SEG adapter reads instance.Rows / instance.Columns. XNAT series metadata
+ * is published as imagePlaneModule (rows/columns). A missing instance module
+ * makes labelmap import throw while reading Rows.
+ */
+export function withSegInstanceMetadata(provider: MetadataProvider): MetadataProvider {
+  const withGeneral = withGeneralImageModule(provider);
+  return {
+    get(type: string, imageId: string, ...rest: unknown[]) {
+      if (type !== 'instance') {
+        return withGeneral.get(type, imageId, ...rest);
+      }
+
+      const existing = provider.get('instance', imageId, ...rest);
+      if (existing?.Rows && existing?.Columns) {
+        return existing;
+      }
+
+      const plane = provider.get('imagePlaneModule', imageId);
+      const pixel = provider.get('imagePixelModule', imageId);
+      const Rows = positiveDimension(existing?.Rows, plane?.rows, plane?.Rows, pixel?.rows, pixel?.Rows);
+      const Columns = positiveDimension(
+        existing?.Columns,
+        plane?.columns,
+        plane?.Columns,
+        pixel?.columns,
+        pixel?.Columns
+      );
+      if (!Rows || !Columns) {
+        return existing;
+      }
+
+      return {
+        ...(existing ?? {}),
+        Rows,
+        Columns,
+      };
+    },
+  };
+}
+
 function viewerMetadataProvider(extensionManager?: any): MetadataProvider {
   const appMetaData = getAppCornerstone(extensionManager)?.metaData as MetadataProvider | undefined;
-  return withGeneralImageModule(appMetaData ?? (metaData as MetadataProvider));
+  return withSegInstanceMetadata(appMetaData ?? (metaData as MetadataProvider));
 }
 
 export const LABELMAP_IMAGE_PIXEL_MODULE = {

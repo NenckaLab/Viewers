@@ -193,6 +193,11 @@ const commandsModule = ({
     toggleViewportLock: {
       commandFn: actions.toggleViewportLock,
     },
+    // Same context as the cornerstone command so this definition replaces it.
+    interpolateLabelmap: {
+      commandFn: actions.interpolateLabelmap,
+      context: 'CORNERSTONE',
+    },
   };
 
   return {

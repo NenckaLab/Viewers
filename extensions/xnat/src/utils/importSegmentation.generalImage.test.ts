@@ -1,4 +1,9 @@
-import { isReversedSliceOrder, labelmapImagePixelModule, withGeneralImageModule } from './importSegmentation';
+import {
+  isReversedSliceOrder,
+  labelmapImagePixelModule,
+  withGeneralImageModule,
+  withSegInstanceMetadata,
+} from './importSegmentation';
 
 describe('isReversedSliceOrder', () => {
   const forward = ['a', 'b', 'c'];
@@ -74,6 +79,24 @@ describe('withGeneralImageModule', () => {
     expect(wrapped.get('generalImageModule', 'image-2')).toEqual({
       sopInstanceUID: '1.2.4',
       instanceNumber: 2,
+    });
+  });
+});
+
+describe('withSegInstanceMetadata', () => {
+  const wrapped = withSegInstanceMetadata({
+    get(type: string) {
+      if (type === 'imagePlaneModule') {
+        return { rows: 256, columns: 256 };
+      }
+      return undefined;
+    },
+  });
+
+  it('builds instance Rows and Columns from the image plane when instance metadata is missing', () => {
+    expect(wrapped.get('instance', 'image-1')).toEqual({
+      Rows: 256,
+      Columns: 256,
     });
   });
 });

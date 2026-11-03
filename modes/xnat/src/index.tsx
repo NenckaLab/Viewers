@@ -61,7 +61,7 @@ function isOverreadSession(servicesManager?: any, query?: URLSearchParams): bool
   );
 }
 
-/** Overread and anatomical share subject loading, nav, and hanging-protocol behavior. */
+/** Overread and anatomical share subject loading and hanging-protocol behavior. */
 function isSubjectReviewSession(servicesManager?: any, query?: URLSearchParams): boolean {
   const search = query ?? new URLSearchParams(window.location.search);
   return (
@@ -110,13 +110,16 @@ const xnatRoute = {
   layoutTemplate: ({ servicesManager }) => {
     const query = new URLSearchParams(window.location.search);
     const isOverreadMode = isOverreadSession(servicesManager, query);
-    const isSubjectSession = isSubjectReviewSession(servicesManager, query);
 
     const rightPanels = isOverreadMode
       ? [xnat.segmentation, xnat.measurements, xnat.customForms]
       : [xnat.segmentation, xnat.measurements];
 
-    const leftPanels = isSubjectSession
+    // Both overread and anatomical use the XNAT study browser. Subject sessions
+    // for that browser are loaded in route init when isSubjectReviewSession.
+    // Overread's second tab is this subject only. Anatomical's second tab is
+    // the project list (every subject in the current project).
+    const leftPanels = isOverreadMode
       ? [xnat.studyBrowser, xnat.overreadNavList]
       : [xnat.studyBrowser, xnat.xnatNavList];
 
@@ -288,13 +291,25 @@ const xnatRoute = {
       !!savedDefaultProtocolId &&
       explicitHangingProtocolId !== savedDefaultProtocolId;
     // Newest experiment is index 0 (top row). The next experiment is index 1 (bottom row).
-    // The saved-layout option skips that layout when a prior study is available.
+    // When ignoreSavedProtocolForComparison is set, a prior study opens comparison MPR
+    // instead of the saved layout. Otherwise honor an explicit URL id OR the project
+    // default already resolved into xnatProtocolIdFromQuery (worklist/Actions often omit
+    // xnathangingprotocolId from the URL even when a default exists).
+    // Count priors from Mode's subject fetch OR from explicit experimentIds=…&experimentIds=…
+    // (comparison launch / Actions) — previously only the fetch path armed this gate.
+    const subjectExperimentCount =
+      overreadExperimentIds.length > 1
+        ? overreadExperimentIds.length
+        : isSubjectSession
+          ? experimentIdsFromURL.length
+          : 0;
+    const effectiveProtocolId = explicitHangingProtocolId || xnatProtocolIdFromQuery;
     const openSubjectComparisonMpr =
       isSubjectSession &&
-      overreadExperimentIds.length > 1 &&
+      subjectExperimentCount > 1 &&
       !scanIdFromQuery &&
       !urlNamesAnotherProtocol &&
-      (ignoreSavedProtocolForComparison || !explicitHangingProtocolId);
+      (ignoreSavedProtocolForComparison || !effectiveProtocolId);
 
     // Initialize data source
     try {
