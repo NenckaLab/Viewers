@@ -1,10 +1,21 @@
 import { hotkeys } from '@ohif/core';
 import toolbarButtons from './toolbarButtons';
 import { id } from './id';
-import SessionRouter from '@ohif/extension-xnat/src/xnat-components/XNATNavigation/helpers/SessionRouter.js';
 import { defaultRouteInit } from '../../../platform/app/src/routes/Mode/defaultRouteInit';
-import sessionMap from '@ohif/extension-xnat/src/utils/sessionMap.js';
-import { parseExcludedScanTypesParam, fetchExcludedScanTypesForProject } from '@ohif/extension-xnat/src/utils/excludeScanTypes';
+import {
+  SessionRouter,
+  sessionMap,
+  parseExcludedScanTypesParam,
+  fetchExcludedScanTypesForProject,
+  getExternalHangingProtocolRegistry,
+  loadExternalHangingProtocols,
+  fetchUserHangingProtocolOptions,
+  buildStudyMappingsForExperiments,
+  buildSyntheticStudyUIDs,
+  fetchSubjectExperiments,
+  isComparisonProtocolId,
+  viewportOverlayCustomization,
+} from '@ohif/extension-xnat';
 import {
   mode as basicMode,
   modeInstance as basicModeInstance,
@@ -21,20 +32,7 @@ import {
   dicomRT,
 } from '../../basic/src/index';
 
-// Import segmentation tools initialization
 import { createTools } from '../../segmentation/src/initToolGroups';
-import {
-  getExternalHangingProtocolRegistry,
-  loadExternalHangingProtocols,
-} from './loadExternalHangingProtocols';
-import { fetchUserDefaultProtocolId } from '@ohif/extension-xnat/src/utils/hangingProtocol/hangingProtocolApi';
-import {
-  buildStudyMappingsForExperiments,
-  buildSyntheticStudyUIDs,
-  fetchSubjectExperiments,
-  isComparisonProtocolId,
-} from '@ohif/extension-xnat/src/utils/overread/loadSubjectExperiments';
-import viewportOverlayCustomization from '../../../extensions/cornerstone/src/customizations/viewportOverlayCustomization';
 
 /** Match a query key regardless of casing (Mode uses lower-case keys). */
 function getQueryParamIgnoreCase(searchParams: URLSearchParams, keyName: string): string | null {
@@ -54,6 +52,23 @@ function getHangingProtocolIdFromQuery(searchParams: URLSearchParams): string | 
 /** XNAT-contained override for external protocols (avoids core pre-resolution). */
 function getXnatHangingProtocolIdFromQuery(searchParams: URLSearchParams): string | null {
   return getQueryParamIgnoreCase(searchParams, 'xnathangingprotocolid');
+}
+
+function isOverreadSession(servicesManager?: any, query?: URLSearchParams): boolean {
+  const search = query ?? new URLSearchParams(window.location.search);
+  return (
+    servicesManager?.services?.isOverreadMode === true || search.get('overreadMode') === 'true'
+  );
+}
+
+/** Overread and anatomical share subject loading and hanging-protocol behavior. */
+function isSubjectReviewSession(servicesManager?: any, query?: URLSearchParams): boolean {
+  const search = query ?? new URLSearchParams(window.location.search);
+  return (
+    isOverreadSession(servicesManager, search) ||
+    servicesManager?.services?.isAnatomicalMode === true ||
+    search.get('anatomicalMode') === 'true'
+  );
 }
 
 const xnat = {
@@ -81,6 +96,8 @@ const xnatLayout = {
   props: {
     ...basicLayout.props,
     leftPanels: [xnat.studyBrowser, xnat.xnatNavList], // Default panels, will be overridden in route
+    // One thumbnail column (135px) plus the study-browser padding. 282px fits two.
+    leftPanelInitialExpandedWidth: 155,
     rightPanels: [xnat.segmentation, xnat.measurements], // Default panels, will be overridden in route
   },
 };
@@ -91,14 +108,17 @@ const xnatRoute = {
   path: '/',
   layoutInstance: xnatLayout,
   layoutTemplate: ({ servicesManager }) => {
-    // Check if we're in overread mode
-    const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
+    const query = new URLSearchParams(window.location.search);
+    const isOverreadMode = isOverreadSession(servicesManager, query);
 
-    // Choose panels based on mode
     const rightPanels = isOverreadMode
-      ? [xnat.segmentation, xnat.measurements, xnat.customForms]  // Overread mode: include custom forms
-      : [xnat.segmentation, xnat.measurements];                   // Regular mode: standard panels
+      ? [xnat.segmentation, xnat.measurements, xnat.customForms]
+      : [xnat.segmentation, xnat.measurements];
 
+    // Both overread and anatomical use the XNAT study browser. Subject sessions
+    // for that browser are loaded in route init when isSubjectReviewSession.
+    // Overread's second tab is this subject only. Anatomical's second tab is
+    // the project list (every subject in the current project).
     const leftPanels = isOverreadMode
       ? [xnat.studyBrowser, xnat.overreadNavList]
       : [xnat.studyBrowser, xnat.xnatNavList];
@@ -159,13 +179,11 @@ const xnatRoute = {
     // Parse identifiers from URL query parameters for comparison views
     const query = new URLSearchParams(window.location.search);
     let xnatProtocolIdFromQuery = getXnatHangingProtocolIdFromQuery(query);
+    const scanIdFromQuery = getQueryParamIgnoreCase(query, 'scanId');
     const studyUIDsFromURL = query.getAll('StudyInstanceUIDs').concat(query.getAll('studyInstanceUIDs'));
     const experimentIdsFromURL = query.getAll('experimentIds');
-    const isOverreadMode =
-      servicesManager?.services?.isOverreadMode === true || query.get('overreadMode') === 'true';
-
-    // Check if we're in a comparison view (either experiment-based or study-based)
-    const isComparisonView = experimentIdsFromURL.length > 1 || studyUIDsFromURL.length > 1;
+    const isOverreadMode = isOverreadSession(servicesManager, query);
+    const isSubjectSession = isSubjectReviewSession(servicesManager, query);
 
     if (experimentIdsFromURL.length > 1) {
       // XNAT native approach: use experiment IDs for comparison
@@ -174,9 +192,6 @@ const xnatRoute = {
     } else if (studyUIDsFromURL.length > 0) {
       // Traditional approach: use parsed study UIDs
       studyInstanceUIDs = studyUIDsFromURL;
-    } else if (!isComparisonView) {
-      // For single study views, keep the original studyInstanceUIDs from SessionRouter
-      console.log('XNAT Route Init: Using original studyInstanceUIDs from SessionRouter:', studyInstanceUIDs);
     }
 
     const hangingProtocolService = servicesManager.services.hangingProtocolService;
@@ -189,24 +204,25 @@ const xnatRoute = {
     });
     servicesManager.services.xnatExternalHangingProtocols = getExternalHangingProtocolRegistry();
 
-    if (!xnatProtocolIdFromQuery) {
+    let ignoreSavedProtocolForComparison = false;
+    let savedDefaultProtocolId: string | null = null;
+    if (!scanIdFromQuery) {
       const projectId = getQueryParamIgnoreCase(query, 'projectId');
       if (projectId) {
         try {
-          const savedDefaultId = await fetchUserDefaultProtocolId(projectId);
-          if (savedDefaultId) {
+          const hangingProtocolOptions = await fetchUserHangingProtocolOptions(projectId);
+          savedDefaultProtocolId = hangingProtocolOptions.defaultProtocolId;
+          ignoreSavedProtocolForComparison =
+            hangingProtocolOptions.ignoreSavedProtocolForComparison;
+          if (!xnatProtocolIdFromQuery && savedDefaultProtocolId) {
             // Honor the saved default even if the protocol module has not registered yet.
             // Actions-list launches pass xnathangingprotocolId in the URL; worklist popups
             // often omit it, and overread would otherwise fall back to the MPR default.
-            xnatProtocolIdFromQuery = savedDefaultId;
-            if (hangingProtocolService.getProtocolById(savedDefaultId)) {
-              console.info(
-                `XNAT: Applying saved hanging protocol "${savedDefaultId}" for project ${projectId}`
-              );
+            xnatProtocolIdFromQuery = savedDefaultProtocolId;
+            if (hangingProtocolService.getProtocolById(savedDefaultProtocolId)) {
+              console.info('XNAT: Applying saved hanging protocol default for this project');
             } else {
-              console.warn(
-                `XNAT: Saved hanging protocol "${savedDefaultId}" was not loaded for project ${projectId}`
-              );
+              console.warn('XNAT: Saved hanging protocol default was not loaded for this project');
             }
           }
         } catch (error) {
@@ -215,12 +231,12 @@ const xnatRoute = {
       }
     }
 
-    // Overread: auto-load all subject experiments into the study panel.
-    // Viewport uses the most recent experiment unless the default HP is a comparison protocol.
+    // Overread and anatomical: load every subject experiment, newest first.
+    // A prior experiment opens comparison MPR (newest on top, next-oldest on the bottom).
     let overreadExperimentIds: string[] = [];
     let overreadPrimaryExperiment: { ID: string; label?: string } | null = null;
 
-    if (isOverreadMode && experimentIdsFromURL.length === 0) {
+    if (isSubjectSession && experimentIdsFromURL.length === 0) {
       const projectId = getQueryParamIgnoreCase(query, 'projectId');
       const subjectId = getQueryParamIgnoreCase(query, 'subjectId');
       if (projectId && subjectId) {
@@ -241,23 +257,59 @@ const xnatRoute = {
                 JSON.stringify(buildStudyMappingsForExperiments(overreadExperimentIds, projectId))
               );
             } catch (storageError) {
-              console.warn('XNAT Overread: Unable to persist experiment selection:', storageError);
+              console.warn(
+                `${isOverreadMode ? 'XNAT Overread' : 'XNAT Anatomical'}: Unable to persist experiment selection:`,
+                storageError
+              );
             }
 
+            const sessionLabel = isOverreadMode ? 'XNAT Overread' : 'XNAT Anatomical';
+            const explicitHp =
+              getXnatHangingProtocolIdFromQuery(query) || getHangingProtocolIdFromQuery(query);
             console.info(
-              `XNAT Overread: Loading ${overreadExperimentIds.length} subject experiment(s); ` +
-                `primary=${overreadPrimaryExperiment.ID}` +
-                (isComparisonProtocolId(xnatProtocolIdFromQuery) ||
-                isComparisonProtocolId(getHangingProtocolIdFromQuery(query))
+              `${sessionLabel}: Loading ${overreadExperimentIds.length} subject experiment(s)` +
+              (overreadExperimentIds.length > 1 && !explicitHp && !scanIdFromQuery
+                ? ' (comparison MPR)'
+                : isComparisonProtocolId(explicitHp)
                   ? ' (comparison HP)'
                   : ' (most recent)')
             );
           }
         } catch (error) {
-          console.warn('XNAT Overread: Failed to load subject experiments for panel:', error);
+          console.warn(
+            `${isOverreadMode ? 'XNAT Overread' : 'XNAT Anatomical'}: Failed to load subject experiments for panel:`,
+            error
+          );
         }
       }
     }
+
+    const explicitHangingProtocolId =
+      getXnatHangingProtocolIdFromQuery(query) || getHangingProtocolIdFromQuery(query);
+    const urlNamesAnotherProtocol =
+      !!explicitHangingProtocolId &&
+      !!savedDefaultProtocolId &&
+      explicitHangingProtocolId !== savedDefaultProtocolId;
+    // Newest experiment is index 0 (top row). The next experiment is index 1 (bottom row).
+    // When ignoreSavedProtocolForComparison is set, a prior study opens comparison MPR
+    // instead of the saved layout. Otherwise honor an explicit URL id OR the project
+    // default already resolved into xnatProtocolIdFromQuery (worklist/Actions often omit
+    // xnathangingprotocolId from the URL even when a default exists).
+    // Count priors from Mode's subject fetch OR from explicit experimentIds=…&experimentIds=…
+    // (comparison launch / Actions) — previously only the fetch path armed this gate.
+    const subjectExperimentCount =
+      overreadExperimentIds.length > 1
+        ? overreadExperimentIds.length
+        : isSubjectSession
+          ? experimentIdsFromURL.length
+          : 0;
+    const effectiveProtocolId = explicitHangingProtocolId || xnatProtocolIdFromQuery;
+    const openSubjectComparisonMpr =
+      isSubjectSession &&
+      subjectExperimentCount > 1 &&
+      !scanIdFromQuery &&
+      !urlNamesAnotherProtocol &&
+      (ignoreSavedProtocolForComparison || !effectiveProtocolId);
 
     // Initialize data source
     try {
@@ -274,10 +326,13 @@ const xnatRoute = {
           parentProjectId: query.get('parentProjectId'),
           experimentLabel:
             (overreadPrimaryExperiment?.label as string | undefined) || query.get('experimentLabel'),
+          scanId: getQueryParamIgnoreCase(query, 'scanId'),
           hangingProtocolId:
+            (openSubjectComparisonMpr ? '@ohif/mrSubjectComparison' : null) ||
+            explicitHangingProtocolId ||
             xnatProtocolIdFromQuery ||
             (typeof hangingProtocolIdFromMode === 'string' && hangingProtocolIdFromMode) ||
-            getHangingProtocolIdFromQuery(query), // Pass to data source for special handling
+            null,
         };
 
         const projectIdsFromURL = query.getAll('projectIds');
@@ -393,10 +448,9 @@ const xnatRoute = {
     const wantsComparison =
       isComparisonProtocolId(urlHp) || isComparisonProtocolId(explicitFromQuery);
 
-    // Overread loads every subject experiment into the panel, so multi-study alone must not
-    // force a comparison layout there; only a comparison default/URL protocol should.
-    // Outside overread, keep the original behavior (multi-study forces comparison).
-    const shouldForceComparisonFromMultiStudy = isMultiStudy && !isOverreadMode;
+    // Non-subject multi-study launches still use the 2×2 compare layout.
+    // Subject sessions with a prior use comparison MPR instead.
+    const shouldForceComparisonFromMultiStudy = isMultiStudy && !isSubjectSession;
 
     // Determine which specific comparison protocol was requested (if any).
     // Prefer the explicit URL query parameter over the mode/xnat protocol id.
@@ -404,23 +458,20 @@ const xnatRoute = {
       (isComparisonProtocolId(explicitFromQuery) ? explicitFromQuery : null) ||
       (isComparisonProtocolId(urlHp) ? urlHp : null);
 
-    if (shouldForceComparisonFromMultiStudy || wantsComparison) {
-      if (requestedComparisonProtocol === '@ohif/mrSubjectComparison') {
-        // MPR 3×2 side-by-side comparison was explicitly requested
-        hangingProtocolId = '@ohif/mrSubjectComparison';
-        hangingProtocolService.setActiveProtocolIds(['@ohif/mrSubjectComparison', '@ohif/hpCompare', 'default']);
-      } else {
-        // Default 2×2 compare layout
-        hangingProtocolId = '@ohif/hpCompare';
-        hangingProtocolService.setActiveProtocolIds(['@ohif/hpCompare', 'default']);
-      }
+    if (openSubjectComparisonMpr || requestedComparisonProtocol === '@ohif/mrSubjectComparison') {
+      // 3×2 MPR: newest study on the top row, prior study on the bottom row.
+      hangingProtocolId = '@ohif/mrSubjectComparison';
+      hangingProtocolService.setActiveProtocolIds(['@ohif/mrSubjectComparison', '@ohif/hpCompare', 'default']);
+    } else if (shouldForceComparisonFromMultiStudy || wantsComparison) {
+      hangingProtocolId = '@ohif/hpCompare';
+      hangingProtocolService.setActiveProtocolIds(['@ohif/hpCompare', 'default']);
     } else if (urlHp) {
       // Query string (or Mode) requested a specific protocol — do not overwrite with XNAT defaults
       hangingProtocolId = urlHp;
       hangingProtocolService.setActiveProtocolIds(urlHp);
     } else {
-      // No URL override: single-study defaults + optional overread MPR fallback
-      const protocolIds = isOverreadMode
+      // No URL override: subject sessions prefer MPR, same as overread.
+      const protocolIds = isSubjectSession
         ? [
           'mpr', // Prioritize MPR in overread mode
           'default',
@@ -445,17 +496,8 @@ const xnatRoute = {
       const activeIds = Array.from(new Set([...protocolIds, ...externalProtocolIds]));
       hangingProtocolService.setActiveProtocolIds(activeIds);
 
-      if (isOverreadMode) {
-        const mprProtocol = hangingProtocolService.getProtocolById('mpr');
-        if (mprProtocol) {
-          const overreadDefaultProtocol = {
-            ...mprProtocol,
-            id: 'default',
-            name: 'Overread Default (MPR)',
-          };
-          hangingProtocolService.addProtocol('default', overreadDefaultProtocol);
-        }
-      }
+      // Keep stack `default` intact so volume/MPR failures can fall back to it.
+      // Overread still prefers MPR via protocolIds order above.
 
       // Let HangingProtocolService.run() match among active protocols (same as stock route)
       hangingProtocolId = undefined;
@@ -506,7 +548,7 @@ const modeInstance = {
       servicesManager.services.isOverreadMode = true;
     }
 
-    // Anatomicals mode: same excluded-scan filtering as overread, without overread UI/workflow
+    // Anatomical mode follows the overread subject session. Custom forms stay on overread only.
     if (anatomicalMode === 'true') {
       servicesManager.services.isAnatomicalMode = true;
     }
@@ -617,8 +659,10 @@ const modeInstance = {
         { toolName: toolNames.RectangleROI },
         { toolName: toolNames.CircleROI },
         { toolName: toolNames.EllipticalROI },
+        { toolName: toolNames.PlanarFreehandROI },
         { toolName: toolNames.SplineROI },
         { toolName: toolNames.LivewireContour },
+        ...(toolNames.CalibrationLine ? [{ toolName: toolNames.CalibrationLine }] : []),
       ],
     };
 
@@ -668,7 +712,7 @@ const modeInstance = {
 
     toolGroupService.createToolGroupAndAddTools('mpr', mprTools);
 
-    const isOverreadMode = servicesManager?.services?.isOverreadMode === true;
+    const isSubjectSession = isSubjectReviewSession(servicesManager);
 
     const {
       customizationService,
@@ -722,8 +766,7 @@ const modeInstance = {
           ],
         },
       },
-      // Overread mode specific customizations
-      ...(isOverreadMode && {
+      ...(isSubjectSession && {
         'worklist.showStudyList': { $set: false },
         'worklist.showPatientInfo': { $set: false },
       }),
@@ -744,6 +787,42 @@ const modeInstance = {
       'Layout',
       'Crosshairs',
       'MoreTools',
+    ]);
+
+    // Populate the MeasurementTools / MoreTools select lists. Basic mode used to
+    // do this via cornerstone.toolbarSections, which is no longer registered.
+    toolbarService.clearButtonSection('MeasurementTools');
+    toolbarService.updateSection('MeasurementTools', [
+      'Length',
+      'Bidirectional',
+      'ArrowAnnotate',
+      'EllipticalROI',
+      'RectangleROI',
+      'CircleROI',
+      'PlanarFreehandROI',
+      'SplineROI',
+      'LivewireContour',
+    ]);
+    toolbarService.clearButtonSection('MoreTools');
+    toolbarService.updateSection('MoreTools', [
+      'Reset',
+      'rotate-right',
+      'flipHorizontal',
+      'ImageSliceSync',
+      'ReferenceLines',
+      'ImageOverlayViewer',
+      'StackScroll',
+      'invert',
+      'Probe',
+      'Cine',
+      'Angle',
+      'CobbAngle',
+      'Magnify',
+      'CalibrationLine',
+      'TagBrowser',
+      'AdvancedMagnify',
+      'UltrasoundDirectionalTool',
+      'WindowLevelRegion',
     ]);
 
     // Per-viewport orientation (axial/sagittal/coronal/acquisition) lives in the

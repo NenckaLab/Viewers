@@ -3,6 +3,38 @@ import { utils, errorHandler } from '@ohif/core';
 import StaticWadoClient from '../DicomWebDataSource/utils/StaticWadoClient';
 import type { XNATDataSourceConfig } from './types';
 
+function getQueryParam(
+    query: { get?: (key: string) => string | null | undefined; entries?: () => Iterable<[string, string]> } | undefined,
+    key: string
+): string | undefined {
+    if (!query) {
+        return undefined;
+    }
+
+    if (typeof query.get === 'function') {
+        const direct = query.get(key);
+        if (direct) {
+            return direct;
+        }
+    }
+
+    if (typeof query.entries === 'function') {
+        const target = key.toLowerCase();
+        for (const [entryKey, value] of query.entries()) {
+            if (String(entryKey).toLowerCase() === target && value) {
+                return value;
+            }
+        }
+    }
+
+    if (typeof window !== 'undefined' && window.location?.search) {
+        const fromLocation = new URLSearchParams(window.location.search);
+        return fromLocation.get(key) || undefined;
+    }
+
+    return undefined;
+}
+
 /**
  * Configuration and initialization logic for XNATDataSource
  */
@@ -36,11 +68,11 @@ export class XNATDataSourceConfigManager {
 
         this.xnatConfig.xnat = this.xnatConfig.xnat || {};
 
-        const queryProjectId = params?.projectId || query?.get?.('projectId');
-        const queryExperimentId = params?.experimentId || query?.get?.('experimentId');
-        const querySessionId = params?.sessionId || query?.get?.('sessionId');
-        const querySubjectId = params?.subjectId || query?.get?.('subjectId');
-        const queryScanId = params?.scanId || query?.get?.('scanId');
+        const queryProjectId = params?.projectId || getQueryParam(query, 'projectId');
+        const queryExperimentId = params?.experimentId || getQueryParam(query, 'experimentId');
+        const querySessionId = params?.sessionId || getQueryParam(query, 'sessionId');
+        const querySubjectId = params?.subjectId || getQueryParam(query, 'subjectId');
+        const queryScanId = params?.scanId || getQueryParam(query, 'scanId');
 
         if (queryProjectId) this.xnatConfig.xnat.projectId = queryProjectId;
         if (queryExperimentId) this.xnatConfig.xnat.experimentId = queryExperimentId;

@@ -21,6 +21,13 @@ const metadataProvider = classes.MetadataProvider;
 const { toNumber } = utils;
 
 type CornerstoneCoreLike = {
+  cache?: {
+    getImage: (imageId: string) => any;
+    getVolume?: (volumeId: string) => any;
+  };
+  metaData?: {
+    get: (type: string, imageId: string) => unknown;
+  };
   StackViewport?: { prototype?: object };
   eventTarget?: {
     addEventListener: (type: string, callback: (event: unknown) => void) => void;

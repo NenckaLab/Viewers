@@ -33,6 +33,7 @@ The mode automatically handles XNAT session routing based on URL parameters:
 - `experimentLabel`: Display label for the experiment
 - `overreadMode`: Enables overread mode when set to 'true'
 - `parentProjectId`: Parent project for shared projects
+- `xnathangingprotocolId`: External hanging protocol id (never `hangingProtocolId`; built-in ids like `@ohif/mnGrid` may still use `hangingProtocolId`)
 
 ### Panel Layouts
 

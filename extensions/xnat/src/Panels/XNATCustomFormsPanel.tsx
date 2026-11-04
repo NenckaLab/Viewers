@@ -13,14 +13,26 @@ import {
   CustomFormField,
   fetchCustomForms,
 } from '../utils/IO/customFormsApi';
+import {
+  getFormFieldOptions,
+  shouldShowFormField,
+  coerceFormFieldValue,
+  normalizeFormFieldType,
+  getSurveyQuestions,
+  toHtmlDateValue,
+  toHtmlTimeValue,
+  toHtmlDateTimeLocalValue,
+} from '../utils/IO/flattenFormioFields';
 import { SubjectExperiment } from '../utils/overread/loadSubjectExperiments';
 import {
-  CLINICALLY_MEANINGFUL_CHANGE_KEY,
-  CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY,
-  CLINICALLY_MEANINGFUL_CHANGE_OPTIONS,
+  NOTABLE_CHANGE_KEY,
+  NOTABLE_CHANGE_NOTES_KEY,
+  NOTABLE_CHANGE_OPTIONS,
+  NOTABLE_CHANGE_META_KEYS,
   PriorOverreadFinding,
   extractFormFieldData,
   formatPriorFieldValue,
+  migrateNotableChangeFields,
   resolveNearestPriorOverread,
 } from '../utils/overread/priorOverread';
 
@@ -32,8 +44,7 @@ const META_FORM_KEYS = new Set([
   'completedByUserId',
   'completedByUsername',
   'completedAt',
-  CLINICALLY_MEANINGFUL_CHANGE_KEY,
-  CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY,
+  ...NOTABLE_CHANGE_META_KEYS,
 ]);
 
 const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesManager }) => {
@@ -77,8 +88,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
     if (urlExperimentId) return urlExperimentId;
 
     // Try session map with different methods
-    // @ts-ignore - getSession() without parameters returns all sessions
-    const sessions = sessionMap.getSession();
+    const sessions = sessionMap.getAllSessions();
     if (Array.isArray(sessions) && sessions.length > 0) {
       // If only one session, use it directly
       if (sessions.length === 1) {
@@ -199,8 +209,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
       setAvailableExperiments(experiments);
     } else {
       // Check session map for multiple sessions
-      // @ts-ignore - getSession() without parameters returns all sessions
-      const sessions = sessionMap.getSession();
+      const sessions = sessionMap.getAllSessions();
       if (Array.isArray(sessions) && sessions.length > 1) {
         setAvailableExperiments(sessions);
       }
@@ -385,17 +394,18 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
           formFields: selectedForm?.fields,
         });
 
-        if (parsedFormData) {
-          setEditingData(parsedFormData);
-        } else if (selectedForm) {
-          const initialData: { [fieldName: string]: any } = {};
-          selectedForm.fields.forEach(field => {
+        const initialData: { [fieldName: string]: any } = {};
+        selectedForm?.fields.forEach(field => {
+          if (field.key) {
             initialData[field.key] = '';
-          });
-          setEditingData(initialData);
-        } else {
-          setEditingData({});
-        }
+          }
+        });
+        setEditingData(
+          migrateNotableChangeFields({
+            ...initialData,
+            ...(parsedFormData || {}),
+          }) || {}
+        );
       }
 
       // Check if user has overread data (only in overread mode)
@@ -430,7 +440,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
 
     if (formData[formUuid]) {
       // Use existing data
-      setEditingData(formData[formUuid]);
+      setEditingData(migrateNotableChangeFields(formData[formUuid]) || {});
     } else if (selectedForm) {
       // Initialize form with field definitions
       const initialData: { [fieldName: string]: any } = {};
@@ -539,14 +549,14 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
       return;
     }
 
-    // Follow-up overreads require an explicit clinically meaningful change assessment
+    // Follow-up overreads require an explicit notable change from prior scan assessment
     if (
       isOverreadMode &&
       isFollowUpOverread &&
-      !editingData[CLINICALLY_MEANINGFUL_CHANGE_KEY]
+      !editingData[NOTABLE_CHANGE_KEY]
     ) {
       const message =
-        'Please indicate whether there was a clinically meaningful change since the prior scan before saving.';
+        'Please indicate whether there was a notable change from prior scan before saving.';
       setError(message);
       uiNotificationService.show({
         title: 'Change assessment required',
@@ -575,9 +585,9 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         ...editingData,
         ...(isFollowUpOverread &&
           nearestPrior && {
-            priorExperimentId: nearestPrior.experimentId,
-            priorExperimentLabel: nearestPrior.experimentLabel,
-          }),
+          priorExperimentId: nearestPrior.experimentId,
+          priorExperimentLabel: nearestPrior.experimentLabel,
+        }),
         ...(userInfo && {
           completedByUserId: userInfo.userId,
           completedByUsername: userInfo.username,
@@ -703,17 +713,13 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
 
   // Render form field based on field definition and value
   const renderFormField = (fieldName: string, value: any, fieldDef?: CustomFormField) => {
-    // Use field definition if available, otherwise fall back to auto-detection
-    let fieldType = 'text';
-    let fieldOptions: Array<{ label: string; value: string }> = [];
+    const fieldOptions = getFormFieldOptions(fieldDef);
+    const displayValue = coerceFormFieldValue(value);
+    let fieldType = fieldDef
+      ? normalizeFormFieldType(fieldDef)
+      : 'text';
 
-    if (fieldDef) {
-      fieldType = fieldDef.type;
-      if (fieldDef.data?.values) {
-        fieldOptions = fieldDef.data.values;
-      }
-    } else {
-      // Auto-detect field type based on field name patterns
+    if (!fieldDef) {
       const fieldNameLower = fieldName.toLowerCase();
       if (fieldNameLower.includes('description') || fieldNameLower.includes('notes') || fieldNameLower.includes('comment')) {
         fieldType = 'textarea';
@@ -726,47 +732,61 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
       }
     }
 
-    // Handle XNAT specific field types
-    switch (fieldType) {
-      case 'xnatSelect':
-        fieldType = 'select';
-        break;
-      case 'textarea':
-        fieldType = 'textarea';
-        break;
-      case 'textfield':
-      case 'text':
-        fieldType = 'text';
-        break;
-      case 'checkbox':
-        fieldType = 'checkbox';
-        break;
-      case 'numberfield':
-      case 'number':
-        fieldType = 'number';
-        break;
-    }
+    const inputClassName =
+      'w-full p-2 border border-input rounded text-sm bg-background text-foreground';
+
+    const renderChoiceGroup = () => (
+      <div
+        role="radiogroup"
+        aria-label={fieldDef?.label || fieldName}
+        className="flex flex-col gap-2"
+        data-cy={`overread-form-radio-${fieldName}`}
+      >
+        {fieldOptions.length > 0 ? (
+          fieldOptions.map(option => (
+            <label
+              key={option.value}
+              className="flex items-start gap-2 text-sm text-foreground cursor-pointer"
+            >
+              <input
+                type="radio"
+                name={fieldName}
+                value={option.value}
+                checked={displayValue === option.value}
+                onChange={() => handleFieldChange(fieldName, option.value)}
+                className="mt-0.5 shrink-0"
+              />
+              <span>{option.label}</span>
+            </label>
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground">No options defined for this field.</p>
+        )}
+      </div>
+    );
 
     switch (fieldType) {
       case 'textarea':
         return (
           <textarea
-            value={value || ''}
+            value={displayValue}
             onChange={(e) => handleFieldChange(fieldName, e.target.value)}
             placeholder={`Enter ${fieldName}`}
             rows={3}
             className="w-full p-2 border border-input rounded text-sm bg-background text-foreground font-inherit"
           />
         );
+      case 'radio':
+        return renderChoiceGroup();
       case 'select':
         return (
           <select
-            value={value || ''}
+            value={displayValue}
             onChange={(e) => handleFieldChange(fieldName, e.target.value)}
             className="w-full p-2 border border-input rounded text-sm bg-background text-foreground"
+            data-cy={`overread-form-select-${fieldName}`}
           >
-            <option value="">Select {fieldName}</option>
-            {/* Use field options if available */}
+            <option value="">Select {fieldDef?.label || fieldName}</option>
             {fieldOptions.length > 0 ? (
               fieldOptions.map(option => (
                 <option key={option.value} value={option.value}>
@@ -774,7 +794,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                 </option>
               ))
             ) : (
-              // Fallback options based on field name
               <>
                 {fieldName.toLowerCase().includes('modality') && (
                   <>
@@ -798,34 +817,133 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         );
       case 'checkbox':
         return (
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              checked={value || false}
-              onChange={(e) => handleFieldChange(fieldName, e.target.checked)}
-              className="mr-2"
-            />
-            <span className="text-sm">{fieldName}</span>
-          </div>
+          <input
+            type="checkbox"
+            checked={value === true || value === 'true' || value === 1 || value === '1'}
+            onChange={(e) => handleFieldChange(fieldName, e.target.checked)}
+            className="h-4 w-4"
+          />
         );
       case 'number':
         return (
           <input
             type="number"
-            value={value || ''}
-            onChange={(e) => handleFieldChange(fieldName, e.target.value)}
-            placeholder={`Enter ${fieldName}`}
-            className="w-full p-2 border border-input rounded text-sm bg-background text-foreground"
+            value={displayValue}
+            step="any"
+            onChange={(e) => handleFieldChange(fieldName, e.target.value === '' ? '' : e.target.value)}
+            placeholder={`Enter ${fieldDef?.label || fieldName}`}
+            className={inputClassName}
           />
         );
+      case 'email':
+        return (
+          <input
+            type="email"
+            value={displayValue}
+            onChange={(e) => handleFieldChange(fieldName, e.target.value)}
+            placeholder={`Enter ${fieldDef?.label || fieldName}`}
+            className={inputClassName}
+            autoComplete="off"
+          />
+        );
+      case 'phone':
+        return (
+          <input
+            type="tel"
+            value={displayValue}
+            onChange={(e) => handleFieldChange(fieldName, e.target.value)}
+            placeholder={`Enter ${fieldDef?.label || fieldName}`}
+            className={inputClassName}
+            autoComplete="off"
+          />
+        );
+      case 'time':
+        return (
+          <input
+            type="time"
+            value={toHtmlTimeValue(value)}
+            onChange={(e) => handleFieldChange(fieldName, e.target.value)}
+            className={inputClassName}
+          />
+        );
+      case 'day':
+        return (
+          <input
+            type="date"
+            value={toHtmlDateValue(value)}
+            onChange={(e) => handleFieldChange(fieldName, e.target.value)}
+            className={inputClassName}
+          />
+        );
+      case 'datetime':
+        return (
+          <input
+            type="datetime-local"
+            value={toHtmlDateTimeLocalValue(value)}
+            onChange={(e) => handleFieldChange(fieldName, e.target.value)}
+            className={inputClassName}
+          />
+        );
+      case 'survey': {
+        const questions = getSurveyQuestions(fieldDef);
+        const answers = fieldOptions;
+        const surveyValue =
+          value && typeof value === 'object' && !Array.isArray(value)
+            ? (value as Record<string, string>)
+            : {};
+
+        if (questions.length === 0 || answers.length === 0) {
+          return <p className="text-sm text-muted-foreground">No survey questions defined.</p>;
+        }
+
+        return (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-foreground border-collapse">
+              <thead>
+                <tr>
+                  <th className="text-left p-1 font-medium" />
+                  {answers.map(answer => (
+                    <th key={answer.value} className="p-1 font-medium text-center">
+                      {answer.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {questions.map(question => (
+                  <tr key={question.value}>
+                    <td className="p-1 pr-2 align-middle">{question.label}</td>
+                    {answers.map(answer => (
+                      <td key={answer.value} className="p-1 text-center">
+                        <input
+                          type="radio"
+                          name={`${fieldName}-${question.value}`}
+                          value={answer.value}
+                          checked={String(surveyValue[question.value] ?? '') === answer.value}
+                          onChange={() =>
+                            handleFieldChange(fieldName, {
+                              ...surveyValue,
+                              [question.value]: answer.value,
+                            })
+                          }
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
       default:
         return (
           <input
             type="text"
-            value={value || ''}
+            value={displayValue}
             onChange={(e) => handleFieldChange(fieldName, e.target.value)}
-            placeholder={`Enter ${fieldName}`}
-            className="w-full p-2 border border-input rounded text-sm bg-background text-foreground"
+            placeholder={`Enter ${fieldDef?.label || fieldName}`}
+            className={inputClassName}
           />
         );
     }
@@ -885,18 +1003,6 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                   Load
                 </button>
               </div>
-            </div>
-          </PanelSection.Content>
-        </PanelSection>
-
-        {/* Debug Information */}
-        <PanelSection>
-          <PanelSection.Header>Debug Information</PanelSection.Header>
-          <PanelSection.Content>
-            <div className="text-sm space-y-2">
-              <p><strong>URL Parameters:</strong> {window.location.search}</p>
-              {/* @ts-ignore - getSession() without parameters returns all sessions */}
-              <p><strong>Session Map:</strong> {JSON.stringify(sessionMap.getSession() || [], null, 2)}</p>
             </div>
           </PanelSection.Content>
         </PanelSection>
@@ -1057,6 +1163,9 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                         .map(([key, value]) => {
                           const selectedForm = customForms.find(f => f.uuid === selectedFormUuid);
                           const fieldDef = selectedForm?.fields.find(f => f.key === key);
+                          const optionLabel = getFormFieldOptions(fieldDef).find(
+                            option => option.value === String(value)
+                          )?.label;
                           return (
                             <div
                               key={key}
@@ -1066,7 +1175,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                                 {fieldDef?.label || key}
                               </div>
                               <div className="text-sm text-foreground whitespace-pre-wrap">
-                                {formatPriorFieldValue(value)}
+                                {optionLabel || formatPriorFieldValue(value)}
                               </div>
                             </div>
                           );
@@ -1076,7 +1185,7 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                     <p className="text-amber-700 dark:text-amber-300" data-cy="overread-prior-empty">
                       No prior overread findings were found for your account on{' '}
                       {nearestPrior.experimentLabel}. You can still record whether there was a
-                      clinically meaningful change.
+                      notable change from prior scan.
                     </p>
                   )}
                 </>
@@ -1090,36 +1199,36 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
         </PanelSection>
       )}
 
-      {/* Clinically meaningful change assessment (required on follow-up) */}
+      {/* Notable change from prior scan assessment (required on follow-up) */}
       {isOverreadMode && isFollowUpOverread && (
         <PanelSection>
           <PanelSection.Header>
             <div className="flex items-center space-x-2 text-aqua-pale">
               <Icons.Clipboard className="w-4 h-4" />
-              <span>Change Since Prior Scan</span>
+              <span>Notable Change from prior scan</span>
             </div>
           </PanelSection.Header>
           <PanelSection.Content>
             <div className="space-y-3 text-sm text-aqua-pale" data-cy="overread-change-assessment">
               <p>
-                Adjust this second read to indicate whether there was a clinically meaningful
-                change since the prior scan
+                Adjust this second read to indicate whether there was a Notable
+                Change from prior scan
                 {nearestPrior ? ` (${nearestPrior.experimentLabel})` : ''}.
               </p>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Clinically meaningful change? <span className="text-destructive">*</span>
+                  Notable Change from prior scan? <span className="text-destructive">*</span>
                 </label>
                 <select
-                  data-cy="overread-clinically-meaningful-change"
-                  value={editingData[CLINICALLY_MEANINGFUL_CHANGE_KEY] || ''}
+                  data-cy="overread-notable-change-from-prior-scan"
+                  value={editingData[NOTABLE_CHANGE_KEY] || ''}
                   onChange={e =>
-                    handleFieldChange(CLINICALLY_MEANINGFUL_CHANGE_KEY, e.target.value)
+                    handleFieldChange(NOTABLE_CHANGE_KEY, e.target.value)
                   }
                   className="w-full p-2 border border-input rounded text-sm bg-background text-foreground"
                 >
                   <option value="">Select...</option>
-                  {CLINICALLY_MEANINGFUL_CHANGE_OPTIONS.map(option => (
+                  {NOTABLE_CHANGE_OPTIONS.map(option => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -1128,16 +1237,16 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Change notes (optional)
+                  Change notes from prior scan (optional)
                 </label>
                 <textarea
-                  data-cy="overread-clinically-meaningful-change-notes"
-                  value={editingData[CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY] || ''}
+                  data-cy="overread-notable-change-from-prior-scan-notes"
+                  value={editingData[NOTABLE_CHANGE_NOTES_KEY] || ''}
                   onChange={e =>
-                    handleFieldChange(CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY, e.target.value)
+                    handleFieldChange(NOTABLE_CHANGE_NOTES_KEY, e.target.value)
                   }
                   rows={3}
-                  placeholder="Describe the clinically meaningful change, if any"
+                  placeholder="Describe the notable change from prior scan, if any"
                   className="w-full p-2 border border-input rounded text-sm bg-background text-foreground font-inherit"
                 />
               </div>
@@ -1255,7 +1364,8 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
                     </PanelSection.Content>
                   </PanelSection>
                 )}
-                {Object.keys(editingData).length === 0 ? (
+                {Object.keys(editingData).length === 0 &&
+                !(customForms.find(f => f.uuid === selectedFormUuid)?.fields.length) ? (
                   <div className="text-muted-foreground text-sm p-3 bg-muted rounded">
                     Loading form data...
                   </div>
@@ -1269,26 +1379,22 @@ const XNATCustomFormsPanel: React.FC<XNATCustomFormsPanelProps> = ({ servicesMan
 
                     return selectedForm.fields.map(fieldDef => {
                       const fieldName = fieldDef.key;
-                      // Dedicated "Change Since Prior Scan" section owns these fields on follow-ups
+                      if (!fieldName) {
+                        return null;
+                      }
+                      // Dedicated "Notable Change from prior scan" section owns these fields on follow-ups
                       if (
                         isFollowUpOverread &&
-                        (fieldName === CLINICALLY_MEANINGFUL_CHANGE_KEY ||
-                          fieldName === CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY)
+                        (fieldName === NOTABLE_CHANGE_KEY ||
+                          fieldName === NOTABLE_CHANGE_NOTES_KEY)
                       ) {
                         return null;
                       }
 
-                      const value = editingData[fieldName] || '';
+                      const value = editingData[fieldName] ?? '';
 
-                      // Check conditional logic
-                      if (fieldDef.conditional) {
-                        const conditionalField = fieldDef.conditional.when;
-                        const conditionalValue = editingData[conditionalField];
-                        const shouldShow = conditionalValue === fieldDef.conditional.eq;
-
-                        if (!shouldShow) {
-                          return null; // Don't render this field
-                        }
+                      if (!shouldShowFormField(fieldDef, editingData, selectedForm.fields)) {
+                        return null;
                       }
 
                       return (

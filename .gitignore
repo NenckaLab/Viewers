@@ -40,12 +40,19 @@ junit.xml
 .cursorrules
 CLAUDE.md
 .idea/
-.vs/
+.npm
+npm-debug.log
+package-lock.json
+# The dependency-audit PR check installs its own dependency with `npm ci`.
+!.scripts/dependency-audit/package-lock.json
+yarn-error.log
+.DS_Store
+.env
 *.code-workspace
 *.swp
 *.swo
 *~
-
+state.json
 # Secrets, env, and session capture
 .env
 .env.*
@@ -91,11 +98,10 @@ Desktop.ini
 libs/
 link-cs3d.js
 unlink-cs3d.js
+auth.json
 
-# Deploy / recipe leftovers
-.vercel
-.locize
-/Viewers.iml
-platform/app/.recipes/Nginx-Dcm4Chee/logs/
-platform/app/.recipes/OpenResty-Orthanc/logs/
-platform/docs/.netlify/state.json
+# platform/ui-next UMD build emits font assets at the package root
+platform/ui-next/*.woff2
+
+# Local review notes
+temp/

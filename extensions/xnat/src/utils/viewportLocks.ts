@@ -65,11 +65,18 @@ type ViewportLockServices = {
       | {
           id: string;
           getSourceViewports: () => Array<{ viewportId: string; renderingEngineId: string }>;
+          getTargetViewports?: () => Array<{ viewportId: string; renderingEngineId: string }>;
         }
       | void;
     getSynchronizersOfType: (
       type: string
-    ) => Array<{ id: string; getSourceViewports: () => Array<{ viewportId: string; renderingEngineId: string }> }> | undefined;
+    ) =>
+      | Array<{
+          id: string;
+          getSourceViewports: () => Array<{ viewportId: string; renderingEngineId: string }>;
+          getTargetViewports?: () => Array<{ viewportId: string; renderingEngineId: string }>;
+        }>
+      | undefined;
   };
   viewportGridService: {
     getState: () => { viewports: Map<string, GridViewport> };
@@ -138,9 +145,9 @@ export function bindViewportLockListeners(servicesManager: ViewportLockServicesM
 
   const { viewportGridService, cornerstoneViewportService } = servicesManager.services;
   const scheduleReapply = () => {
-    if (!useViewportLockStore.getState().hasAnyEnabled()) {
-      return;
-    }
+    // Always reapply. Adding a prior session puts every viewport into the
+    // hanging-protocol window-level group; that has to be narrowed again even
+    // when the lock checkboxes are off. Zoom/pan has no protocol group.
     if (reapplyTimer) {
       clearTimeout(reapplyTimer);
     }
@@ -190,6 +197,11 @@ function applyLockType(
 ): void {
   const eligible = getEligibleViewportRefs(services);
 
+  if (type === 'voi') {
+    applyWindowLevelLock(services, eligible, allSeriesEnabled, currentSeriesEnabled);
+    return;
+  }
+
   if (allSeriesEnabled) {
     setGroupMembers(services, type, ALL_SYNC_IDS[type], eligible);
   } else {
@@ -215,6 +227,85 @@ function applyLockType(
   }
 
   clearManagedSeriesGroupsExcept(services, type, seriesPrefix, new Set());
+}
+
+/**
+ * The MPR hanging protocol puts every viewport in one window-level group.
+ * A prior session loaded into that layout stays locked to the current session,
+ * and turning the lock off used to leave that protocol group in place.
+ * Same-series planes still share window level. Different series do not,
+ * unless "all series" is on.
+ */
+function applyWindowLevelLock(
+  services: ViewportLockServices,
+  eligible: ViewportRef[],
+  allSeriesEnabled: boolean,
+  currentSeriesEnabled: boolean
+): void {
+  const bySeries = groupViewportRefsBySeries(eligible);
+  const seriesPrefix = SERIES_SYNC_PREFIX.voi;
+
+  if (allSeriesEnabled) {
+    detachVoiGroupsExcept(services, eligible, new Set([ALL_SYNC_IDS.voi]));
+    setGroupMembers(services, 'voi', ALL_SYNC_IDS.voi, eligible);
+    clearManagedSeriesGroupsExcept(services, 'voi', seriesPrefix, new Set());
+    return;
+  }
+
+  clearGroup(services, ALL_SYNC_IDS.voi);
+
+  if (currentSeriesEnabled) {
+    const desiredIds = new Set<string>();
+    for (const seriesInstanceUID of bySeries.keys()) {
+      desiredIds.add(`${seriesPrefix}${seriesInstanceUID}`);
+    }
+
+    detachVoiGroupsExcept(services, eligible, desiredIds);
+
+    for (const [seriesInstanceUID, refs] of bySeries) {
+      setGroupMembers(services, 'voi', `${seriesPrefix}${seriesInstanceUID}`, refs);
+    }
+
+    clearManagedSeriesGroupsExcept(services, 'voi', seriesPrefix, desiredIds);
+    return;
+  }
+
+  // A second series joins the protocol-wide window-level group and stays there
+  // after the lock is turned off. Drop that group so the sessions are independent.
+  if (bySeries.size > 1) {
+    detachVoiGroupsExcept(services, eligible, new Set());
+  }
+
+  clearManagedSeriesGroupsExcept(services, 'voi', seriesPrefix, new Set());
+}
+
+function detachVoiGroupsExcept(
+  services: ViewportLockServices,
+  eligible: ViewportRef[],
+  keepIds: Set<string>
+): void {
+  const synchronizers = services.syncGroupService.getSynchronizersOfType('voi') ?? [];
+  const eligibleIds = new Set(eligible.map(ref => ref.viewportId));
+
+  for (const synchronizer of synchronizers) {
+    if (!synchronizer?.id || keepIds.has(synchronizer.id)) {
+      continue;
+    }
+
+    const members = [
+      ...(synchronizer.getSourceViewports?.() ?? []),
+      ...(synchronizer.getTargetViewports?.() ?? []),
+    ];
+    const seen = new Set<string>();
+
+    for (const member of members) {
+      if (!member?.viewportId || seen.has(member.viewportId) || !eligibleIds.has(member.viewportId)) {
+        continue;
+      }
+      seen.add(member.viewportId);
+      removeViewportFromGroup(services, member.viewportId, member.renderingEngineId, synchronizer.id);
+    }
+  }
 }
 
 function getEligibleViewportRefs(services: ViewportLockServices): ViewportRef[] {
@@ -322,11 +413,21 @@ function getGroupMembers(
 function clearGroup(services: ViewportLockServices, syncId: string): void {
   const members = getGroupMembers(services, syncId);
   for (const member of members) {
-    services.syncGroupService.removeViewportFromSyncGroup(
-      member.viewportId,
-      member.renderingEngineId,
-      syncId
-    );
+    removeViewportFromGroup(services, member.viewportId, member.renderingEngineId, syncId);
+  }
+}
+
+function removeViewportFromGroup(
+  services: ViewportLockServices,
+  viewportId: string,
+  renderingEngineId: string,
+  syncId: string
+): void {
+  try {
+    services.syncGroupService.removeViewportFromSyncGroup(viewportId, renderingEngineId, syncId);
+  } catch {
+    // A layout change can leave a synchronizer pointing at a viewport that
+    // has already been destroyed. Keep clearing the rest of the group.
   }
 }
 

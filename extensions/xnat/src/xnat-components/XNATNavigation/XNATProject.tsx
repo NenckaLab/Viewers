@@ -16,6 +16,8 @@ interface Subject {
 interface XNATProjectProps {
   ID: string;
   name: string;
+  /** Open the subject list immediately. Used by anatomical mode. */
+  defaultExpanded?: boolean;
 }
 
 interface XNATProjectState {
@@ -45,13 +47,19 @@ export default class XNATProject extends React.Component<XNATProjectProps, XNATP
     this.state = {
       subjects: [],
       active,
-      expanded: false,
+      expanded: !!this.props.defaultExpanded,
       fetched: false,
     };
 
     // Bind helper methods
     this.getExpandIcon = getExpandIcon.bind(this);
     this.onExpandIconClick = onExpandIconClick.bind(this);
+  }
+
+  componentDidMount(): void {
+    if (this.props.defaultExpanded && !this.state.fetched) {
+      this.fetchData();
+    }
   }
 
   componentWillUnmount(): void {

@@ -44,7 +44,7 @@ export default class XNATContourImportMenu extends React.Component {
       'experimentId'
     );
 
-    this._sessions = sessionMap.getSession();
+    this._sessions = sessionMap.getAllSessions();
     const sessionRoiCollections = {};
     for (let i = 0; i < this._sessions.length; i++) {
       const experimentId = this._sessions[i].experimentId;

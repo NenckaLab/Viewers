@@ -27,10 +27,12 @@ import {
     setActiveSegmentAndCenter,
     XNATImportSegmentation
 } from './SegmentationUtils';
+import { interpolateActiveLabelmap } from './interpolateLabelmap';
 
 export const createSegmentationCommands = (
     servicesManager: any,
-    commandsManager?: any
+    commandsManager?: any,
+    extensionManager?: any
 ) => {
     const {
         segmentationService,
@@ -44,6 +46,13 @@ export const createSegmentationCommands = (
         /**
          * Loads segmentations for a specified viewport.
          */
+        /**
+         * Fill slices between drawn segment slices on the on-screen labelmap.
+         * Overrides the cornerstone command, which reports success when its
+         * worker returns the original voxels unchanged.
+         */
+        interpolateLabelmap: () => interpolateActiveLabelmap(servicesManager, extensionManager),
+
         loadSegmentationsForViewport: async ({ segmentations, viewportId }) =>
             loadSegmentationsForViewport(
                 { segmentations, viewportId },
@@ -56,7 +65,7 @@ export const createSegmentationCommands = (
         generateSegmentation: async ({ segmentationId, options = {} }) =>
             generateSegmentation(
                 { segmentationId, options },
-                { segmentationService }
+                { segmentationService, extensionManager }
             ),
 
         /**
@@ -72,7 +81,7 @@ export const createSegmentationCommands = (
 
             const dataset = await generateSegmentation(
                 { segmentationId },
-                { segmentationService }
+                { segmentationService, extensionManager }
             );
 
             const reportBlob = dcmjs.data.datasetToBlob(dataset);
@@ -102,7 +111,8 @@ export const createSegmentationCommands = (
                     displaySet: displaySetService.getDisplaySets().find(ds =>
                         ds.SeriesInstanceUID === seriesInstanceUID
                     ),
-                    segmentationService
+                    segmentationService,
+                    extensionManager,
                 }
             ),
 

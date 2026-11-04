@@ -5,8 +5,206 @@ import {
   segmentation as csSegmentation,
 } from '@cornerstonejs/tools';
 
-const { convertStackToVolumeLabelmap } = csSegmentation.helpers;
 import { cache, metaData } from '@cornerstonejs/core';
+import { getAppCornerstone } from '../registerVoiLutModuleHandler';
+
+type MetadataProvider = {
+  get: (type: string, imageId: string, ...rest: unknown[]) => any;
+};
+
+/**
+ * The SEG adapter reads generalImageModule.sopInstanceUID for every source image.
+ * That module is only present after the DICOM file is decoded. Series metadata
+ * already has the SOP UID via sopCommonModule / the instance, so fill it in
+ * before the adapter's reduce.
+ */
+export function withGeneralImageModule(provider: MetadataProvider): MetadataProvider {
+  return {
+    get(type: string, imageId: string, ...rest: unknown[]) {
+      if (type !== 'generalImageModule') {
+        return provider.get(type, imageId, ...rest);
+      }
+
+      const existing = provider.get(type, imageId, ...rest);
+      if (existing?.sopInstanceUID) {
+        return existing;
+      }
+
+      const instance = provider.get('instance', imageId);
+      const sopInstanceUID =
+        provider.get('sopCommonModule', imageId)?.sopInstanceUID ?? instance?.SOPInstanceUID;
+      if (!sopInstanceUID) {
+        return existing;
+      }
+
+      return {
+        ...(existing ?? {}),
+        sopInstanceUID,
+        instanceNumber: existing?.instanceNumber ?? instance?.InstanceNumber,
+      };
+    },
+  };
+}
+
+function positiveDimension(...values: unknown[]): number | undefined {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number) && number > 0) {
+      return number;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The SEG adapter reads instance.Rows / instance.Columns. XNAT series metadata
+ * is published as imagePlaneModule (rows/columns). A missing instance module
+ * makes labelmap import throw while reading Rows.
+ */
+export function withSegInstanceMetadata(provider: MetadataProvider): MetadataProvider {
+  const withGeneral = withGeneralImageModule(provider);
+  return {
+    get(type: string, imageId: string, ...rest: unknown[]) {
+      if (type !== 'instance') {
+        return withGeneral.get(type, imageId, ...rest);
+      }
+
+      const existing = provider.get('instance', imageId, ...rest);
+      if (existing?.Rows && existing?.Columns) {
+        return existing;
+      }
+
+      const plane = provider.get('imagePlaneModule', imageId);
+      const pixel = provider.get('imagePixelModule', imageId);
+      const Rows = positiveDimension(existing?.Rows, plane?.rows, plane?.Rows, pixel?.rows, pixel?.Rows);
+      const Columns = positiveDimension(
+        existing?.Columns,
+        plane?.columns,
+        plane?.Columns,
+        pixel?.columns,
+        pixel?.Columns
+      );
+      if (!Rows || !Columns) {
+        return existing;
+      }
+
+      return {
+        ...(existing ?? {}),
+        Rows,
+        Columns,
+      };
+    },
+  };
+}
+
+function viewerMetadataProvider(extensionManager?: any): MetadataProvider {
+  const appMetaData = getAppCornerstone(extensionManager)?.metaData as MetadataProvider | undefined;
+  return withSegInstanceMetadata(appMetaData ?? (metaData as MetadataProvider));
+}
+
+export const LABELMAP_IMAGE_PIXEL_MODULE = {
+  bitsAllocated: 8,
+  bitsStored: 8,
+  highBit: 7,
+  samplesPerPixel: 1,
+  pixelRepresentation: 0,
+  photometricInterpretation: 'MONOCHROME2',
+};
+
+/** Pixel module a volume loader can read for a derived labelmap image. */
+export function labelmapImagePixelModule(source?: Record<string, unknown> | null) {
+  return {
+    ...(source ?? {}),
+    ...LABELMAP_IMAGE_PIXEL_MODULE,
+  };
+}
+
+function placeLabelmapsInViewerCache(results: any, extensionManager?: any) {
+  const appCache = getAppCornerstone(extensionManager)?.cache as
+    | {
+        getImage?: (imageId: string) => unknown;
+        putImageSync?: (imageId: string, image: unknown) => void;
+      }
+    | undefined;
+  if (!appCache?.getImage || !appCache.putImageSync) {
+    return;
+  }
+
+  const images = Array.isArray(results?.labelMapImages)
+    ? results.labelMapImages.flat()
+    : [];
+  for (const image of images) {
+    if (!image?.imageId || appCache.getImage(image.imageId)) {
+      continue;
+    }
+    try {
+      appCache.putImageSync(image.imageId, image);
+    } catch (error) {
+      console.warn('XNAT SEG import: labelmap image was not added to the viewer cache', error);
+    }
+  }
+}
+
+/**
+ * Volume creation reads imagePixelModule from the viewer's metadata store.
+ * Derived labelmap images are registered on the adapter's Cornerstone copy,
+ * so the viewer store has no pixelRepresentation and makeVolumeMetadata throws.
+ */
+function ensureLabelmapVolumeMetadata(
+  results: any,
+  metadataProvider: MetadataProvider,
+  extensionManager?: any
+) {
+  const appCornerstone = getAppCornerstone(extensionManager) as
+    | {
+        metaData?: MetadataProvider;
+        utilities?: {
+          genericMetadataProvider?: {
+            add: (imageId: string, payload: { type: string; metadata: unknown }) => void;
+          };
+        };
+      }
+    | undefined;
+  const appMetaData = appCornerstone?.metaData;
+  const genericMetadataProvider = appCornerstone?.utilities?.genericMetadataProvider;
+  if (!appMetaData?.get || !genericMetadataProvider?.add) {
+    return;
+  }
+
+  const images = Array.isArray(results?.labelMapImages) ? results.labelMapImages.flat() : [];
+  for (const image of images) {
+    const imageId = image?.imageId as string | undefined;
+    const referencedImageId = image?.referencedImageId as string | undefined;
+    if (!imageId) {
+      continue;
+    }
+
+    if (appMetaData.get('imagePixelModule', imageId)?.pixelRepresentation == null) {
+      const source = referencedImageId
+        ? metadataProvider.get('imagePixelModule', referencedImageId)
+        : undefined;
+      genericMetadataProvider.add(imageId, {
+        type: 'imagePixelModule',
+        metadata: labelmapImagePixelModule(source),
+      });
+    }
+
+    if (!appMetaData.get('imagePlaneModule', imageId) && referencedImageId) {
+      const plane = metadataProvider.get('imagePlaneModule', referencedImageId);
+      if (plane) {
+        genericMetadataProvider.add(imageId, { type: 'imagePlaneModule', metadata: plane });
+      }
+    }
+
+    if (!appMetaData.get('generalSeriesModule', imageId) && referencedImageId) {
+      const series = metadataProvider.get('generalSeriesModule', referencedImageId);
+      if (series) {
+        genericMetadataProvider.add(imageId, { type: 'generalSeriesModule', metadata: series });
+      }
+    }
+  }
+}
+
 /**
  * RGBA for label index `segmentLabel` — same entries as platform/core
  * SegmentationService uses via `generateNewColorLUT` → `cloneDeep(COLOR_LUT)`.
@@ -237,7 +435,75 @@ function isAscendingInstanceOrder(instanceImageIds: string[]): boolean {
   return instanceOrderMatchesGeometricSort(instanceImageIds);
 }
 
-async function ensureVolumeLoaded(volume: { load?: (...args: unknown[]) => unknown }): Promise<void> {
+/**
+ * True when the labelmap volume's source slices run opposite the viewport volume.
+ * Instance storage order differs between XNAT servers; the viewport volume order
+ * is the one on screen.
+ */
+export function isReversedSliceOrder(
+  labelmapReferencedIds: string[],
+  viewportImageIds: string[]
+): boolean {
+  if (labelmapReferencedIds.length < 2 || labelmapReferencedIds.length !== viewportImageIds.length) {
+    return false;
+  }
+
+  const sameOrder = labelmapReferencedIds.every((id, index) => id === viewportImageIds[index]);
+  if (sameOrder) {
+    return false;
+  }
+
+  const lastIndex = viewportImageIds.length - 1;
+  return labelmapReferencedIds.every((id, index) => id === viewportImageIds[lastIndex - index]);
+}
+
+function getViewerLibraries(extensionManager?: any) {
+  return extensionManager
+    ?.getModuleEntry?.('@ohif/extension-cornerstone.utilityModule.common')
+    ?.exports?.getCornerstoneLibraries?.();
+}
+
+function labelmapReferencedImageIds(
+  imageIds: string[],
+  extensionManager?: any
+): string[] {
+  const imageCache = viewerCache(extensionManager);
+  return imageIds.map(imageId => {
+    const image = imageCache?.getImage?.(imageId) ?? cache.getImage(imageId);
+    return image?.referencedImageId || imageId;
+  });
+}
+
+function orderLabelmapIdsByViewport(
+  labelmapImageIds: string[],
+  viewportImageIds: string[],
+  extensionManager?: any
+): string[] | null {
+  const imageCache = viewerCache(extensionManager);
+  const derivedByRef = new Map<string, string>();
+
+  for (const imageId of labelmapImageIds) {
+    const image = imageCache?.getImage?.(imageId) ?? cache.getImage(imageId);
+    const refId = image?.referencedImageId;
+    if (refId && !derivedByRef.has(refId)) {
+      derivedByRef.set(refId, imageId);
+    }
+  }
+
+  const ordered = viewportImageIds
+    .map(refId => derivedByRef.get(refId))
+    .filter((id): id is string => Boolean(id));
+
+  if (ordered.length !== labelmapImageIds.length) {
+    return null;
+  }
+
+  return ordered;
+}
+
+async function ensureVolumeLoaded(volume: {
+  load?: (...args: unknown[]) => unknown;
+}): Promise<void> {
   if (typeof volume?.load !== 'function') {
     return;
   }
@@ -247,57 +513,284 @@ async function ensureVolumeLoaded(volume: { load?: (...args: unknown[]) => unkno
   }
 }
 
+type ScalarBuffer = ArrayLike<number> & {
+  length: number;
+  subarray?: (s: number, e: number) => ArrayLike<number>;
+  constructor?: new (length: number) => Uint8Array;
+};
+
+function copyFramesReversed(scalarData: ScalarBuffer, frameSize: number, numFrames: number) {
+  const Ctor = (scalarData.constructor as new (length: number) => Uint8Array) || Uint8Array;
+  const flipped = new Ctor(scalarData.length);
+  for (let k = 0; k < numFrames; k++) {
+    const srcStart = k * frameSize;
+    const dstStart = (numFrames - 1 - k) * frameSize;
+    if (typeof scalarData.subarray === 'function') {
+      flipped.set(scalarData.subarray(srcStart, srcStart + frameSize) as Uint8Array, dstStart);
+    } else {
+      for (let i = 0; i < frameSize; i++) {
+        flipped[dstStart + i] = Number(scalarData[srcStart + i]);
+      }
+    }
+  }
+  return flipped;
+}
+
 /**
- * Reverse labelmap voxel data along the volume k-axis. Ascending instance-order series
- * use the same convertStackToVolumeLabelmap path as descending series, but the overlay
- * ends up mirrored along z; flipping the cached labelmap volume fixes alignment.
+ * Reverse labelmap voxel data along the volume k-axis. Ascending instance-order
+ * series use the same convertStackToVolumeLabelmap path as descending series, but
+ * the overlay ends up mirrored along z even when volume.imageIds match the
+ * viewport — flipping the cached scalar buffer fixes alignment.
+ *
+ * Image-backed volumes (ImageVolumeVoxelManager) throw on getScalarData; they
+ * expose getCompleteScalarDataArray / setCompleteScalarDataArray instead.
  */
-async function flipLabelmapVolumeAlongKAxis(volumeId: string): Promise<boolean> {
-  const volume = cache.getVolume(volumeId);
+function flipLabelmapVolumeAlongKAxis(
+  volume: {
+    voxelManager?: {
+      getScalarData?: () => ScalarBuffer;
+      setScalarData?: (data: Uint8Array) => void;
+      getCompleteScalarDataArray?: () => ScalarBuffer;
+      setCompleteScalarDataArray?: (data: ArrayLike<number>) => void;
+      invalidateCache?: () => void;
+    };
+    dimensions?: number[];
+    imageIds?: string[];
+  },
+  extensionManager?: any
+): boolean {
   const voxelManager = volume?.voxelManager;
   const dimensions = volume?.dimensions;
 
-  if (!voxelManager?.getAtIndex || !voxelManager?.setAtIndex || !dimensions || dimensions.length < 3) {
+  if (!voxelManager || !dimensions || dimensions.length < 3) {
     return false;
   }
-
-  await ensureVolumeLoaded(volume);
 
   const frameSize = dimensions[0] * dimensions[1];
   const numFrames = dimensions[2];
-  if (numFrames < 2) {
+  const expectedLength = frameSize * numFrames;
+
+  let scalarData: ScalarBuffer | null = null;
+  try {
+    scalarData = voxelManager.getScalarData?.() ?? null;
+  } catch {
+    scalarData = null;
+  }
+
+  if (scalarData?.length === expectedLength && voxelManager.setScalarData) {
+    voxelManager.setScalarData(copyFramesReversed(scalarData, frameSize, numFrames));
+    voxelManager.invalidateCache?.();
+    return true;
+  }
+
+  const complete = voxelManager.getCompleteScalarDataArray?.();
+  if (complete?.length === expectedLength && voxelManager.setCompleteScalarDataArray) {
+    voxelManager.setCompleteScalarDataArray(
+      copyFramesReversed(complete, frameSize, numFrames)
+    );
+    voxelManager.invalidateCache?.();
+    return true;
+  }
+
+  // Last resort: swap pixel buffers on the derived slice images in place.
+  return flipLabelmapSliceImagesAlongKAxis(volume.imageIds, extensionManager);
+}
+
+function flipLabelmapSliceImagesAlongKAxis(
+  imageIds: string[] | undefined,
+  extensionManager?: any
+): boolean {
+  if (!imageIds || imageIds.length < 2) {
     return false;
   }
 
-  const readFrame = (frameIndex: number): Uint8Array => {
-    const frame = new Uint8Array(frameSize);
-    const start = frameIndex * frameSize;
-    for (let i = 0; i < frameSize; i++) {
-      frame[i] = Number(voxelManager.getAtIndex(start + i) ?? 0);
+  const imageCache = viewerCache(extensionManager);
+  const half = Math.floor(imageIds.length / 2);
+
+  for (let k = 0; k < half; k++) {
+    const imageA =
+      imageCache?.getImage?.(imageIds[k]) ?? cache.getImage(imageIds[k]);
+    const imageB =
+      imageCache?.getImage?.(imageIds[imageIds.length - 1 - k]) ??
+      cache.getImage(imageIds[imageIds.length - 1 - k]);
+    const vmA = imageA?.voxelManager;
+    const vmB = imageB?.voxelManager;
+    if (!vmA?.getScalarData || !vmB?.getScalarData || !vmA?.setScalarData || !vmB?.setScalarData) {
+      return false;
     }
-    return frame;
-  };
 
-  const writeFrame = (frameIndex: number, data: Uint8Array) => {
-    const start = frameIndex * frameSize;
-    for (let i = 0; i < frameSize; i++) {
-      voxelManager.setAtIndex(start + i, data[i]);
+    const dataA = vmA.getScalarData();
+    const dataB = vmB.getScalarData();
+    if (!dataA?.length || dataA.length !== dataB?.length) {
+      return false;
     }
-  };
 
-  for (let k = 0; k < Math.floor(numFrames / 2); k++) {
-    const opposite = numFrames - 1 - k;
-    const frameK = readFrame(k);
-    const frameOpposite = readFrame(opposite);
-    writeFrame(k, frameOpposite);
-    writeFrame(opposite, frameK);
-  }
-
-  if (SEG_IMPORT_DEBUG) {
-    console.log(`[SEG import] flipped labelmap volume k-axis for ${volumeId}`);
+    const Ctor = (dataA.constructor as new (length: number) => Uint8Array) || Uint8Array;
+    const copyA = new Ctor(dataA.length);
+    const copyB = new Ctor(dataB.length);
+    copyA.set(dataA as Uint8Array);
+    copyB.set(dataB as Uint8Array);
+    vmA.setScalarData(copyB);
+    vmB.setScalarData(copyA);
   }
 
   return true;
+}
+
+function triggerLabelmapDataModified(
+  extensionManager: any,
+  segmentationId: string,
+  viewportId: string
+) {
+  const libraries = getViewerLibraries(extensionManager);
+  const events = libraries?.cornerstoneTools?.segmentation?.triggerSegmentationEvents;
+  events?.triggerSegmentationDataModified?.(segmentationId);
+  events?.triggerSegmentationRepresentationModified?.(
+    viewportId,
+    segmentationId,
+    ToolsEnums.SegmentationRepresentations.Labelmap
+  );
+}
+
+/**
+ * Keep the labelmap stack / volume aligned with the viewport.
+ * - Descending catalogs: rebuild when volume.imageIds are reversed vs viewport.
+ * - Ascending catalogs: convertStackToVolumeLabelmap still mirrors along z even
+ *   when imageIds match; flip the scalar buffer along k after convert.
+ */
+async function ensureLabelmapMatchesViewport(
+  segmentationId: string,
+  viewportId: string,
+  servicesManager: any,
+  ascendingInstanceOrder = false
+) {
+  const { segmentationService, displaySetService } = servicesManager.services;
+  const extensionManager = displaySetService?.extensionManager;
+  const viewportImageIds = getViewportReferenceImageIds(viewportId, servicesManager);
+  const segmentation = segmentationService.getSegmentation?.(segmentationId);
+  const labelmapKey = ToolsEnums.SegmentationRepresentations.Labelmap;
+  const labelmap = segmentation?.representationData?.[labelmapKey] as
+    | { imageIds?: string[]; volumeId?: string }
+    | undefined;
+
+  if (!viewportImageIds?.length) {
+    if (SEG_IMPORT_DEBUG) {
+      console.log('[SEG import] labelmap volume order not compared (no viewport imageIds)');
+    }
+    return;
+  }
+
+  if (!labelmap?.imageIds?.length) {
+    if (SEG_IMPORT_DEBUG) {
+      console.log('[SEG import] labelmap volume order not compared (no labelmap imageIds)');
+    }
+    return;
+  }
+
+  const orderedIds = orderLabelmapIdsByViewport(
+    labelmap.imageIds,
+    viewportImageIds,
+    extensionManager
+  );
+  if (!orderedIds) {
+    if (SEG_IMPORT_DEBUG) {
+      console.log('[SEG import] labelmap volume order not compared (could not map refs)');
+    }
+    return;
+  }
+
+  const stackMatchesViewport = orderedIds.every((id, index) => id === labelmap.imageIds![index]);
+  if (!stackMatchesViewport) {
+    labelmap.imageIds = orderedIds;
+    if (SEG_IMPORT_DEBUG) {
+      console.log('[SEG import] reordered labelmap stack to match viewport');
+    }
+  }
+
+  const libraries = getViewerLibraries(extensionManager);
+  const viewerTools = libraries?.cornerstoneTools;
+  const viewerCacheApi = libraries?.cornerstone?.cache;
+  const convertStackToVolumeLabelmap =
+    viewerTools?.segmentation?.helpers?.convertStackToVolumeLabelmap;
+
+  let labelmapVolume = segmentationService.getLabelmapVolume?.(segmentationId);
+  if (!labelmapVolume?.imageIds?.length && convertStackToVolumeLabelmap) {
+    try {
+      if (labelmap.volumeId && viewerCacheApi?.removeVolumeLoadObject) {
+        try {
+          viewerCacheApi.removeVolumeLoadObject(labelmap.volumeId);
+        } catch {
+          // volume may not be in this cache copy
+        }
+        delete labelmap.volumeId;
+      }
+      await convertStackToVolumeLabelmap(segmentation);
+      labelmapVolume = segmentationService.getLabelmapVolume?.(segmentationId);
+    } catch (error) {
+      console.warn('XNAT SEG import: convertStackToVolumeLabelmap failed:', error);
+    }
+  }
+
+  if (!labelmapVolume?.imageIds?.length) {
+    if (SEG_IMPORT_DEBUG) {
+      console.log(
+        `[SEG import] labelmap volume order not compared (no volumeId after convert; stackMatchesViewport=${stackMatchesViewport})`
+      );
+    }
+    return;
+  }
+
+  const volumeRefIds = labelmapReferencedImageIds(
+    labelmapVolume.imageIds,
+    extensionManager
+  );
+  const reversed = isReversedSliceOrder(volumeRefIds, viewportImageIds);
+  if (SEG_IMPORT_DEBUG) {
+    console.log(`[SEG import] labelmap volume reversed vs viewport = ${reversed}`);
+  }
+
+  if (reversed && convertStackToVolumeLabelmap) {
+    // Rebuild the volume from viewport-ordered stack ids.
+    labelmap.imageIds = orderedIds;
+    if (labelmap.volumeId && viewerCacheApi?.removeVolumeLoadObject) {
+      try {
+        viewerCacheApi.removeVolumeLoadObject(labelmap.volumeId);
+      } catch {
+        // ignore
+      }
+      delete labelmap.volumeId;
+    }
+
+    try {
+      await convertStackToVolumeLabelmap(segmentation);
+      labelmapVolume = segmentationService.getLabelmapVolume?.(segmentationId);
+      if (SEG_IMPORT_DEBUG) {
+        console.log('[SEG import] rebuilt labelmap volume to match viewport order');
+      }
+    } catch (error) {
+      console.warn('XNAT SEG import: labelmap volume rebuild failed:', error);
+    }
+  }
+
+  // Ascending catalogs: imageIds can match while convert still mirrors along z.
+  if (!ascendingInstanceOrder || !labelmapVolume) {
+    return;
+  }
+
+  try {
+    await ensureVolumeLoaded(labelmapVolume);
+    const flipped = flipLabelmapVolumeAlongKAxis(labelmapVolume, extensionManager);
+    if (flipped) {
+      triggerLabelmapDataModified(extensionManager, segmentationId, viewportId);
+      if (SEG_IMPORT_DEBUG) {
+        console.log('[SEG import] flipped labelmap volume k-axis (ascending)');
+      }
+    } else if (SEG_IMPORT_DEBUG) {
+      console.log('[SEG import] ascending k-axis flip skipped (no scalar data)');
+    }
+  } catch (error) {
+    console.warn('XNAT SEG import: ascending k-axis flip failed:', error);
+  }
 }
 
 /**
@@ -330,9 +823,18 @@ function alignLabelmapImagesWithReferences(results: any, referenceImageIds: stri
   }
 }
 
+function viewerCache(extensionManager?: any) {
+  return getAppCornerstone(extensionManager)?.cache as
+    | {
+        getImage?: (imageId: string) => { referencedImageId?: string } | undefined;
+        getVolume?: (volumeId: string) => { imageIds?: string[] } | undefined;
+      }
+    | undefined;
+}
+
 /** Frame order used by the active viewport's reference volume or stack. */
 function getViewportReferenceImageIds(viewportId: string, servicesManager: any): string[] | null {
-  const { cornerstoneViewportService } = servicesManager.services;
+  const { cornerstoneViewportService, displaySetService } = servicesManager.services;
   const viewport = cornerstoneViewportService?.getCornerstoneViewport(viewportId);
   if (!viewport) {
     return null;
@@ -342,7 +844,8 @@ function getViewportReferenceImageIds(viewportId: string, servicesManager: any):
     const volumeId =
       typeof viewport.getVolumeId === 'function' ? viewport.getVolumeId() : undefined;
     if (volumeId) {
-      const volume = cache.getVolume(volumeId);
+      const imageCache = viewerCache(displaySetService?.extensionManager);
+      const volume = imageCache?.getVolume?.(volumeId) ?? cache.getVolume(volumeId);
       if (volume?.imageIds?.length) {
         return [...volume.imageIds];
       }
@@ -692,8 +1195,11 @@ export const importSegmentation = async ({
       throw new Error('Referenced display set not found');
     }
 
+    const metadataProvider = viewerMetadataProvider(displaySetService?.extensionManager);
     // Same order as SegmentationService.createSegmentationForSEGDisplaySet (instances → imageId)
-    const instanceImageIds = getReferenceImageIds(referencedDisplaySet);
+    const instanceImageIds = getReferenceImageIds(referencedDisplaySet).filter(imageId =>
+      Boolean(metadataProvider.get('generalImageModule', imageId)?.sopInstanceUID)
+    );
 
     if (!instanceImageIds || instanceImageIds.length === 0) {
       throw new Error('No image IDs found in referenced display set');
@@ -706,33 +1212,40 @@ export const importSegmentation = async ({
     const results = await adaptersSEG.Cornerstone3D.Segmentation.createFromDICOMSegBuffer(
       instanceImageIds,
       arrayBuffer,
-      { metadataProvider: metaData, tolerance }
+      { metadataProvider, tolerance }
     );
 
     if (!results) {
       throw new Error('Failed to parse DICOM SEG file');
     }
 
-    alignLabelmapImagesWithReferences(results, instanceImageIds);
+    placeLabelmapsInViewerCache(results, displaySetService?.extensionManager);
+    ensureLabelmapVolumeMetadata(
+      results,
+      metadataProvider,
+      displaySetService?.extensionManager
+    );
+
+    const viewportImageIds =
+      getViewportReferenceImageIds(activeViewportId, servicesManager) ?? instanceImageIds;
+    // Match the on-screen volume/stack order, not only XNAT catalog order.
+    alignLabelmapImagesWithReferences(results, viewportImageIds);
 
     mergeOverlappingLabelMapStacks(results);
     reconcileSegmentsWithLabelmap(results);
 
     const ascendingInstanceOrder = isAscendingInstanceOrder(instanceImageIds);
 
-    logSegImportDiagnostics(results, instanceImageIds);
+    logSegImportDiagnostics(results, viewportImageIds);
 
     if (SEG_IMPORT_DEBUG) {
-      const viewportImageIds = getViewportReferenceImageIds(activeViewportId, servicesManager);
       console.log(`[SEG import] ascending instance order = ${ascendingInstanceOrder}`);
-      if (viewportImageIds) {
-        const viewportMatchesInstance = viewportImageIds.every(
-          (id, index) => id === instanceImageIds[index]
-        );
-        console.log(
-          `[SEG import] viewport ref order matches instance = ${viewportMatchesInstance}`
-        );
-      }
+      const viewportMatchesInstance = viewportImageIds.every(
+        (id, index) => id === instanceImageIds[index]
+      );
+      console.log(
+        `[SEG import] viewport ref order matches instance = ${viewportMatchesInstance}`
+      );
     }
 
     // Ensure centroids are properly structured
@@ -762,6 +1275,8 @@ export const importSegmentation = async ({
       SeriesDescription: segmentationLabel, // This is what the cornerstone service uses for the segmentation label
       SeriesDate: new Date().toISOString().split('T')[0], // Add SeriesDate for modifiedTime
       ...results, // Include all the parsed SEG data
+      // Keep the same order as the aligned labelMapImages / on-screen volume.
+      referencedImageIds: viewportImageIds,
     };
     const createdSegmentationId = await segmentationService.createSegmentationForSEGDisplaySet(
       segDisplaySet,
@@ -776,53 +1291,12 @@ export const importSegmentation = async ({
       type: ToolsEnums.SegmentationRepresentations.Labelmap,
     });
 
-    if (ascendingInstanceOrder) {
-      let segmentation = csSegmentation.state.getSegmentation(createdSegmentationId);
-      const labelmapKey = ToolsEnums.SegmentationRepresentations.Labelmap;
-      let labelmapData = segmentation?.representationData?.[labelmapKey] as {
-        volumeId?: string;
-      };
-
-      if (segmentation && !labelmapData?.volumeId) {
-        try {
-          await convertStackToVolumeLabelmap(segmentation);
-          segmentation = csSegmentation.state.getSegmentation(createdSegmentationId);
-          labelmapData = segmentation?.representationData?.[labelmapKey] as {
-            volumeId?: string;
-          };
-          if (SEG_IMPORT_DEBUG) {
-            console.log(
-              `[SEG import] convertStackToVolumeLabelmap volumeId = ${labelmapData?.volumeId ?? 'none'}`
-            );
-          }
-        } catch (convertError) {
-          console.warn('XNAT SEG import: convertStackToVolumeLabelmap failed:', convertError);
-        }
-      }
-
-      if (labelmapData?.volumeId) {
-        try {
-          const flipped = await flipLabelmapVolumeAlongKAxis(labelmapData.volumeId);
-          if (flipped) {
-            csSegmentation.triggerSegmentationEvents.triggerSegmentationDataModified(
-              createdSegmentationId
-            );
-            csSegmentation.triggerSegmentationEvents.triggerSegmentationRepresentationModified(
-              activeViewportId,
-              createdSegmentationId,
-              ToolsEnums.SegmentationRepresentations.Labelmap
-            );
-          }
-          if (SEG_IMPORT_DEBUG) {
-            console.log(`[SEG import] ascending k-axis correction applied = ${flipped}`);
-          }
-        } catch (flipError) {
-          console.warn('XNAT SEG import: labelmap k-axis flip failed:', flipError);
-        }
-      } else if (SEG_IMPORT_DEBUG) {
-        console.warn('[SEG import] no labelmap volumeId after stack→volume conversion');
-      }
-    }
+    await ensureLabelmapMatchesViewport(
+      createdSegmentationId,
+      activeViewportId,
+      servicesManager,
+      ascendingInstanceOrder
+    );
 
     applyOhifDefaultSegmentationColorLUT(activeViewportId, createdSegmentationId);
 

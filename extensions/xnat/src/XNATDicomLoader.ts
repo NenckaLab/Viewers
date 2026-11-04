@@ -82,11 +82,9 @@ export function initXNATDicomLoader(xnatConfig: any): Promise<void> {
         // Add XNAT-specific auth headers
         const xnatAuthHeaders: Record<string, string> = {};
         if (xnatConfig?.xnatAuth?.token) {
-          console.info('XNAT: Setting up XSRF token for image loading');
           xnatAuthHeaders['XNAT-XSRF-TOKEN'] = xnatConfig.xnatAuth.token;
         }
         if (xnatConfig?.xnatAuth?.jsessionid) {
-          console.info('XNAT: Setting up JSESSIONID for image loading');
           document.cookie = `JSESSIONID=${xnatConfig.xnatAuth.jsessionid}; path=/`;
         }
 
@@ -118,7 +116,6 @@ export function initXNATDicomLoader(xnatConfig: any): Promise<void> {
                   
                   const baseUrl = xnatConfig.wadoUriRoot || getServerUrl();
                   const fullUrl = new URL(urlPart.startsWith('/') ? urlPart : `/${urlPart}`, baseUrl).href;
-                  console.info('XNAT: Modified URL:', fullUrl);
                   xhr.open('GET', fullUrl); // Overwrite the default open behavior
                   try {
                     const matchingInstance = findMatchingInstanceForImageId(imageId, urlPart);

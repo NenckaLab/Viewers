@@ -1,4 +1,5 @@
 import fetchCSRFToken from '../IO/fetchCSRFToken.js';
+import sessionMap from '../sessionMap.js';
 
 type ManifestFileEntry = {
   id: string;
@@ -9,6 +10,13 @@ type ManifestFileEntry = {
 type HangingProtocolManifest = {
   files: ManifestFileEntry[];
   defaultProtocolId?: string;
+  /** When true, a prior study opens comparison MPR instead of the saved layout. */
+  ignoreSavedProtocolForComparison?: boolean;
+};
+
+export type UserHangingProtocolOptions = {
+  defaultProtocolId: string | null;
+  ignoreSavedProtocolForComparison: boolean;
 };
 
 function appendCsrfToken(url: string, csrfToken: string): string {
@@ -16,23 +24,26 @@ function appendCsrfToken(url: string, csrfToken: string): string {
   return `${url}${separator}XNAT_CSRF=${encodeURIComponent(csrfToken)}`;
 }
 
-function getXnatBaseUrl(): string {
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin;
-  }
-  return '';
-}
-
 function getUserManifestUrl(projectId: string): string {
-  return `${getXnatBaseUrl()}/xapi/viewer/users/me/projects/${encodeURIComponent(projectId)}/hanging-protocols/manifest.json`;
+  return sessionMap.resolveUrl(
+    `xapi/viewer/users/me/projects/${encodeURIComponent(projectId)}/hanging-protocols/manifest.json`
+  );
 }
 
 function getUserProtocolUrl(projectId: string, protocolId: string): string {
-  return `${getXnatBaseUrl()}/xapi/viewer/users/me/projects/${encodeURIComponent(projectId)}/hanging-protocols/${encodeURIComponent(protocolId)}.json`;
+  return sessionMap.resolveUrl(
+    `xapi/viewer/users/me/projects/${encodeURIComponent(projectId)}/hanging-protocols/${encodeURIComponent(protocolId)}.json`
+  );
 }
 
 function getUserDefaultProtocolPrefUrl(projectId: string): string {
-  return `${getXnatBaseUrl()}/xapi/user-options/prefs/me/hanging-protocol/${encodeURIComponent(projectId)}?format=plain`;
+  return sessionMap.resolveUrl(
+    `xapi/user-options/prefs/me/hanging-protocol/${encodeURIComponent(projectId)}?format=plain`
+  );
+}
+
+function redactRequestUrl(url: string): string {
+  return url.replace(/([?&]XNAT_CSRF=)[^&]*/gi, '$1redacted');
 }
 
 async function fetchJson(url: string, options: RequestInit = {}): Promise<any> {
@@ -51,8 +62,7 @@ async function fetchJson(url: string, options: RequestInit = {}): Promise<any> {
   }
 
   if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText);
-    throw new Error(`HTTP ${response.status} for ${url}: ${message}`);
+    throw new Error(`HTTP ${response.status} for ${redactRequestUrl(url)}`);
   }
 
   if (response.status === 204) {
@@ -85,8 +95,7 @@ async function putJson(url: string, body: unknown): Promise<void> {
   });
 
   if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText);
-    throw new Error(`HTTP ${response.status} for ${url}: ${message}`);
+    throw new Error(`HTTP ${response.status} for ${redactRequestUrl(url)}`);
   }
 }
 
@@ -109,10 +118,12 @@ export async function saveUserHangingProtocol({
   projectId,
   protocol,
   setAsDefault = true,
+  ignoreSavedProtocolForComparison,
 }: {
   projectId: string;
   protocol: Record<string, any>;
   setAsDefault?: boolean;
+  ignoreSavedProtocolForComparison?: boolean;
 }): Promise<void> {
   if (!projectId) {
     throw new Error('A project ID is required to save a hanging protocol.');
@@ -141,7 +152,11 @@ export async function saveUserHangingProtocol({
 
   await putJson(getUserManifestUrl(projectId), {
     files,
-    defaultProtocolId: protocolId,
+    defaultProtocolId: setAsDefault ? protocolId : existingManifest.defaultProtocolId,
+    ignoreSavedProtocolForComparison:
+      ignoreSavedProtocolForComparison ??
+      existingManifest.ignoreSavedProtocolForComparison ??
+      false,
   });
 
   if (setAsDefault) {
@@ -175,6 +190,23 @@ export function getUserHangingProtocolSources(projectId: string): string[] {
   }
 
   return [getUserManifestUrl(projectId)];
+}
+
+export async function fetchUserHangingProtocolOptions(
+  projectId: string
+): Promise<UserHangingProtocolOptions> {
+  const empty = { defaultProtocolId: null, ignoreSavedProtocolForComparison: false };
+  if (!projectId) {
+    return empty;
+  }
+
+  const manifest = await fetchUserHangingProtocolManifest(projectId);
+  const defaultProtocolId = await fetchUserDefaultProtocolId(projectId);
+
+  return {
+    defaultProtocolId,
+    ignoreSavedProtocolForComparison: manifest?.ignoreSavedProtocolForComparison === true,
+  };
 }
 
 export async function fetchUserDefaultProtocolId(projectId: string): Promise<string | null> {

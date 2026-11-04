@@ -7,17 +7,50 @@ import {
 import { SubjectExperiment, fetchSubjectExperiments } from './loadSubjectExperiments';
 
 /** Saved with the current (follow-up) overread when a prior scan exists. */
-export const CLINICALLY_MEANINGFUL_CHANGE_KEY = 'clinicallyMeaningfulChange';
-export const CLINICALLY_MEANINGFUL_CHANGE_NOTES_KEY = 'clinicallyMeaningfulChangeNotes';
+export const NOTABLE_CHANGE_KEY = 'notableChange';
+export const NOTABLE_CHANGE_NOTES_KEY = 'notableChangeNotes';
 
-export const CLINICALLY_MEANINGFUL_CHANGE_OPTIONS = [
+/** Previous storage keys; mapped on read so they do not appear in the UI. */
+const LEGACY_NOTABLE_CHANGE_KEY = 'clinicallyMeaningfulChange';
+const LEGACY_NOTABLE_CHANGE_NOTES_KEY = 'clinicallyMeaningfulChangeNotes';
+
+export const NOTABLE_CHANGE_OPTIONS = [
   { label: 'Yes', value: 'yes' },
   { label: 'No', value: 'no' },
   { label: 'Unable to assess', value: 'unable_to_assess' },
 ] as const;
 
-export type ClinicallyMeaningfulChangeValue =
-  (typeof CLINICALLY_MEANINGFUL_CHANGE_OPTIONS)[number]['value'];
+export type NotableChangeValue =
+  (typeof NOTABLE_CHANGE_OPTIONS)[number]['value'];
+
+export const NOTABLE_CHANGE_META_KEYS = new Set([
+  NOTABLE_CHANGE_KEY,
+  NOTABLE_CHANGE_NOTES_KEY,
+  LEGACY_NOTABLE_CHANGE_KEY,
+  LEGACY_NOTABLE_CHANGE_NOTES_KEY,
+]);
+
+export function migrateNotableChangeFields(
+  data: { [fieldName: string]: any } | null
+): { [fieldName: string]: any } | null {
+  if (!data) {
+    return data;
+  }
+
+  const next = { ...data };
+  if (next[NOTABLE_CHANGE_KEY] == null && next[LEGACY_NOTABLE_CHANGE_KEY] != null) {
+    next[NOTABLE_CHANGE_KEY] = next[LEGACY_NOTABLE_CHANGE_KEY];
+  }
+  if (
+    next[NOTABLE_CHANGE_NOTES_KEY] == null &&
+    next[LEGACY_NOTABLE_CHANGE_NOTES_KEY] != null
+  ) {
+    next[NOTABLE_CHANGE_NOTES_KEY] = next[LEGACY_NOTABLE_CHANGE_NOTES_KEY];
+  }
+  delete next[LEGACY_NOTABLE_CHANGE_KEY];
+  delete next[LEGACY_NOTABLE_CHANGE_NOTES_KEY];
+  return next;
+}
 
 export type PriorOverreadFinding = {
   experimentId: string;
@@ -165,17 +198,21 @@ export async function loadPriorOverreadFinding(
     }
   }
 
-  const formData = extractFormFieldData(data, formUuid, options);
+  const formData = migrateNotableChangeFields(
+    extractFormFieldData(data, formUuid, options)
+  );
   const meaningfulKeys = formData
     ? Object.keys(formData).filter(
-        key =>
-          key !== 'completedByUserId' &&
-          key !== 'completedByUsername' &&
-          key !== 'completedAt' &&
-          formData[key] !== '' &&
-          formData[key] !== null &&
-          formData[key] !== undefined
-      )
+      key =>
+        key !== 'completedByUserId' &&
+        key !== 'completedByUsername' &&
+        key !== 'completedAt' &&
+        !NOTABLE_CHANGE_META_KEYS.has(key) &&
+        !key.startsWith('priorExperiment') &&
+        formData[key] !== '' &&
+        formData[key] !== null &&
+        formData[key] !== undefined
+    )
     : [];
 
   return {

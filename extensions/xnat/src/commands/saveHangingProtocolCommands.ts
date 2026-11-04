@@ -1,6 +1,9 @@
 import sessionMap from '../utils/sessionMap';
 import { serializeCurrentHangingProtocol } from '../utils/hangingProtocol/serializeCurrentHangingProtocol';
-import { saveUserHangingProtocol } from '../utils/hangingProtocol/hangingProtocolApi';
+import {
+  fetchUserHangingProtocolOptions,
+  saveUserHangingProtocol,
+} from '../utils/hangingProtocol/hangingProtocolApi';
 import createHangingProtocolDialogPrompt from '../Panels/createHangingProtocolDialogPrompt';
 import PROMPT_RESPONSES from '../utils/_shared/PROMPT_RESPONSES';
 
@@ -38,13 +41,18 @@ export const createSaveHangingProtocolCommands = (servicesManager: any, commands
       }
 
       let resolvedName = name?.trim();
+      let ignoreSavedProtocolForComparison: boolean | undefined;
       if (!resolvedName) {
         const { uiDialogService } = servicesManager.services;
-        const promptResult = await createHangingProtocolDialogPrompt(uiDialogService);
+        const existingOptions = await fetchUserHangingProtocolOptions(projectId);
+        const promptResult = await createHangingProtocolDialogPrompt(uiDialogService, {
+          ignoreSavedProtocolForComparison: existingOptions.ignoreSavedProtocolForComparison,
+        });
         if (!promptResult?.value || promptResult.action !== PROMPT_RESPONSES.CREATE_REPORT) {
           return false;
         }
         resolvedName = promptResult.value;
+        ignoreSavedProtocolForComparison = promptResult.ignoreSavedProtocolForComparison;
       }
 
       try {
@@ -57,6 +65,7 @@ export const createSaveHangingProtocolCommands = (servicesManager: any, commands
           projectId,
           protocol,
           setAsDefault,
+          ignoreSavedProtocolForComparison,
         });
 
         hangingProtocolService.addProtocol(protocol.id, protocol);
@@ -74,7 +83,9 @@ export const createSaveHangingProtocolCommands = (servicesManager: any, commands
 
         uiNotificationService.show({
           title: 'Save Hanging Protocol',
-          message: `Saved "${protocol.name}" for this project. It will be used the next time you open the viewer here.`,
+          message: ignoreSavedProtocolForComparison
+            ? `Saved "${protocol.name}" for this project. A prior study will open in comparison MPR instead of this layout.`
+            : `Saved "${protocol.name}" for this project. It will be used the next time you open the viewer here.`,
           type: 'success',
           duration: 5000,
         });

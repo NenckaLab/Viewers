@@ -5,51 +5,12 @@
  * enableViewport on mount; when viewportId changes due to protocol fallback,
  * the viewport must be re-enabled before setViewportData runs.
  */
-import React, { useLayoutEffect, useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useEffect } from 'react';
 import { OHIFCornerstoneViewport } from '@ohif/extension-cornerstone';
 import { useViewportRefs, useSystem } from '@ohif/core';
-
-// const XNAT_STACK_FALLBACK_PROTOCOL_ID = 'xnatStackFallback';
-
-/** Reload the viewer with stack protocol in the URL so the error boundary is cleared. */
-// function reloadWithStackProtocol(): void {
-//   try {
-//     const url = new URL(window.location.href);
-//     url.searchParams.set('hangingProtocolId', XNAT_STACK_FALLBACK_PROTOCOL_ID);
-//     console.warn(
-//       'XNAT: Volume rendering error detected, reloading with single stack viewport (hangingProtocolId=xnatStackFallback).'
-//     );
-//     window.location.replace(url.toString());
-//   } catch (e) {
-//     console.warn('XNAT: Failed to reload with stack protocol:', e);
-//   }
-// }
-
-function isVolumeRenderingError(message: string, stack?: string): boolean {
-  const msg = String(message || '');
-  const st = String(stack || '');
-  const fromStack = st.includes('setMapperShaderParameters') || st.includes('updateShaders') || st.includes('vtkVolumeFS');
-  return (
-    msg.includes('Error compiling shader') ||
-    msg.includes('vtkVolumeFS') ||
-    (msg.includes('Cannot read properties of null') && (msg.includes('isAttributeUsed') || fromStack)) ||
-    (msg.includes('isAttributeUsed') && msg.includes('setMapperShaderParameters')) ||
-    fromStack
-  );
-}
-
-function runFallbackToStack(hangingProtocolService: any): void {
-  try {
-    const hpState = hangingProtocolService.getState();
-    // if (hpState.protocolId === XNAT_STACK_FALLBACK_PROTOCOL_ID) return;
-    // reloadWithStackProtocol();
-  } catch (e) {
-    console.warn('XNAT: MPR fallback to single-stack failed:', e);
-  }
-}
+import { recoverFromVolumeRenderingError } from '../utils/volumeRenderingErrorHandler';
 
 interface VolumeErrorBoundaryProps {
-  hangingProtocolService: any;
   children?: React.ReactNode;
 }
 
@@ -61,7 +22,7 @@ class VolumeErrorBoundary extends React.Component<
   VolumeErrorBoundaryProps,
   VolumeErrorBoundaryState
 > {
-  constructor(props) {
+  constructor(props: VolumeErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };
   }
@@ -70,12 +31,8 @@ class VolumeErrorBoundary extends React.Component<
     return { hasError: true };
   }
 
-  componentDidCatch(error: any) {
-    const { hangingProtocolService } = this.props;
-    setTimeout(
-      () => requestAnimationFrame(() => runFallbackToStack(hangingProtocolService)),
-      50
-    );
+  componentDidCatch() {
+    recoverFromVolumeRenderingError();
   }
 
   render() {
@@ -92,36 +49,7 @@ function XNATCornerstoneViewport(props: React.ComponentProps<typeof OHIFCornerst
   const syncGroups = viewportOptions?.syncGroups;
   const { servicesManager } = useSystem();
   const { getViewportElement } = useViewportRefs();
-  const { cornerstoneViewportService, hangingProtocolService, syncGroupService } = servicesManager.services;
-  const fallbackRef = useRef<(() => void) | null>(null);
-
-  fallbackRef.current = () => {
-    runFallbackToStack(hangingProtocolService);
-  };
-
-  // Global listener for errors that never hit our boundary (e.g. thrown in async/rAF).
-  useEffect(() => {
-    const onError = (event: ErrorEvent) => {
-      const message = String(event.message || event.error?.message || '');
-      const stack = event.error?.stack ?? '';
-      if (!isVolumeRenderingError(message, stack)) return;
-      // Defer so we're fully out of the error stack; next frame after a short delay.
-      setTimeout(() => requestAnimationFrame(() => fallbackRef.current?.()), 50);
-    };
-    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
-      const reason = event.reason;
-      const message = String(reason?.message ?? reason ?? '');
-      const stack = reason?.stack ?? '';
-      if (!isVolumeRenderingError(message, stack)) return;
-      setTimeout(() => requestAnimationFrame(() => fallbackRef.current?.()), 50);
-    };
-    window.addEventListener('error', onError, true);
-    window.addEventListener('unhandledrejection', onUnhandledRejection, true);
-    return () => {
-      window.removeEventListener('error', onError, true);
-      window.removeEventListener('unhandledrejection', onUnhandledRejection, true);
-    };
-  }, [hangingProtocolService]);
+  const { cornerstoneViewportService, syncGroupService } = servicesManager.services;
 
   // Apply MPR sync groups (camera/pan/zoom) when this viewport's data is set.
   // Sync groups from the HP are in viewportOptions; we add this viewport to them
@@ -164,7 +92,7 @@ function XNATCornerstoneViewport(props: React.ComponentProps<typeof OHIFCornerst
   }, [viewportId]);
 
   return (
-    <VolumeErrorBoundary hangingProtocolService={hangingProtocolService}>
+    <VolumeErrorBoundary>
       <OHIFCornerstoneViewport key={viewportId} {...props} servicesManager={servicesManager} />
     </VolumeErrorBoundary>
   );

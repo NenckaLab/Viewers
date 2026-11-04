@@ -3,6 +3,7 @@ import createReportDialogPrompt from '../Panels/createReportDialogPrompt';
 import PROMPT_RESPONSES from '../utils/_shared/PROMPT_RESPONSES';
 import { PromptResult } from './types';
 import { applyViewportLocks } from '../utils/viewportLocks';
+import { resolveSegmentationForExport } from './SegmentationGenerators';
 import {
     VIEWPORT_LOCK_OPTION_IDS,
     useViewportLockStore,
@@ -92,22 +93,32 @@ export const createXNATCommands = (
                 }
 
                 const seriesInstanceUID = displaySet.SeriesInstanceUID;
+                const chosenViewportId = viewport.viewportId ?? activeViewportId;
+                const segmentation = resolveSegmentationForExport(
+                    segmentationService,
+                    segmentationId,
+                    chosenViewportId
+                );
+
+                if (!segmentation?.segmentationId) {
+                    throw new Error('Segmentation not found');
+                }
 
                 console.log('[XNAT XNATStoreSegmentation] resolved export context', {
                     activeViewportId,
-                    chosenViewportId: viewport.viewportId ?? '(no id)',
-                    displaySetInstanceUID,
-                    seriesInstanceUID,
+                    chosenViewportId: chosenViewportId ?? '(no id)',
+                    hasSegmentationId: Boolean(segmentation.segmentationId),
                 });
 
                 // Call the actual export function directly
                 await exportSegmentationToXNAT(
-                    { segmentationId, seriesInstanceUID },
+                    { segmentationId: segmentation.segmentationId, seriesInstanceUID },
                     {
                         uiNotificationService,
                         servicesManager,
                         displaySet,
                         segmentationService,
+                        extensionManager,
                     }
                 );
             } catch (error: any) {

@@ -39,6 +39,7 @@ const XNATNavigationPanel: React.FC<XNATNavigationPanelProps> = ({ servicesManag
 
   // Use uiNotificationService from servicesManager if needed
   const { uiNotificationService } = servicesManager.services;
+  const anatomicalMode = isAnatomicalNavigation(servicesManager);
 
   /**
    * Fetch available projects from XNAT on component mount
@@ -135,7 +136,11 @@ const XNATNavigationPanel: React.FC<XNATNavigationPanelProps> = ({ servicesManag
             <div className="space-y-2">
               {activeProjects.map(project => (
                 <div key={project.ID}>
-                  <XNATProject ID={project.ID} name={project.name} />
+                  <XNATProject
+                    ID={project.ID}
+                    name={project.name}
+                    defaultExpanded={anatomicalMode}
+                  />
                 </div>
               ))}
             </div>
@@ -145,15 +150,31 @@ const XNATNavigationPanel: React.FC<XNATNavigationPanelProps> = ({ servicesManag
         </PanelSection.Content>
       </PanelSection>
 
-      {/* Other Projects Section */}
+      {/* Anatomical mode stays inside the launch project. Regular mode can jump projects. */}
+      {anatomicalMode ? null : (
       <PanelSection>
         <PanelSection.Header>Other Projects</PanelSection.Header>
         <PanelSection.Content>
           <XNATProjectList projects={otherProjects} />
         </PanelSection.Content>
       </PanelSection>
+      )}
     </div>
   );
 };
+
+function isAnatomicalNavigation(servicesManager?: {
+  services?: { isAnatomicalMode?: boolean };
+}): boolean {
+  if (servicesManager?.services?.isAnatomicalMode === true) {
+    return true;
+  }
+
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return new URLSearchParams(window.location.search).get('anatomicalMode') === 'true';
+}
 
 export default XNATNavigationPanel; 

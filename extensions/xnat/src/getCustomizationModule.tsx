@@ -9,6 +9,8 @@ import viewportNotificationCustomization from './customizations/notificationCust
 import layoutSelectorCustomization from './customizations/layoutSelectorCustomization';
 import { coalescePatientField } from './XNATDataSource/Utils/DataSourceUtils';
 
+export { viewportOverlayCustomization };
+
 /**
  * Maps XNAT metadata to a format the study browser expects
  * @param studies - Array of studies from DicomMetadataStore
