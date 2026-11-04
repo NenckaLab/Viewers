@@ -52,7 +52,7 @@ yarn-error.log
 *.swp
 *.swo
 *~
-
+state.json
 # Secrets, env, and session capture
 .env
 .env.*
