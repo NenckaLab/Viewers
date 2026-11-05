@@ -7,7 +7,7 @@
  */
 import React, { useLayoutEffect, useEffect } from 'react';
 import { OHIFCornerstoneViewport } from '@ohif/extension-cornerstone';
-import { useViewportRefs, useSystem } from '@ohif/core';
+import { useViewportElement, useSystem } from '@ohif/core';
 import { recoverFromVolumeRenderingError } from '../utils/volumeRenderingErrorHandler';
 
 interface VolumeErrorBoundaryProps {
@@ -48,7 +48,7 @@ function XNATCornerstoneViewport(props: React.ComponentProps<typeof OHIFCornerst
   const viewportId = viewportOptions?.viewportId;
   const syncGroups = viewportOptions?.syncGroups;
   const { servicesManager } = useSystem();
-  const { getViewportElement } = useViewportRefs();
+  const element = useViewportElement<HTMLDivElement>(viewportId || '');
   const { cornerstoneViewportService, syncGroupService } = servicesManager.services;
 
   // Apply MPR sync groups (camera/pan/zoom) when this viewport's data is set.
@@ -81,15 +81,9 @@ function XNATCornerstoneViewport(props: React.ComponentProps<typeof OHIFCornerst
   // useLayoutEffect runs synchronously after refs are set, before child's useEffect.
   // This ensures enableViewport runs before loadViewportData->setViewportData.
   useLayoutEffect(() => {
-    if (!viewportId) return;
-    const element = getViewportElement(viewportId);
-    if (element) {
-      cornerstoneViewportService.enableViewport(
-        viewportId,
-        element as HTMLDivElement
-      );
-    }
-  }, [viewportId]);
+    if (!viewportId || !element) return;
+    cornerstoneViewportService.enableViewport(viewportId, element);
+  }, [viewportId, element, cornerstoneViewportService]);
 
   return (
     <VolumeErrorBoundary>

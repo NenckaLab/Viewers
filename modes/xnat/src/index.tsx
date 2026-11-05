@@ -102,10 +102,11 @@ const xnatLayout = {
   },
 };
 
-// Create the XNAT route
+// OHIF's BrowserRouter basename is /VIEWER/, so this route is the remainder.
+// An empty path keeps the address at /VIEWER/ rather than /VIEWER/<segment>.
 const xnatRoute = {
   ...basicRoute,
-  path: '/',
+  path: '',
   layoutInstance: xnatLayout,
   layoutTemplate: ({ servicesManager }) => {
     const query = new URLSearchParams(window.location.search);
@@ -525,6 +526,7 @@ const xnatRoute = {
 const modeInstance = {
   ...basicModeInstance,
   id,
+  // Same contract as path above: basename supplies /VIEWER/.
   routeName: '',
   displayName: ({ servicesManager }) => {
     const isOverreadMode = servicesManager?.services?.isOverreadMode === true;

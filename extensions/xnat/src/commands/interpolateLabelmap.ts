@@ -60,16 +60,50 @@ function applyInterpolation(
   return changed;
 }
 
-/** Copy the nearer drawn slice into the unlabeled slices between two drawings. */
-function fillGapsFromNearestLabeledSlice(
+type Pixel = { x: number; y: number };
+
+function slicePixels(
+  data: ArrayLike<number>,
+  width: number,
+  frameSize: number,
+  slice: number,
+  label: number
+): Pixel[] {
+  const pixels: Pixel[] = [];
+  const start = slice * frameSize;
+  for (let i = 0; i < frameSize; i++) {
+    if (data[start + i] === label) {
+      pixels.push({ x: i % width, y: Math.floor(i / width) });
+    }
+  }
+  return pixels;
+}
+
+function centroid(pixels: Pixel[]): Pixel {
+  let x = 0;
+  let y = 0;
+  for (const pixel of pixels) {
+    x += pixel.x;
+    y += pixel.y;
+  }
+  return { x: x / pixels.length, y: y / pixels.length };
+}
+
+/**
+ * Move the drawn mark from one labeled slice to the next. Each gap slice gets
+ * the shape shifted by that fraction of the path, instead of holding the first
+ * position until the midpoint and then jumping.
+ */
+function slideShapeBetweenLabeledSlices(
   data: ScalarArray,
   dimensions: number[],
   label: number
 ): number {
-  const frameSize = dimensions[0] * dimensions[1];
-  const depth = dimensions[2];
+  const width = dimensions[0];
+  const height = dimensions[1];
+  const frameSize = width * height;
   const labeled: number[] = [];
-  for (let k = 0; k < depth; k++) {
+  for (let k = 0; k < dimensions[2]; k++) {
     const start = k * frameSize;
     for (let i = 0; i < frameSize; i++) {
       if (data[start + i] === label) {
@@ -83,13 +117,32 @@ function fillGapsFromNearestLabeledSlice(
   for (let pair = 0; pair < labeled.length - 1; pair++) {
     const startSlice = labeled[pair];
     const endSlice = labeled[pair + 1];
+    if (endSlice <= startSlice + 1) {
+      continue;
+    }
+    const startPixels = slicePixels(data, width, frameSize, startSlice, label);
+    const endPixels = slicePixels(data, width, frameSize, endSlice, label);
+    if (!startPixels.length || !endPixels.length) {
+      continue;
+    }
+    const startCenter = centroid(startPixels);
+    const endCenter = centroid(endPixels);
+    const span = endSlice - startSlice;
+
     for (let k = startSlice + 1; k < endSlice; k++) {
-      const sourceSlice = k - startSlice <= endSlice - k ? startSlice : endSlice;
-      const source = sourceSlice * frameSize;
+      const t = (k - startSlice) / span;
+      const shiftX = t * (endCenter.x - startCenter.x);
+      const shiftY = t * (endCenter.y - startCenter.y);
       const dest = k * frameSize;
-      for (let i = 0; i < frameSize; i++) {
-        if (data[source + i] === label && data[dest + i] !== label) {
-          data[dest + i] = label;
+      for (const pixel of startPixels) {
+        const x = Math.round(pixel.x + shiftX);
+        const y = Math.round(pixel.y + shiftY);
+        if (x < 0 || y < 0 || x >= width || y >= height) {
+          continue;
+        }
+        const index = dest + y * width + x;
+        if (data[index] !== label) {
+          data[index] = label;
           changed++;
         }
       }
@@ -224,7 +277,7 @@ export async function interpolateActiveLabelmap(servicesManager: any, extensionM
   let changed = applyInterpolation(merged, scalarData, outputData, segmentIndex);
 
   if (!changed) {
-    changed = fillGapsFromNearestLabeledSlice(merged, dimensions, segmentIndex);
+    changed = slideShapeBetweenLabeledSlices(merged, dimensions, segmentIndex);
   }
 
   if (!changed) {

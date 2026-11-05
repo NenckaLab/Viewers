@@ -3,8 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import i18n from '@ohif/i18n';
 import { I18nextProvider } from 'react-i18next';
-import { Router, type BrowserRouterProps } from 'react-router-dom';
-import { createBrowserHistory } from 'history';
+import { BrowserRouter, type BrowserRouterProps } from 'react-router-dom';
 
 import Compose from './routes/Mode/Compose';
 import {
@@ -27,7 +26,6 @@ import {
   ModalProvider,
   ViewportDialogProvider,
   UserAuthenticationProvider,
-  ErrorBoundary,
 } from '@ohif/ui-next';
 // Viewer Project
 // TODO: Should this influence study list?
@@ -77,12 +75,9 @@ function App({
     extensions: [],
   },
   defaultExtensions = [],
-  defaultModes = ['@ohif/mode-xnat'],
+  defaultModes = [],
 }) {
   const [init, setInit] = useState(null);
-  const history = createBrowserHistory();
-
-
   useEffect(() => {
     const run = async () => {
       appInit(config, defaultExtensions, defaultModes)
@@ -181,8 +176,6 @@ function App({
       />
     );
   }
-
-
 
   return (
     <CombinedProviders>
