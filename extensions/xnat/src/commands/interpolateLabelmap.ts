@@ -79,22 +79,87 @@ function slicePixels(
   return pixels;
 }
 
-function centroid(pixels: Pixel[]): Pixel {
-  let x = 0;
-  let y = 0;
-  for (const pixel of pixels) {
-    x += pixel.x;
-    y += pixel.y;
+function binaryMaskFromPixels(pixels: Pixel[], width: number, height: number): Uint8Array {
+  const mask = new Uint8Array(width * height);
+  for (const { x, y } of pixels) {
+    if (x >= 0 && y >= 0 && x < width && y < height) {
+      mask[y * width + x] = 1;
+    }
   }
-  return { x: x / pixels.length, y: y / pixels.length };
+  return mask;
 }
 
 /**
- * Move the drawn mark from one labeled slice to the next. Each gap slice gets
- * the shape shifted by that fraction of the path, instead of holding the first
- * position until the midpoint and then jumping.
+ * Chamfer distance to the nearest foreground (mask==1) pixel.
+ * Foreground pixels are 0; background gets an approximate Euclidean distance.
  */
-function slideShapeBetweenLabeledSlices(
+function distanceToForeground(mask: Uint8Array, width: number, height: number): Float32Array {
+  const INF = 1e6;
+  const dist = new Float32Array(width * height);
+  for (let i = 0; i < dist.length; i++) {
+    dist[i] = mask[i] ? 0 : INF;
+  }
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (x > 0) {
+        dist[i] = Math.min(dist[i], dist[i - 1] + 1);
+      }
+      if (y > 0) {
+        dist[i] = Math.min(dist[i], dist[i - width] + 1);
+      }
+      if (x > 0 && y > 0) {
+        dist[i] = Math.min(dist[i], dist[i - width - 1] + Math.SQRT2);
+      }
+      if (x + 1 < width && y > 0) {
+        dist[i] = Math.min(dist[i], dist[i - width + 1] + Math.SQRT2);
+      }
+    }
+  }
+
+  for (let y = height - 1; y >= 0; y--) {
+    for (let x = width - 1; x >= 0; x--) {
+      const i = y * width + x;
+      if (x + 1 < width) {
+        dist[i] = Math.min(dist[i], dist[i + 1] + 1);
+      }
+      if (y + 1 < height) {
+        dist[i] = Math.min(dist[i], dist[i + width] + 1);
+      }
+      if (x + 1 < width && y + 1 < height) {
+        dist[i] = Math.min(dist[i], dist[i + width + 1] + Math.SQRT2);
+      }
+      if (x > 0 && y + 1 < height) {
+        dist[i] = Math.min(dist[i], dist[i + width - 1] + Math.SQRT2);
+      }
+    }
+  }
+
+  return dist;
+}
+
+/** Negative inside the mask, positive outside — zero on the boundary. */
+function signedDistance(mask: Uint8Array, width: number, height: number): Float32Array {
+  const outside = distanceToForeground(mask, width, height);
+  const inverted = new Uint8Array(mask.length);
+  for (let i = 0; i < mask.length; i++) {
+    inverted[i] = mask[i] ? 0 : 1;
+  }
+  const inside = distanceToForeground(inverted, width, height);
+  const signed = new Float32Array(mask.length);
+  for (let i = 0; i < mask.length; i++) {
+    signed[i] = outside[i] - inside[i];
+  }
+  return signed;
+}
+
+/**
+ * Morph the drawn mark from one labeled slice to the next.
+ * Interpolating signed distance fields moves and reshapes the mark, instead of
+ * sliding only the start silhouette and jumping to the end drawing.
+ */
+function morphShapeBetweenLabeledSlices(
   data: ScalarArray,
   dimensions: number[],
   label: number
@@ -125,22 +190,25 @@ function slideShapeBetweenLabeledSlices(
     if (!startPixels.length || !endPixels.length) {
       continue;
     }
-    const startCenter = centroid(startPixels);
-    const endCenter = centroid(endPixels);
+
+    const startDist = signedDistance(
+      binaryMaskFromPixels(startPixels, width, height),
+      width,
+      height
+    );
+    const endDist = signedDistance(binaryMaskFromPixels(endPixels, width, height), width, height);
     const span = endSlice - startSlice;
 
     for (let k = startSlice + 1; k < endSlice; k++) {
       const t = (k - startSlice) / span;
-      const shiftX = t * (endCenter.x - startCenter.x);
-      const shiftY = t * (endCenter.y - startCenter.y);
+      const oneMinusT = 1 - t;
       const dest = k * frameSize;
-      for (const pixel of startPixels) {
-        const x = Math.round(pixel.x + shiftX);
-        const y = Math.round(pixel.y + shiftY);
-        if (x < 0 || y < 0 || x >= width || y >= height) {
+      for (let i = 0; i < frameSize; i++) {
+        const distance = oneMinusT * startDist[i] + t * endDist[i];
+        if (distance > 0) {
           continue;
         }
-        const index = dest + y * width + x;
+        const index = dest + i;
         if (data[index] !== label) {
           data[index] = label;
           changed++;
@@ -278,7 +346,7 @@ export async function interpolateActiveLabelmap(servicesManager: any, extensionM
   let changed = applyInterpolation(merged, scalarData, outputData, segmentIndex);
 
   if (!changed) {
-    changed = slideShapeBetweenLabeledSlices(merged, dimensions, segmentIndex);
+    changed = morphShapeBetweenLabeledSlices(merged, dimensions, segmentIndex);
   }
 
   if (!changed) {
