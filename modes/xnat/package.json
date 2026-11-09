@@ -1,6 +1,6 @@
 {
   "name": "@ohif/mode-xnat",
-  "version": "1.0.7-3",
+  "version": "1.0.7-4",
   "description": "XNAT workflow mode for OHIF",
   "author": "Zachary Pick",
   "license": "MIT",

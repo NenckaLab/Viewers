@@ -261,10 +261,11 @@ export async function interpolateActiveLabelmap(servicesManager: any, extensionM
 
   let outputData: ArrayLike<number> | undefined;
   try {
+    // Leave webWorker on so large volumes do not freeze the UI thread.
+    // If the worker path fails, the catch falls through to the local gap fill.
     const { outputImage } = await morphologicalContourInterpolation(inputImage, {
       label: segmentIndex,
       axis: 2,
-      webWorker: false,
     });
     outputData = outputImage?.data;
   } catch (error) {
