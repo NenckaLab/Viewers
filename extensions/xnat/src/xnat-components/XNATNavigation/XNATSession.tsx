@@ -330,11 +330,28 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
 
     return (
       <React.Fragment>
-        <div className="flex items-center space-x-2 p-2 hover:bg-accent/50 rounded cursor-pointer">
+        <div
+          className="flex items-center space-x-2 p-2 hover:bg-accent/50 rounded cursor-pointer"
+          role="button"
+          tabIndex={0}
+          title={active ? 'Current session' : 'Open this session'}
+          aria-disabled={active}
+          onClick={this.onViewSessionClick}
+          onKeyDown={(event: React.KeyboardEvent<HTMLDivElement>) => {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+              return;
+            }
+            event.preventDefault();
+            void this.onViewSessionClick();
+          }}
+        >
           <button
             className="flex-shrink-0 p-1 hover:bg-accent rounded text-primary"
-            onClick={this.onLaunchViewerClick}
-            title="Launch Session in Viewer"
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+              event.stopPropagation();
+              void this.onLaunchViewerClick();
+            }}
+            title="Compare this session with the current session"
           >
             <Icons.LaunchInfo />
           </button>
