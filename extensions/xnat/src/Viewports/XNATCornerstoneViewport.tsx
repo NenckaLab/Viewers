@@ -8,7 +8,10 @@
 import React, { useLayoutEffect, useEffect } from 'react';
 import { OHIFCornerstoneViewport } from '@ohif/extension-cornerstone';
 import { useViewportElement, useSystem } from '@ohif/core';
-import { recoverFromVolumeRenderingError } from '../utils/volumeRenderingErrorHandler';
+import {
+  isVolumeRenderingError,
+  recoverFromVolumeRenderingError,
+} from '../utils/volumeRenderingErrorHandler';
 
 interface VolumeErrorBoundaryProps {
   children?: React.ReactNode;
@@ -16,28 +19,65 @@ interface VolumeErrorBoundaryProps {
 
 interface VolumeErrorBoundaryState {
   hasError: boolean;
+  recovering: boolean;
+  recoveryAttempts: number;
 }
 
 class VolumeErrorBoundary extends React.Component<
   VolumeErrorBoundaryProps,
   VolumeErrorBoundaryState
 > {
+  private retryTimer?: ReturnType<typeof setTimeout>;
+
   constructor(props: VolumeErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, recovering: false, recoveryAttempts: 0 };
   }
 
   static getDerivedStateFromError() {
     return { hasError: true };
   }
 
-  componentDidCatch() {
+  componentDidCatch(error: Error) {
+    if (!isVolumeRenderingError(error?.message, error?.stack)) {
+      this.setState({ recovering: false });
+      return;
+    }
+
+    if (this.state.recoveryAttempts >= 2) {
+      this.setState({ recovering: false });
+      return;
+    }
+
     recoverFromVolumeRenderingError();
+    this.setState({ recovering: true });
+    this.retryTimer = setTimeout(() => {
+      this.setState(state => ({
+        hasError: false,
+        recovering: false,
+        recoveryAttempts: state.recoveryAttempts + 1,
+      }));
+    }, 300);
+  }
+
+  componentWillUnmount() {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+    }
   }
 
   render() {
     if (this.state.hasError) {
-      return null;
+      return (
+        <div
+          className="flex h-full w-full items-center justify-center text-sm text-muted-foreground"
+          role="alert"
+        >
+          {this.state.recovering
+            ? 'Recovering the viewport…'
+            : 'The viewport could not be rendered.'}
+        </div>
+      );
     }
     return this.props.children as React.ReactNode;
   }
@@ -50,6 +90,9 @@ function XNATCornerstoneViewport(props: React.ComponentProps<typeof OHIFCornerst
   const { servicesManager } = useSystem();
   const element = useViewportElement<HTMLDivElement>(viewportId || '');
   const { cornerstoneViewportService, syncGroupService } = servicesManager.services;
+  const displaySetKey =
+    props.displaySets?.map(displaySet => displaySet.displaySetInstanceUID).join('|') ?? '';
+  const viewportResetKey = `${viewportId || ''}:${displaySetKey}`;
 
   // Apply MPR sync groups (camera/pan/zoom) when this viewport's data is set.
   // Sync groups from the HP are in viewportOptions; we add this viewport to them
@@ -86,8 +129,8 @@ function XNATCornerstoneViewport(props: React.ComponentProps<typeof OHIFCornerst
   }, [viewportId, element, cornerstoneViewportService]);
 
   return (
-    <VolumeErrorBoundary>
-      <OHIFCornerstoneViewport key={viewportId} {...props} servicesManager={servicesManager} />
+    <VolumeErrorBoundary key={viewportResetKey}>
+      <OHIFCornerstoneViewport {...props} servicesManager={servicesManager} />
     </VolumeErrorBoundary>
   );
 }
