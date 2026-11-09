@@ -60,16 +60,115 @@ function applyInterpolation(
   return changed;
 }
 
-/** Copy the nearer drawn slice into the unlabeled slices between two drawings. */
-function fillGapsFromNearestLabeledSlice(
+type Pixel = { x: number; y: number };
+
+function slicePixels(
+  data: ArrayLike<number>,
+  width: number,
+  frameSize: number,
+  slice: number,
+  label: number
+): Pixel[] {
+  const pixels: Pixel[] = [];
+  const start = slice * frameSize;
+  for (let i = 0; i < frameSize; i++) {
+    if (data[start + i] === label) {
+      pixels.push({ x: i % width, y: Math.floor(i / width) });
+    }
+  }
+  return pixels;
+}
+
+function binaryMaskFromPixels(pixels: Pixel[], width: number, height: number): Uint8Array {
+  const mask = new Uint8Array(width * height);
+  for (const { x, y } of pixels) {
+    if (x >= 0 && y >= 0 && x < width && y < height) {
+      mask[y * width + x] = 1;
+    }
+  }
+  return mask;
+}
+
+/**
+ * Chamfer distance to the nearest foreground (mask==1) pixel.
+ * Foreground pixels are 0; background gets an approximate Euclidean distance.
+ */
+function distanceToForeground(mask: Uint8Array, width: number, height: number): Float32Array {
+  const INF = 1e6;
+  const dist = new Float32Array(width * height);
+  for (let i = 0; i < dist.length; i++) {
+    dist[i] = mask[i] ? 0 : INF;
+  }
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (x > 0) {
+        dist[i] = Math.min(dist[i], dist[i - 1] + 1);
+      }
+      if (y > 0) {
+        dist[i] = Math.min(dist[i], dist[i - width] + 1);
+      }
+      if (x > 0 && y > 0) {
+        dist[i] = Math.min(dist[i], dist[i - width - 1] + Math.SQRT2);
+      }
+      if (x + 1 < width && y > 0) {
+        dist[i] = Math.min(dist[i], dist[i - width + 1] + Math.SQRT2);
+      }
+    }
+  }
+
+  for (let y = height - 1; y >= 0; y--) {
+    for (let x = width - 1; x >= 0; x--) {
+      const i = y * width + x;
+      if (x + 1 < width) {
+        dist[i] = Math.min(dist[i], dist[i + 1] + 1);
+      }
+      if (y + 1 < height) {
+        dist[i] = Math.min(dist[i], dist[i + width] + 1);
+      }
+      if (x + 1 < width && y + 1 < height) {
+        dist[i] = Math.min(dist[i], dist[i + width + 1] + Math.SQRT2);
+      }
+      if (x > 0 && y + 1 < height) {
+        dist[i] = Math.min(dist[i], dist[i + width - 1] + Math.SQRT2);
+      }
+    }
+  }
+
+  return dist;
+}
+
+/** Negative inside the mask, positive outside — zero on the boundary. */
+function signedDistance(mask: Uint8Array, width: number, height: number): Float32Array {
+  const outside = distanceToForeground(mask, width, height);
+  const inverted = new Uint8Array(mask.length);
+  for (let i = 0; i < mask.length; i++) {
+    inverted[i] = mask[i] ? 0 : 1;
+  }
+  const inside = distanceToForeground(inverted, width, height);
+  const signed = new Float32Array(mask.length);
+  for (let i = 0; i < mask.length; i++) {
+    signed[i] = outside[i] - inside[i];
+  }
+  return signed;
+}
+
+/**
+ * Morph the drawn mark from one labeled slice to the next.
+ * Interpolating signed distance fields moves and reshapes the mark, instead of
+ * sliding only the start silhouette and jumping to the end drawing.
+ */
+function morphShapeBetweenLabeledSlices(
   data: ScalarArray,
   dimensions: number[],
   label: number
 ): number {
-  const frameSize = dimensions[0] * dimensions[1];
-  const depth = dimensions[2];
+  const width = dimensions[0];
+  const height = dimensions[1];
+  const frameSize = width * height;
   const labeled: number[] = [];
-  for (let k = 0; k < depth; k++) {
+  for (let k = 0; k < dimensions[2]; k++) {
     const start = k * frameSize;
     for (let i = 0; i < frameSize; i++) {
       if (data[start + i] === label) {
@@ -83,13 +182,35 @@ function fillGapsFromNearestLabeledSlice(
   for (let pair = 0; pair < labeled.length - 1; pair++) {
     const startSlice = labeled[pair];
     const endSlice = labeled[pair + 1];
+    if (endSlice <= startSlice + 1) {
+      continue;
+    }
+    const startPixels = slicePixels(data, width, frameSize, startSlice, label);
+    const endPixels = slicePixels(data, width, frameSize, endSlice, label);
+    if (!startPixels.length || !endPixels.length) {
+      continue;
+    }
+
+    const startDist = signedDistance(
+      binaryMaskFromPixels(startPixels, width, height),
+      width,
+      height
+    );
+    const endDist = signedDistance(binaryMaskFromPixels(endPixels, width, height), width, height);
+    const span = endSlice - startSlice;
+
     for (let k = startSlice + 1; k < endSlice; k++) {
-      const sourceSlice = k - startSlice <= endSlice - k ? startSlice : endSlice;
-      const source = sourceSlice * frameSize;
+      const t = (k - startSlice) / span;
+      const oneMinusT = 1 - t;
       const dest = k * frameSize;
       for (let i = 0; i < frameSize; i++) {
-        if (data[source + i] === label && data[dest + i] !== label) {
-          data[dest + i] = label;
+        const distance = oneMinusT * startDist[i] + t * endDist[i];
+        if (distance > 0) {
+          continue;
+        }
+        const index = dest + i;
+        if (data[index] !== label) {
+          data[index] = label;
           changed++;
         }
       }
@@ -208,10 +329,11 @@ export async function interpolateActiveLabelmap(servicesManager: any, extensionM
 
   let outputData: ArrayLike<number> | undefined;
   try {
+    // Leave webWorker on so large volumes do not freeze the UI thread.
+    // If the worker path fails, the catch falls through to the local gap fill.
     const { outputImage } = await morphologicalContourInterpolation(inputImage, {
       label: segmentIndex,
       axis: 2,
-      webWorker: false,
     });
     outputData = outputImage?.data;
   } catch (error) {
@@ -224,7 +346,7 @@ export async function interpolateActiveLabelmap(servicesManager: any, extensionM
   let changed = applyInterpolation(merged, scalarData, outputData, segmentIndex);
 
   if (!changed) {
-    changed = fillGapsFromNearestLabeledSlice(merged, dimensions, segmentIndex);
+    changed = morphShapeBetweenLabeledSlices(merged, dimensions, segmentIndex);
   }
 
   if (!changed) {
