@@ -194,12 +194,25 @@ export default class SessionRouter {
     }
 
     _loadRoute() {
-        let params = `?subjectId=${this.subjectId}&projectId=${this.projectId}&experimentId=${this.experimentId}&experimentLabel=${this.experimentLabel}`;
-        if (this.parentProjectId !== this.projectId) {
-            //Shared Project
-            params += `&parentProjectId=${this.parentProjectId}`;
+        const search = new URLSearchParams();
+        if (this.subjectId) {
+            search.set('subjectId', String(this.subjectId));
+        }
+        if (this.projectId) {
+            search.set('projectId', String(this.projectId));
+        }
+        if (this.experimentId) {
+            search.set('experimentId', String(this.experimentId));
+        }
+        if (this.experimentLabel) {
+            search.set('experimentLabel', String(this.experimentLabel));
+        }
+        if (this.parentProjectId && this.parentProjectId !== this.projectId) {
+            // Shared Project
+            search.set('parentProjectId', String(this.parentProjectId));
         }
 
+        let params = `?${search.toString()}`;
         params = appendOverreadViewerQueryParams(params);
 
         const { xnatRootUrl } = sessionMap;

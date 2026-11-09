@@ -262,23 +262,28 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
 
       // Construct comparison URL using experiment IDs (XNAT's native identifiers)
       // Use mrSubjectComparison for MPR 3x2 comparison view
-      let viewerUrl = `/VIEWER/?experimentIds=${currentExperimentId}&experimentIds=${selectedExperimentId}&hangingprotocolId=@ohif/mrSubjectComparison`;
+      const search = new URLSearchParams();
+      search.append('experimentIds', currentExperimentId);
+      search.append('experimentIds', selectedExperimentId);
+      search.set('hangingprotocolId', '@ohif/mrSubjectComparison');
 
       // projectIds[i] must match experimentIds[i], including cross-project / shared sessions.
       if (currentDataProjectId || selectedDataProjectId) {
         const firstProjectId = currentDataProjectId || selectedDataProjectId;
         const secondProjectId = selectedDataProjectId || currentDataProjectId;
-        viewerUrl += `&projectIds=${encodeURIComponent(firstProjectId)}&projectIds=${encodeURIComponent(secondProjectId)}`;
+        search.append('projectIds', firstProjectId);
+        search.append('projectIds', secondProjectId);
       }
       if (currentProjectId) {
-        viewerUrl += `&projectId=${encodeURIComponent(currentProjectId)}`;
+        search.set('projectId', currentProjectId);
       }
       if (currentSubjectId) {
-        viewerUrl += `&subjectId=${encodeURIComponent(currentSubjectId)}`;
+        search.set('subjectId', currentSubjectId);
       }
       // Keep the current experiment ID for context
-      viewerUrl += `&experimentId=${encodeURIComponent(currentExperimentId)}`;
+      search.set('experimentId', currentExperimentId);
 
+      let viewerUrl = `/VIEWER/?${search.toString()}`;
       viewerUrl = appendOverreadViewerQueryParams(viewerUrl);
 
       // Navigate to the comparison view
@@ -332,8 +337,21 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
    */
   _fallbackToNewTab(): void {
     const { subjectId, projectId, ID, label } = this.props;
-    let viewerUrl = `/VIEWER/?subjectId=${subjectId}&projectId=${projectId}&experimentId=${ID}&experimentLabel=${label}`;
+    const search = new URLSearchParams();
+    if (subjectId) {
+      search.set('subjectId', subjectId);
+    }
+    if (projectId) {
+      search.set('projectId', projectId);
+    }
+    if (ID) {
+      search.set('experimentId', ID);
+    }
+    if (label) {
+      search.set('experimentLabel', label);
+    }
 
+    let viewerUrl = `/VIEWER/?${search.toString()}`;
     viewerUrl = appendOverreadViewerQueryParams(viewerUrl);
 
     window.open(viewerUrl, '_blank');
