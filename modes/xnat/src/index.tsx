@@ -365,7 +365,10 @@ const xnatRoute = {
                 // Create mapping key using the synthetic UID format that matches what we created above
                 const mappingKey = `xnat_experiment_${index}_${experimentId}`;
                 mappings[mappingKey] = {
-                  projectId: params.projectId || sessionStorage.getItem('xnat_projectId'),
+                  projectId:
+                    projectIdsFromURL[index] ||
+                    params.projectId ||
+                    sessionStorage.getItem('xnat_projectId'),
                   experimentId: experimentId,
                 };
               }

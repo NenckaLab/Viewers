@@ -215,7 +215,7 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
    * @returns {null}
    */
   async onLaunchViewerClick(): Promise<void> {
-    const { subjectId, projectId, ID, label } = this.props;
+    const { ID: selectedExperimentId } = this.props;
 
     try {
       // Get current experiment ID from sessionStorage (XNAT uses experiment IDs, not study UIDs)
@@ -227,9 +227,6 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
         this._fallbackToNewTab();
         return;
       }
-
-      // For comparison, we need the selected experiment ID (passed as ID prop)
-      const selectedExperimentId = ID;
 
       if (!selectedExperimentId) {
         console.error('XNATSession: Selected experiment ID not available');
@@ -252,14 +249,32 @@ export default class XNATSession extends React.Component<XNATSessionProps, XNATS
       const currentProjectId = sessionMap.getProject() || sessionStorageProjectId;
       const currentSubjectId = sessionMap.getSubject() || sessionStorageSubjectId;
       const currentParentProjectId = sessionMap.getParentProject() || sessionStorageParentProjectId;
+      const { projectId: selectedProjectId, parentProjectId: selectedParentProjectId } = this.props;
+      // Shared sessions live in parentProjectId; otherwise use the row's project.
+      const selectedDataProjectId =
+        selectedParentProjectId && selectedParentProjectId !== selectedProjectId
+          ? selectedParentProjectId
+          : selectedProjectId;
+      const currentDataProjectId =
+        currentParentProjectId && currentParentProjectId !== currentProjectId
+          ? currentParentProjectId
+          : currentProjectId;
 
       // Construct comparison URL using experiment IDs (XNAT's native identifiers)
       // Use mrSubjectComparison for MPR 3x2 comparison view
       let viewerUrl = `/VIEWER/?experimentIds=${currentExperimentId}&experimentIds=${selectedExperimentId}&hangingprotocolId=@ohif/mrSubjectComparison`;
 
-      // Add essential XNAT parameters for data access - pass projectIds for each experiment
+      // projectIds[i] must match experimentIds[i], including cross-project / shared sessions.
+      if (currentDataProjectId || selectedDataProjectId) {
+        const firstProjectId = currentDataProjectId || selectedDataProjectId;
+        const secondProjectId = selectedDataProjectId || currentDataProjectId;
+        viewerUrl += `&projectIds=${encodeURIComponent(firstProjectId)}&projectIds=${encodeURIComponent(secondProjectId)}`;
+      }
       if (currentProjectId) {
-        viewerUrl += `&projectIds=${encodeURIComponent(currentProjectId)}&projectIds=${encodeURIComponent(currentProjectId)}&projectId=${encodeURIComponent(currentProjectId)}&subjectId=${encodeURIComponent(currentSubjectId)}`;
+        viewerUrl += `&projectId=${encodeURIComponent(currentProjectId)}`;
+      }
+      if (currentSubjectId) {
+        viewerUrl += `&subjectId=${encodeURIComponent(currentSubjectId)}`;
       }
       // Keep the current experiment ID for context
       viewerUrl += `&experimentId=${encodeURIComponent(currentExperimentId)}`;
