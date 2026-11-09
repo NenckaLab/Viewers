@@ -106,7 +106,7 @@ function XNATCornerstoneViewport(props: React.ComponentProps<typeof OHIFCornerst
       if (!renderingEngineId) return;
       syncGroupService.addViewportToSyncGroup(viewportId, renderingEngineId, syncGroups);
     };
-    const unsub = cornerstoneViewportService.subscribe(
+    const { unsubscribe } = cornerstoneViewportService.subscribe(
       cornerstoneViewportService.EVENTS.VIEWPORT_DATA_CHANGED,
       (evt: { viewportId: string }) => {
         if (evt.viewportId !== viewportId) return;
@@ -117,7 +117,7 @@ function XNATCornerstoneViewport(props: React.ComponentProps<typeof OHIFCornerst
     const t = setTimeout(applySync, 100);
     return () => {
       clearTimeout(t);
-      if (typeof unsub === 'function') unsub();
+      unsubscribe();
     };
   }, [viewportId, syncGroups, cornerstoneViewportService, syncGroupService]);
 
