@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import PropTypes from 'prop-types';
 import XNATStudyBrowser from '../xnat-components/XNATStudyBrowser/XNATStudyBrowser';
 import { useViewportGrid } from '@ohif/ui-next';
@@ -7,7 +7,6 @@ import sessionMap from '../utils/sessionMap';
 import getImageSrcFromImageId from '../../../../extensions/default/src/Panels/getImageSrcFromImageId';
 import { normalizePatientName } from '../XNATDataSource/Utils/DataSourceUtils';
 
-// Declare the AppContext global variable for TypeScript
 declare global {
   interface Window {
     AppContext?: {
@@ -17,7 +16,16 @@ declare global {
   }
 }
 
-// Define study interface to match the structure we're creating
+interface ThumbnailData {
+  displaySetInstanceUID: string;
+  SeriesDescription: string;
+  SeriesNumber: string | number;
+  modality: string;
+  numImageFrames: number;
+  imageId?: string;
+  imageSrc?: string | null;
+}
+
 interface StudyData {
   StudyInstanceUID: string;
   StudyDescription: string;
@@ -29,290 +37,427 @@ interface StudyData {
     projectId: string;
     subjectId: string;
   };
-  thumbnails: Array<{
-    displaySetInstanceUID: string;
-    SeriesDescription: string;
-    SeriesNumber: string | number;
-    modality: string;
-    numImageFrames: number;
-    imageId?: string;
-  }>;
+  thumbnails: ThumbnailData[];
 }
 
+const THUMBNAIL_RETRY_DELAY_MS = 750;
+const THUMBNAIL_MAX_RETRIES = 4;
+const THUMBNAIL_NO_IMAGE_MODALITIES = ['SR', 'SEG', 'SM', 'RTSTRUCT', 'RTPLAN', 'RTDOSE'];
+
+function resolveThumbnailImageId(displaySet: any, dataSource: any): string | undefined {
+  if (!displaySet) {
+    return undefined;
+  }
+
+  if (Array.isArray(displaySet.imageIds) && displaySet.imageIds.length > 0) {
+    return displaySet.imageIds[Math.floor(displaySet.imageIds.length / 2)];
+  }
+
+  if (dataSource && typeof dataSource.getImageIdsForDisplaySet === 'function') {
+    const imageIds = dataSource.getImageIdsForDisplaySet(displaySet);
+    if (Array.isArray(imageIds) && imageIds.length > 0) {
+      return imageIds[Math.floor(imageIds.length / 2)];
+    }
+  }
+
+  const instances = displaySet.instances || displaySet.images;
+  if (Array.isArray(instances) && instances.length > 0) {
+    return instances[Math.floor(instances.length / 2)]?.imageId;
+  }
+
+  return undefined;
+}
+
+function buildSessionForStudy(StudyInstanceUID: string) {
+  let mappedExperimentId = '';
+  let mappedProjectId = '';
+  try {
+    const cachedMappings = sessionStorage.getItem('xnat_studyMappings');
+    if (cachedMappings) {
+      const mapped = JSON.parse(cachedMappings)?.[StudyInstanceUID];
+      mappedExperimentId = mapped?.experimentId || '';
+      mappedProjectId = mapped?.projectId || '';
+    }
+  } catch (_e) {
+    // ignore invalid cached mappings
+  }
+
+  return {
+    experimentId:
+      mappedExperimentId ||
+      sessionMap.getExperimentID?.() ||
+      sessionStorage.getItem('xnat_experimentId') ||
+      '',
+    projectId:
+      mappedProjectId ||
+      sessionMap.getProject?.() ||
+      sessionStorage.getItem('xnat_projectId') ||
+      '',
+    subjectId:
+      sessionMap.getSubject?.() ||
+      sessionStorage.getItem('xnat_subjectId') ||
+      '',
+  };
+}
+
+function buildStudyBrowserStructure(displaySets: any[]): StudyData[] {
+  const studyDisplaySetsMap: Record<string, StudyData> = {};
+  const studyUIDs = Array.from(new Set(displaySets.map(ds => ds.StudyInstanceUID).filter(Boolean)));
+  const dicomStudies = studyUIDs
+    .map(uid => {
+      const study = DicomMetadataStore.getStudy(uid);
+      return study ? { ...study, StudyInstanceUID: uid, wadoRoot: study.wadoRoot } : null;
+    })
+    .filter(Boolean);
+
+  displaySets.forEach(displaySet => {
+    const {
+      StudyInstanceUID,
+      displaySetInstanceUID,
+      SeriesDescription,
+      SeriesNumber,
+      Modality,
+      numImageFrames,
+    } = displaySet;
+
+    if (!StudyInstanceUID || !displaySetInstanceUID) {
+      return;
+    }
+
+    if (!studyDisplaySetsMap[StudyInstanceUID]) {
+      const dicomStudy = dicomStudies.find(study => study?.StudyInstanceUID === StudyInstanceUID);
+      const fromDisplaySet = normalizePatientName(
+        displaySet?.PatientName || displaySet?.instances?.[0]?.PatientName
+      );
+      const fromStore = normalizePatientName(dicomStudy?.PatientName);
+      studyDisplaySetsMap[StudyInstanceUID] = {
+        StudyInstanceUID,
+        StudyDescription:
+          dicomStudy?.StudyDescription || displaySet?.StudyDescription || 'No description',
+        PatientName: fromDisplaySet || fromStore || '',
+        PatientID: normalizePatientName(
+          displaySet?.PatientID || displaySet?.instances?.[0]?.PatientID || dicomStudy?.PatientID
+        ),
+        StudyDate: dicomStudy?.StudyDate || displaySet?.StudyDate || '',
+        session: buildSessionForStudy(StudyInstanceUID),
+        thumbnails: [],
+      };
+    }
+
+    studyDisplaySetsMap[StudyInstanceUID].thumbnails.push({
+      displaySetInstanceUID,
+      SeriesDescription: SeriesDescription || 'No description',
+      SeriesNumber: SeriesNumber || '',
+      modality: Modality || '',
+      numImageFrames: numImageFrames || 0,
+      imageSrc: null,
+    });
+  });
+
+  return Object.values(studyDisplaySetsMap);
+}
+
+function mergePreservedImageSrcs(studies: StudyData[], previous: StudyData[]): StudyData[] {
+  const previousSrcByUid: Record<string, { imageSrc?: string | null; imageId?: string }> = {};
+  previous.forEach(study => {
+    study.thumbnails.forEach(thumb => {
+      if (thumb.imageSrc) {
+        previousSrcByUid[thumb.displaySetInstanceUID] = {
+          imageSrc: thumb.imageSrc,
+          imageId: thumb.imageId,
+        };
+      }
+    });
+  });
+
+  return studies.map(study => ({
+    ...study,
+    thumbnails: study.thumbnails.map(thumb => {
+      const preserved = previousSrcByUid[thumb.displaySetInstanceUID];
+      if (!preserved) {
+        return thumb;
+      }
+      return {
+        ...thumb,
+        imageSrc: preserved.imageSrc,
+        imageId: preserved.imageId,
+      };
+    }),
+  }));
+}
+
+function patchThumbnailImageSrc(
+  studies: StudyData[],
+  displaySetInstanceUID: string,
+  imageId: string | undefined,
+  imageSrc: string | null
+): StudyData[] {
+  return studies.map(study => ({
+    ...study,
+    thumbnails: study.thumbnails.map(thumb =>
+      thumb.displaySetInstanceUID === displaySetInstanceUID
+        ? { ...thumb, imageId, imageSrc }
+        : thumb
+    ),
+  }));
+}
 
 /**
  * Wraps the XNATStudyBrowser and provides services
- * 
- * @param {object} params
- * @param {object} extensionManager
- * @param {object} servicesManager
- * @param {object} commandsManager
  */
 function WrappedXNATStudyBrowserPanel({ extensionManager, servicesManager, commandsManager }) {
-  
-  // Get the data source
   const [dataSource] = extensionManager.getActiveDataSource();
-  
-  // Get needed services
-  const { 
-    displaySetService, 
-    hangingProtocolService 
-  } = servicesManager.services as { 
-    displaySetService: any; 
-    hangingProtocolService: any; 
+  const { displaySetService, hangingProtocolService } = servicesManager.services as {
+    displaySetService: any;
+    hangingProtocolService: any;
   };
-  
+
   const [{ activeViewportId, isHangingProtocolLayout }, viewportGridService] = useViewportGrid();
-  
-  // Get Cornerstone utilities and create getImageSrc function
-  const getCornerstoneLibraries = useCallback(() => {
-    const utilities = extensionManager.getModuleEntry(
-      '@ohif/extension-cornerstone.utilityModule.common'
-    );
-    if (!utilities) {
-      console.error('Cornerstone utility module not found. Thumbnails may not work.');
-      return null;
-    }
-    try {
-      return utilities.exports.getCornerstoneLibraries();
-    } catch (ex) {
-      console.error('Failed to get Cornerstone libraries:', ex);
-      return null;
-    }
+
+  const [studyBrowserData, setStudyBrowserData] = useState<StudyData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
+  const processGenerationRef = useRef(0);
+  const inFlightThumbnailUidsRef = useRef<Set<string>>(new Set());
+  const retryAttemptByUidRef = useRef<Record<string, number>>({});
+  const studyBrowserDataRef = useRef<StudyData[]>([]);
+  const getImageSrcRef = useRef<(imageId: string) => Promise<string | null>>(async () => null);
+
+  useEffect(() => {
+    studyBrowserDataRef.current = studyBrowserData;
+  }, [studyBrowserData]);
+
+  useEffect(() => {
+    getImageSrcRef.current = async (imageId: string) => {
+      const utilities = extensionManager.getModuleEntry(
+        '@ohif/extension-cornerstone.utilityModule.common'
+      );
+      if (!utilities) {
+        return null;
+      }
+      try {
+        const { cornerstone } = utilities.exports.getCornerstoneLibraries();
+        if (!cornerstone) {
+          return null;
+        }
+        return await getImageSrcFromImageId(cornerstone, imageId);
+      } catch (_ex) {
+        return null;
+      }
+    };
   }, [extensionManager]);
 
-  const _getImageSrcFromImageId = useCallback(() => {
-    const cornerstoneLibraries = getCornerstoneLibraries();
-    if (!cornerstoneLibraries || !cornerstoneLibraries.cornerstone) {
-       return async () => null; // Return a no-op async function if cornerstone is not available
+  const loadThumbnailForDisplaySet = async (displaySetInstanceUID: string) => {
+    if (!isMountedRef.current || inFlightThumbnailUidsRef.current.has(displaySetInstanceUID)) {
+      return;
     }
-    return getImageSrcFromImageId.bind(null, cornerstoneLibraries.cornerstone);
-  }, [getCornerstoneLibraries]);
-  
-  // State for our study data - This will now hold the final data with resolved imageSrc
-  const [studyBrowserData, setStudyBrowserData] = useState<StudyData[]>([]); 
-  const [isLoading, setIsLoading] = useState(true);
-  // Ref for debounce timeout
-  const debounceTimeoutRef = useRef(null);
-  const isMountedRef = useRef(true); // Ref to track mount status
-  
-  // --- Define processDataHandler outside useEffect ---
-  const processDataHandler = useCallback(async () => {
-    // Check ref instead of variable
+
+    const existing = studyBrowserDataRef.current
+      .flatMap(study => study.thumbnails)
+      .find(thumb => thumb.displaySetInstanceUID === displaySetInstanceUID);
+    if (existing?.imageSrc) {
+      return;
+    }
+
+    const displaySet = displaySetService.getDisplaySetByUID(displaySetInstanceUID);
+    if (
+      !displaySet ||
+      displaySet.unsupported ||
+      THUMBNAIL_NO_IMAGE_MODALITIES.includes(displaySet.Modality)
+    ) {
+      retryAttemptByUidRef.current[displaySetInstanceUID] = THUMBNAIL_MAX_RETRIES;
+      return;
+    }
+
+    inFlightThumbnailUidsRef.current.add(displaySetInstanceUID);
+
+    try {
+      let imageSrc: string | null = displaySet.thumbnailSrc || null;
+      const imageId = resolveThumbnailImageId(displaySet, dataSource);
+
+      if (!imageSrc && typeof displaySet.getThumbnailSrc === 'function') {
+        try {
+          imageSrc =
+            (await displaySet.getThumbnailSrc({
+              getImageSrc: (id: string) => getImageSrcRef.current(id),
+            })) || null;
+        } catch (_error) {
+          imageSrc = null;
+        }
+      }
+
+      if (!imageSrc && imageId) {
+        try {
+          imageSrc = (await getImageSrcRef.current(imageId)) || null;
+        } catch (_error) {
+          imageSrc = null;
+        }
+      }
+
+      if (imageSrc) {
+        displaySet.thumbnailSrc = imageSrc;
+        retryAttemptByUidRef.current[displaySetInstanceUID] = 0;
+      }
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      setStudyBrowserData(prev =>
+        patchThumbnailImageSrc(prev, displaySetInstanceUID, imageId, imageSrc)
+      );
+    } finally {
+      inFlightThumbnailUidsRef.current.delete(displaySetInstanceUID);
+    }
+  };
+
+  const scheduleThumbnailRetries = () => {
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+    }
+
+    retryTimeoutRef.current = setTimeout(() => {
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      const missingUids = studyBrowserDataRef.current
+        .flatMap(study => study.thumbnails)
+        .filter(thumb => !thumb.imageSrc)
+        .map(thumb => thumb.displaySetInstanceUID)
+        .filter(uid => {
+          if (inFlightThumbnailUidsRef.current.has(uid)) {
+            return false;
+          }
+          const attempts = retryAttemptByUidRef.current[uid] || 0;
+          return attempts < THUMBNAIL_MAX_RETRIES;
+        });
+
+      missingUids.forEach(uid => {
+        retryAttemptByUidRef.current[uid] = (retryAttemptByUidRef.current[uid] || 0) + 1;
+        loadThumbnailForDisplaySet(uid);
+      });
+
+      const stillWaiting = studyBrowserDataRef.current
+        .flatMap(study => study.thumbnails)
+        .some(thumb => {
+          if (thumb.imageSrc) {
+            return false;
+          }
+          if (inFlightThumbnailUidsRef.current.has(thumb.displaySetInstanceUID)) {
+            return true;
+          }
+          return (retryAttemptByUidRef.current[thumb.displaySetInstanceUID] || 0) < THUMBNAIL_MAX_RETRIES;
+        });
+
+      if (stillWaiting) {
+        scheduleThumbnailRetries();
+      }
+    }, THUMBNAIL_RETRY_DELAY_MS);
+  };
+
+  const refreshStudyBrowser = () => {
     if (!isMountedRef.current) {
       return;
     }
 
-    const currentDisplaySets = displaySetService.activeDisplaySets;
+    const generation = ++processGenerationRef.current;
+    const currentDisplaySets = displaySetService.activeDisplaySets || [];
 
-    const currentStudyInstanceUIDs = Array.from(
-      new Set(currentDisplaySets.map(ds => ds.StudyInstanceUID))
-    );
-
-    if (!currentDisplaySets || currentDisplaySets.length === 0) {
-      // Check ref
-      if (studyBrowserData.length > 0 && isMountedRef.current) {
+    if (currentDisplaySets.length === 0) {
+      if (studyBrowserDataRef.current.length > 0) {
         setStudyBrowserData([]);
       }
-      // Check ref
-      if (isMountedRef.current) setIsLoading(true);
+      setIsLoading(true);
       return;
     }
 
-    // Check ref
-    if (isMountedRef.current) setIsLoading(true);
-
-    try {
-      const studyDisplaySetsMap: Record<string, StudyData> = {};
-       const dicomStudies = currentStudyInstanceUIDs.map(uid => {
-              const study = DicomMetadataStore.getStudy(uid);
-              // Ensure wadoRoot is included if available in the stored study metadata
-              return study ? { ...study, StudyInstanceUID: uid, wadoRoot: study.wadoRoot } : null;
-            }).filter(Boolean);
-
-          
-          currentDisplaySets.forEach(displaySet => {
-        const {
-          StudyInstanceUID,
-          displaySetInstanceUID,
-          SeriesDescription,
-          SeriesNumber,
-          Modality,
-          numImageFrames, // Added numImageFrames here
-        } = displaySet;
-
-        if (!studyDisplaySetsMap[StudyInstanceUID]) {
-              const dicomStudy = dicomStudies.find(study => study?.StudyInstanceUID === StudyInstanceUID);
-              const fromDisplaySet = normalizePatientName(
-                displaySet?.PatientName || displaySet?.instances?.[0]?.PatientName
-              );
-              const fromStore = normalizePatientName(dicomStudy?.PatientName);
-              studyDisplaySetsMap[StudyInstanceUID] = {
-                StudyInstanceUID,
-                StudyDescription:
-                  dicomStudy?.StudyDescription ||
-                  displaySet?.StudyDescription ||
-                  'No description',
-                PatientName: fromDisplaySet || fromStore || '',
-                PatientID: normalizePatientName(
-                  displaySet?.PatientID ||
-                    displaySet?.instances?.[0]?.PatientID ||
-                    dicomStudy?.PatientID
-                ),
-                StudyDate: dicomStudy?.StudyDate || displaySet?.StudyDate || '',
-                session: (() => {
-                  let mappedExperimentId = '';
-                  let mappedProjectId = '';
-                  try {
-                    const cachedMappings = sessionStorage.getItem('xnat_studyMappings');
-                    if (cachedMappings) {
-                      const mapped = JSON.parse(cachedMappings)?.[StudyInstanceUID];
-                      mappedExperimentId = mapped?.experimentId || '';
-                      mappedProjectId = mapped?.projectId || '';
-                    }
-                  } catch (e) {
-                    // ignore invalid cached mappings
-                  }
-                  return {
-                    experimentId:
-                      mappedExperimentId ||
-                      sessionMap.getExperimentID?.() ||
-                      sessionStorage.getItem('xnat_experimentId') ||
-                      '',
-                    projectId:
-                      mappedProjectId ||
-                      sessionMap.getProject?.() ||
-                      sessionStorage.getItem('xnat_projectId') ||
-                      '',
-                    subjectId:
-                      sessionMap.getSubject?.() ||
-                      sessionStorage.getItem('xnat_subjectId') ||
-                      '',
-                  };
-                })(),
-                thumbnails: [],
-              };
-        }
-
-        studyDisplaySetsMap[StudyInstanceUID].thumbnails.push({
-          displaySetInstanceUID,
-          SeriesDescription: SeriesDescription || 'No description',
-          SeriesNumber: SeriesNumber || '',
-          modality: Modality || '',
-          numImageFrames: numImageFrames || 0, // Use destructured numImageFrames
-        });
-      });
-
-      const studiesArray = Object.values(studyDisplaySetsMap);
-      const getImageSrcFunction = _getImageSrcFromImageId();
-
-      const studiesWithImageSrcPromises = studiesArray.map(async study => {
-          const updatedThumbnails = await Promise.all(
-             study.thumbnails.map(async (thumb) => {
-                  const currentDisplaySet = displaySetService.getDisplaySetByUID(thumb.displaySetInstanceUID);
-
-                 const instances = currentDisplaySet?.instances;
-                  // Recalculate middle index based on potentially updated instances
-                  const middleIndex = instances && instances.length > 0 ? Math.floor(instances.length / 2) : 0;
-                  const representativeImageId = instances && instances.length > 0
-                    ? instances[middleIndex]?.imageId // Use optional chaining for safety
-                    : undefined;
-
-
-                if (representativeImageId) {
-                  try {
-                    const imageSrc = await getImageSrcFunction(representativeImageId);
-                    return { ...thumb, imageId: representativeImageId, imageSrc: imageSrc };
-                  } catch (error) {
-                    console.error(`XNAT: Failed to get thumbnail src for ${representativeImageId}`, error);
-                    return { ...thumb, imageId: representativeImageId, imageSrc: null };
-                  }
-                } else {
-                  return { ...thumb, imageId: undefined, imageSrc: null };
-                }
-             })
-          );
-          return { ...study, thumbnails: updatedThumbnails };
-      });
-
-      const resolvedStudies = await Promise.all(studiesWithImageSrcPromises);
-
-      // Check ref
-      if (isMountedRef.current) {
-        setStudyBrowserData(resolvedStudies);
-                }
-              } catch (error) {
-      console.error('XNAT: Error processing study data:', error);
-      // Check ref
-      if (isMountedRef.current) setStudyBrowserData([]);
-    } finally {
-      // Check ref
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
+    // Keep existing thumbnails visible while refreshing — remounting the list
+    // was part of why late-arriving imageSrcs looked blank until panel reopen.
+    if (studyBrowserDataRef.current.length === 0) {
+      setIsLoading(true);
     }
-  }, [ // Dependencies for processDataHandler
-    displaySetService,
-    _getImageSrcFromImageId,
-    setStudyBrowserData,
-    setIsLoading,
-    isMountedRef, // Add ref here
-  ]);
 
-  // --- Debounced Handler ---
-  const debouncedProcessDataHandler = useCallback(() => {
+    const nextStructure = mergePreservedImageSrcs(
+      buildStudyBrowserStructure(currentDisplaySets),
+      studyBrowserDataRef.current
+    );
+
+    if (generation !== processGenerationRef.current || !isMountedRef.current) {
+      return;
+    }
+
+    setStudyBrowserData(nextStructure);
+    setIsLoading(false);
+
+    const pendingUids = nextStructure
+      .flatMap(study => study.thumbnails)
+      .filter(thumb => !thumb.imageSrc)
+      .map(thumb => thumb.displaySetInstanceUID);
+
+    pendingUids.forEach(uid => {
+      loadThumbnailForDisplaySet(uid);
+    });
+
+    if (pendingUids.length > 0) {
+      scheduleThumbnailRetries();
+    }
+  };
+
+  const debouncedRefreshStudyBrowser = () => {
     if (debounceTimeoutRef.current) {
       clearTimeout(debounceTimeoutRef.current);
     }
     debounceTimeoutRef.current = setTimeout(() => {
-      processDataHandler(); // Call the memoized handler
+      refreshStudyBrowser();
     }, 100);
-  }, [processDataHandler]); // Dependency on the memoized handler
+  };
 
-  // --- Effect for subscriptions and initial call ---
   useEffect(() => {
-    // Set mounted status on mount
     isMountedRef.current = true;
-
-    debouncedProcessDataHandler(); // Use the debounced handler
+    debouncedRefreshStudyBrowser();
 
     let addedSubscription = { unsubscribe: () => {} };
-    let updatedSubscription = { unsubscribe: () => {} };
+    let changedSubscription = { unsubscribe: () => {} };
 
-
-    if (displaySetService?.EVENTS?.DISPLAY_SETS_ADDED && displaySetService?.EVENTS?.DISPLAY_SETS_CHANGED) {
+    if (
+      displaySetService?.EVENTS?.DISPLAY_SETS_ADDED &&
+      displaySetService?.EVENTS?.DISPLAY_SETS_CHANGED
+    ) {
       addedSubscription = displaySetService.subscribe(
         displaySetService.EVENTS.DISPLAY_SETS_ADDED,
-        debouncedProcessDataHandler // Use debounced handler
+        debouncedRefreshStudyBrowser
       );
-      updatedSubscription = displaySetService.subscribe(
+      changedSubscription = displaySetService.subscribe(
         displaySetService.EVENTS.DISPLAY_SETS_CHANGED,
-        debouncedProcessDataHandler // Use debounced handler
+        debouncedRefreshStudyBrowser
       );
-        } else {
+    } else {
       console.warn('XNAT: DisplaySetService EVENTS (ADDED/CHANGED) not ready yet, skipping subscription.');
     }
 
-    // Cleanup function
     return () => {
-      isMountedRef.current = false; // Set unmounted status
+      isMountedRef.current = false;
       addedSubscription.unsubscribe();
-      updatedSubscription.unsubscribe();
+      changedSubscription.unsubscribe();
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current);
       }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+      inFlightThumbnailUidsRef.current.clear();
     };
-     // Dependencies for the effect itself
-  }, [displaySetService, _getImageSrcFromImageId, debouncedProcessDataHandler]);
-  
-  // Handle thumbnail click
-  const onThumbnailClick = (displaySetInstanceUID, event) => {
+  }, [displaySetService, dataSource, extensionManager]);
+
+  const onThumbnailClick = (_displaySetInstanceUID, _event) => {
     // No action for single click currently
   };
-  
-  // Handle double-click (load into viewport)
-  const onThumbnailDoubleClick = (displaySetInstanceUID) => {
-    
+
+  const onThumbnailDoubleClick = displaySetInstanceUID => {
     try {
       const updatedViewports = hangingProtocolService.getViewportsRequireUpdate(
         activeViewportId,
@@ -325,25 +470,23 @@ function WrappedXNATStudyBrowserPanel({ extensionManager, servicesManager, comma
     }
   };
 
-  if (isLoading) {
-     return (
-       <div className="h-full overflow-y-auto overflow-x-hidden p-4">
-         <div className="text-sm text-muted-foreground">Loading studies...</div>
-       </div>
-     );
+  if (isLoading && studyBrowserData.length === 0) {
+    return (
+      <div className="h-full overflow-y-auto overflow-x-hidden p-4">
+        <div className="text-sm text-muted-foreground">Loading studies...</div>
+      </div>
+    );
   }
 
-  // Render the XNATStudyBrowser with data containing resolved imageSrc
   return (
     <div className="h-full">
-      {/* Render conditionally based on data length AFTER loading is false */}
-      {!isLoading && studyBrowserData.length === 0 ? (
-         <div className="h-full overflow-y-auto overflow-x-hidden p-4">
-            <div className="text-sm text-muted-foreground">No studies available</div>
+      {studyBrowserData.length === 0 ? (
+        <div className="h-full overflow-y-auto overflow-x-hidden p-4">
+          <div className="text-sm text-muted-foreground">No studies available</div>
         </div>
       ) : (
         <XNATStudyBrowser
-          studies={studyBrowserData} // Pass data with resolved imageSrc
+          studies={studyBrowserData}
           onThumbnailClick={onThumbnailClick}
           onThumbnailDoubleClick={onThumbnailDoubleClick}
           supportsDrag
@@ -359,4 +502,4 @@ WrappedXNATStudyBrowserPanel.propTypes = {
   commandsManager: PropTypes.object.isRequired,
 };
 
-export default WrappedXNATStudyBrowserPanel; 
+export default WrappedXNATStudyBrowserPanel;
