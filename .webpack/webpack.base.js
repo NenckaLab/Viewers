@@ -42,24 +42,21 @@ const COMMIT_HASH = fs.readFileSync(path.join(__dirname, '../commit.txt'), 'utf8
 dotenv.config();
 
 const defineValues = {
-    /* Application */
-    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
-    'process.env.NODE_DEBUG': JSON.stringify(process.env.NODE_DEBUG),
-    'process.env.DEBUG': JSON.stringify(process.env.DEBUG),
-    'process.env.PUBLIC_URL': JSON.stringify(process.env.PUBLIC_URL || '/'),
-    'process.env.BUILD_NUM': JSON.stringify(BUILD_NUM),
-    'process.env.VERSION_NUMBER': JSON.stringify(VERSION_NUMBER),
-    'process.env.COMMIT_HASH': JSON.stringify(COMMIT_HASH),
-    /* i18n */
-    'process.env.USE_LOCIZE': JSON.stringify(process.env.USE_LOCIZE || ''),
-    'process.env.LOCIZE_PROJECTID': JSON.stringify(process.env.LOCIZE_PROJECTID || ''),
-    'process.env.LOCIZE_API_KEY': JSON.stringify(process.env.LOCIZE_API_KEY || ''),
-    'process.env.REACT_APP_I18N_DEBUG': JSON.stringify(process.env.REACT_APP_I18N_DEBUG || ''),
-    'process.env.TEST_ENV': JSON.stringify(process.env.TEST_ENV || ''),
-    // Browser bundles: some deps still reference Node globals (lazy chunks). Rsbuild
-    // sets these in rsbuild.config.ts; Webpack builds must define them here too.
-    __filename: JSON.stringify(''),
-    __dirname: JSON.stringify('/'),
+  /* Application */
+  'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
+  'process.env.NODE_DEBUG': JSON.stringify(process.env.NODE_DEBUG),
+  'process.env.DEBUG': JSON.stringify(process.env.DEBUG),
+  'process.env.PUBLIC_URL': JSON.stringify(process.env.PUBLIC_URL || '/'),
+  'process.env.BUILD_NUM': JSON.stringify(BUILD_NUM),
+  'process.env.VERSION_NUMBER': JSON.stringify(VERSION_NUMBER),
+  'process.env.DCMJS_VERSION': JSON.stringify(require('./dcmjsVersion')),
+  'process.env.COMMIT_HASH': JSON.stringify(COMMIT_HASH),
+  /* i18n */
+  'process.env.USE_LOCIZE': JSON.stringify(process.env.USE_LOCIZE || ''),
+  'process.env.LOCIZE_PROJECTID': JSON.stringify(process.env.LOCIZE_PROJECTID || ''),
+  'process.env.LOCIZE_API_KEY': JSON.stringify(process.env.LOCIZE_API_KEY || ''),
+  'process.env.REACT_APP_I18N_DEBUG': JSON.stringify(process.env.REACT_APP_I18N_DEBUG || ''),
+  'process.env.TEST_ENV': JSON.stringify(process.env.TEST_ENV || ''),
 };
 
 // Only redefine updated values.  This avoids warning messages in the logs
