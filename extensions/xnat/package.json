@@ -1,6 +1,6 @@
 {
   "name": "@ohif/extension-xnat",
-  "version": "1.0.7-8",
+  "version": "1.0.7-9",
   "description": "OHIF v3 extension for XNAT functionality",
   "author": "Zachary Pick",
   "license": "MIT",
